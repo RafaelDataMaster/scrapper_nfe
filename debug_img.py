@@ -1,6 +1,6 @@
 import pdfplumber
 
-arquivo = "nfs/nfse_sp2.pdf"
+arquivo = "nfs/nsfe_contaazul_salvador.pdf"
 
 with pdfplumber.open(arquivo) as pdf:
     # Pega a primeira página
