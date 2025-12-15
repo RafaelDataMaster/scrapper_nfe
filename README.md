@@ -1,19 +1,24 @@
 # Projeto de Scraping  de notas fiscais eletrônicas
 
 # To Do
-- [X] Criar core/models.py (Estrutura de dados).
+- [ ] Conseguir o acesso ao maior número de pdfs e a tabela já catalogada dos dados pra conferir se a extração do PDF está de fato funcionando.
+- [ ] Começar a estudar como realmente fazer o scrapping de diferentes tipos de email. (Talvez pedir um email alternativo pra isso).
+- [ ] Terminar de organizar a documentação por completo! Arrumando o Index e outras partes.
 
-- [X] Criar core/processor.py e mover as funções limpar_valor_monetario, converter_data_iso e, principalmente, extrair_numero_nota_flexivel para dentro dessa classe.
-
-- [X] Atualizar main.py para iterar sobre os arquivos e salvar o CSV (similar ao que existia no final do extracao_1_teste.py).
 
 # Done
+
+## 15/12/2025
+- [X] Montar o site da documentação
+- [X] Organizar a estrutura do projeto
+
 ## 11/12/2025
 - [X] Debugar os pdfs pra entender cada caso. 
 - [X] Extração de dados para um csv baseados em pdf's de diferentes casos
 
+
 # Oque eu to focando em pesquisar por agora
-Padrões de projeto para tornar o código mais legivel e de fácil manutenabilidade e escalabilidade. Transformar em uma base sólida para ELT.
+Continuar avaliando o padrão e estrutura do projeto. Validar o funcionamento da extração dos dados do pdf. Começar a montar realmente a parte do Scrapping.
 
 # Dificuldades até o momento
 Boa parte dos erros foram relacionados ao Regex, estudar mais a fundo e procurar fazer testes com casos mais complexos para ir adicionando mais palavras ao dicionário de Regex.
