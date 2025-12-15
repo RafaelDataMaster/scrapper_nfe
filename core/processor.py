@@ -1,15 +1,14 @@
-# core/processor.py
 import re
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from core.models import InvoiceData
-from strategies.fallback import smart_extraction_strategy
+from strategies.fallback import SmartExtractionStrategy
 
 class BaseInvoiceProcessor(ABC):
     def __init__(self):
         # Instancia a estratégia de leitura que você já criou
-        self.reader = smart_extraction_strategy()
+        self.reader = SmartExtractionStrategy()
 
     def process(self, file_path: str) -> InvoiceData:
         """Método Template: Define o esqueleto do processo"""
@@ -60,15 +59,54 @@ class BaseInvoiceProcessor(ABC):
         return None
 
     def _extract_numero_nota(self, text: str):
-        # AQUI entra a sua lógica complexa de "extrair_numero_nota_flexivel"
-        # Você deve copiar aquela função inteira do extracao_1_teste.py para cá
-        # ajustando para ser um método da classe (self).
-        
+        if not text:
+            return None
+
+        # --- 1. LIMPEZA CIRÚRGICA (Trazida do seu teste original) ---
         texto_limpo = text
-        texto_limpo = re.sub(r'\d{2}/\d{2}/\d{4}', ' ', texto_limpo)
-        # ... (restante da lógica do seu regex) ...
-        # Por brevidade, use a lógica do seu arquivo original aqui
         
-        # Exemplo simplificado para teste:
-        match = re.search(r'(?i)Número\s+da\s+Nota.*?(?<!\d)(\d{1,15})(?!\d)', texto_limpo)
-        return match.group(1) if match else None
+        # Remove Datas (DD/MM/AAAA) para evitar confundir ano com número da nota
+        texto_limpo = re.sub(r'\d{2}/\d{2}/\d{4}', ' ', texto_limpo)
+        
+        # Remove "RPS 1234", "Lote 1234", "Série 1", etc.
+        padroes_lixo = r'(?i)\b(RPS|Lote|Protocolo|Recibo|S[eé]rie)\b\D{0,10}?\d+'
+        texto_limpo = re.sub(padroes_lixo, ' ', texto_limpo)
+
+        # --- 2. LISTA DE PADRÕES (Sua lógica de ouro) ---
+        padroes = [
+            # 1. CASO SALVADOR / MISTURADO (PRIORIDADE MÁXIMA)
+            r'(?i)Número\s+da\s+Nota.*?(?<!\d)(\d{1,15})(?!\d)',
+
+            # 2. CASO NFS-e ESPECÍFICO
+            r'(?i)(?:(?:Número|Numero|N[º°o])\s*da\s*)?NFS-e\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*\b(\d{1,15})\b',
+
+            # 3. CASO VERTICAL (MARÍLIA/OUTROS)
+            r'(?i)Número\s+da\s+Nota[\s\S]*?\b(\d{1,15})\b',
+
+            # 4. CASO NOTA FISCAL (Genérico)
+            r'(?i)Nota\s*Fiscal\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*(\d{1,15})',
+            
+            # 5. CASO BLINDADO FINAL
+            r'(?i)(?<!RPS\s)(?<!Lote\s)(?<!S[eé]rie\s)(?:Número|N[º°o])\s*[:.-]?\s*(\d{1,15})',
+        ]
+
+        # --- 3. LOOP DE TENTATIVAS ---
+        for regex in padroes:
+            match = re.search(regex, texto_limpo, re.IGNORECASE)
+            if match:
+                resultado = match.group(1)
+                
+                # Limpeza pós-match
+                resultado = resultado.replace('.', '').replace(' ', '')
+
+                # Validação de Ano (Evita pegar "2023", "2024" solto)
+                if resultado in ['2022', '2023', '2024', '2025', '2026']:
+                    continue
+                
+                # Validação de Tamanho
+                if len(resultado) < 2 and "NFS-e" not in regex:
+                    continue
+
+                return resultado # Achou! Retorna e encerra.
+
+        return None # Não achou nada

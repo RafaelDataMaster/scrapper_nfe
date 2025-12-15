@@ -1,8 +1,11 @@
 # Projeto de Scraping  de notas fiscais eletrônicas
 
 # To Do
-- [ ] Organizar uma estrutura pro projeto.
-- [ ] Estudar os emails e planejar a extração e definição de casos.
+- [X] Criar core/models.py (Estrutura de dados).
+
+- [X] Criar core/processor.py e mover as funções limpar_valor_monetario, converter_data_iso e, principalmente, extrair_numero_nota_flexivel para dentro dessa classe.
+
+- [X] Atualizar main.py para iterar sobre os arquivos e salvar o CSV (similar ao que existia no final do extracao_1_teste.py).
 
 # Done
 ## 11/12/2025

@@ -1,4 +1,6 @@
 from core.interfaces import TextExtractionStrategy
+from .native import NativePdfStrategy
+from .ocr import TesseractOcrStrategy  
 
 class SmartExtractionStrategy(TextExtractionStrategy):
     def __init__(self):
