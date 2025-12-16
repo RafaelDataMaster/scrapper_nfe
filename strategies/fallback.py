@@ -18,6 +18,18 @@ class SmartExtractionStrategy(TextExtractionStrategy):
         ]
 
     def extract(self, file_path: str) -> str:
+        """
+        Tenta extrair texto usando as estratégias em ordem de prioridade.
+
+        Args:
+            file_path (str): Caminho do arquivo PDF.
+
+        Returns:
+            str: Texto extraído pela primeira estratégia bem-sucedida.
+
+        Raises:
+            Exception: Se todas as estratégias falharem.
+        """
         for strategy in self.strategies:
             texto = strategy.extract(file_path)
             if texto: # Se retornou algo válido

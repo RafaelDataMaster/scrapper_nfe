@@ -11,11 +11,26 @@ class TesseractOcrStrategy(TextExtractionStrategy):
     Acionada quando o PDF não possui camada de texto (ex: digitalizações).
     """
     def __init__(self):
+        """
+        Inicializa a estratégia configurando o caminho do executável Tesseract.
+        """
         # 1. Configurar o caminho do Tesseract (VITAL NO WINDOWS)
         # Se não fizer isso, vai dar erro de "tesseract not found" depois
         pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
 
     def extract(self, file_path: str) -> str:
+        """
+        Converte PDF em imagem e executa OCR.
+
+        Args:
+            file_path (str): Caminho do arquivo PDF.
+
+        Returns:
+            str: Texto extraído da imagem.
+
+        Raises:
+            Exception: Se houver erro na conversão ou no OCR.
+        """
         custom_config = settings.OCR_CONFIG
         
         try:

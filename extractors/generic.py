@@ -14,12 +14,30 @@ class GenericExtractor(BaseExtractor):
     
     @classmethod
     def can_handle(cls, text: str) -> bool:
+        """
+        Verifica se este extrator pode processar o texto fornecido.
+
+        Args:
+            text (str): Texto extraído do PDF.
+
+        Returns:
+            bool: Sempre True (Fallback padrão).
+        """
         # Se nenhum outro pegar, este pega (ou defina uma regra específica)
         # Como é um extrator genérico, ele deve ser o último recurso ou sempre retornar True se for o único
         # Por enquanto, vamos assumir que ele sempre tenta se for chamado
         return True 
 
     def extract(self, text: str) -> Dict[str, Any]:
+        """
+        Extrai campos padronizados (CNPJ, Valor, Data, Número) usando Regex.
+
+        Args:
+            text (str): Texto bruto do documento.
+
+        Returns:
+            Dict[str, Any]: Dicionário com os campos extraídos.
+        """
         data = {}
         data['cnpj_prestador'] = self._extract_cnpj(text)
         data['numero_nota'] = self._extract_numero_nota(text)

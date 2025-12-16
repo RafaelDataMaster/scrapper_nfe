@@ -13,7 +13,7 @@ class NativePdfStrategy(TextExtractionStrategy):
         Extrai texto de um PDF vetorial.
 
         Args:
-            file_path: Caminho do arquivo.
+            file_path (str): Caminho absoluto ou relativo do arquivo PDF.
 
         Returns:
             str: Texto extraído ou string vazia se a extração falhar/for insuficiente.

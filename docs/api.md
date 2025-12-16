@@ -20,6 +20,15 @@ Componentes fundamentais que definem as estruturas de dados e o fluxo de process
     options:
       show_root_heading: true
 
+## Ingestors (Entrada de Dados)
+
+Componentes responsáveis por conectar em fontes externas (e-mail, APIs) e trazer os dados para o sistema.
+
+::: ingestors.imap.ImapIngestor
+    options:
+      show_root_heading: true
+      show_source: true
+
 ## Strategies (Leitura)
 
 Implementações responsáveis por transformar arquivos binários (PDF) em texto bruto.

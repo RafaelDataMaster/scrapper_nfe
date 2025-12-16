@@ -1,3 +1,20 @@
+"""
+Script de Orquestração de Ingestão de E-mails.
+
+Este módulo é responsável por conectar ao servidor de e-mail, baixar anexos PDF
+de notas fiscais e encaminhá-los para o pipeline de processamento.
+
+Funcionalidades:
+1.  Conexão segura via IMAP (configurada via .env).
+2.  Filtragem de e-mails por assunto.
+3.  Download de anexos para pasta temporária (com tratamento de colisão de nomes).
+4.  Execução do processador de extração.
+5.  Geração de relatório CSV.
+
+Usage:
+    python run_ingestion.py
+"""
+
 import os
 import shutil
 import uuid
