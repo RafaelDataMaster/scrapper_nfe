@@ -3,6 +3,13 @@ from .native import NativePdfStrategy
 from .ocr import TesseractOcrStrategy  
 
 class SmartExtractionStrategy(TextExtractionStrategy):
+    """
+    Estratégia composta (Composite) que gerencia tentativas de leitura.
+
+    Implementa um padrão de **Fallback**:
+    1.  Tenta a estratégia nativa (rápida).
+    2.  Se falhar, aciona a estratégia de OCR (lenta e robusta).
+    """
     def __init__(self):
         # Define a ordem de prioridade
         self.strategies = [

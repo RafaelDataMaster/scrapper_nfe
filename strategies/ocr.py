@@ -4,6 +4,12 @@ from core.interfaces import TextExtractionStrategy
 from config import settings  # Importando suas configurações
 
 class TesseractOcrStrategy(TextExtractionStrategy):
+    """
+    Estratégia de leitura baseada em OCR (Reconhecimento Óptico de Caracteres).
+
+    Utiliza `pdf2image` para rasterizar o PDF e `pytesseract` para extrair texto da imagem.
+    Acionada quando o PDF não possui camada de texto (ex: digitalizações).
+    """
     def __init__(self):
         # 1. Configurar o caminho do Tesseract (VITAL NO WINDOWS)
         # Se não fizer isso, vai dar erro de "tesseract not found" depois
