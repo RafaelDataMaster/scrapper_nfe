@@ -1,69 +1,100 @@
 # Pipeline de Automação de Entradas de NFS-e
 
-Bem-vindo à documentação oficial do projeto de automação fiscal. Este sistema foi projetado para eliminar o gargalo manual no recebimento e lançamento de Notas Fiscais de Serviço (NFS-e), garantindo integridade de dados e integração direta com o ERP Protheus.
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
+![Status](https://img.shields.io/badge/status-active-success)
+![Documentation](https://img.shields.io/badge/docs-mkdocs-material)
 
-O projeto opera sobre três pilares fundamentais: **Orquestração**, **ELT (Extract, Load, Transform)** e **Automação**.
+Bem-vindo à documentação oficial do projeto de automação fiscal. Este sistema foi projetado para eliminar o gargalo manual no recebimento e lançamento de Notas Fiscais de Serviço (NFS-e), garantindo integridade de dados e integração direta com o ERP.
+
+O projeto opera sobre três pilares fundamentais: **Ingestão (E-mail)**, **Processamento (OCR/PDF)** e **Integração**.
+
+---
+
+## 🚀 Quick Start
+
+Comece a processar notas em menos de 5 minutos.
+
+<div class="grid cards" markdown>
+
+-   :material-email-fast: **Ingestão Automática**
+    
+    Configure o `.env` e baixe notas direto do Gmail/Outlook.
+    [Guia de Ingestão](guide/ingestion.md)
+
+-   :material-file-document-outline: **Processamento Local**
+    
+    Tem uma pasta cheia de PDFs? Processe tudo de uma vez.
+    [Guia de Uso](guide/usage.md)
+
+-   :material-test-tube: **Testes & Qualidade**
+    
+    Garanta que nada quebrou antes de subir para produção.
+    [Guia de Testes](guide/testing.md)
+
+-   :material-api: **Referência da API**
+    
+    Detalhes técnicos das classes e métodos internos.
+    [API Reference](api.md)
+
+</div>
 
 ---
 
 ## 🏗️ Arquitetura do Processo
 
-Abaixo, o fluxo de dados desenhado para atender aos requisitos da Master:
+O fluxo de dados foi desenhado para ser resiliente e escalável:
 
 ```mermaid
 graph TD
-    subgraph ORCH [1. Orquestração]
-        A[📧 Varredura de E-mails] -->|Identifica NF| B(Download Anexos)
+    subgraph INGEST [1. Ingestão (ImapIngestor)]
+        A[📧 E-mail Server] -->|IMAP/SSL| B(run_ingestion.py)
+        B -->|Bytes| C{Buffer em Disco}
+        C -->|UUID| D[Arquivos Temporários]
     end
 
-    subgraph ELT [2. ELT & Validação]
-        B --> C{Tipo de Arquivo?}
-        C -->|PDF Texto| D[Extração Nativa]
-        C -->|Imagem/Scan| E[OCR Tesseract]
-        D --> F[Estruturação de Dados]
-        E --> F
-        F --> G{Validação Cruzada}
-        H[(Tabela Verdade<br>Contratos e Pedidos)] --> G
+    subgraph CORE [2. Processamento (InvoiceProcessor)]
+        D --> E{É Texto?}
+        E -->|Sim| F[NativePdfStrategy]
+        E -->|Não| G[TesseractOcrStrategy]
+        F --> H[Extração Regex]
+        G --> H
+        H --> I[InvoiceData Model]
     end
 
-    subgraph AUTO [3. Automação]
-        G -->|Dados Válidos| I[🚀 Inserção no Protheus]
-        G -->|Divergência| J[⚠️ Relatório de Exceção]
+    subgraph OUTPUT [3. Saída]
+        I --> J[CSV Consolidado]
+        I --> K[Integração ERP (Futuro)]
     end
 
-    style ORCH fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    style ELT fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    style AUTO fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    style INGEST fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style CORE fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style OUTPUT fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
 ```
 
 -----
 
-## 🔄 1. Orquestração (Ingestão)
+## 🔄 1. Ingestão Segura
 
-Responsável pela **monitoria e captura** dos documentos fiscais na entrada da empresa.
+Responsável pela **monitoria e captura** dos documentos fiscais.
 
-  * **Rotinas de Varredura:** Monitoramento contínuo de caixas de e-mail específicas.
-  * **Filtros Inteligentes:** Identificação de e-mails contendo NFS-e (baseado em assunto, remetente e anexos).
-  * **Gestão de Fontes:** Integração com a base de contratos para priorizar fornecedores cadastrados.
+*   **Protocolo IMAP:** Conexão persistente e segura (SSL) com provedores modernos (Gmail, Office 365).
+*   **Segurança:** Credenciais gerenciadas via variáveis de ambiente (`.env`), suportando *App Passwords* para contornar 2FA.
+*   **Resiliência:** Tratamento de colisão de nomes de arquivos usando UUIDs.
 
 -----
 
-## ⛏️ 2. ELT (Extração e Transformação)
+## ⛏️ 2. Extração Inteligente
 
-Este é o núcleo atual do projeto (`scrapper_nfe`), responsável por transformar documentos desestruturados (PDFs variados) em dados estruturados.
+O núcleo do projeto (`scrapper_nfe`) transforma documentos desestruturados em dados.
 
-### Funcionalidades
+### Funcionalidades Chave
 
-1.  **Leitura Híbrida:** Utiliza *Strategies* para alternar entre leitura nativa (rápida) e OCR (Tesseract) automaticamente.
-2.  **Categorização:** Digitaliza as informações críticas (CNPJ, Valores, Datas).
-3.  **Validação de Negócio (Tabela Verdade):**
-      * Lê a tabela de **Contratos e Pedidos** vigentes.
-      * Compara: *Dados da NF extraída* **vs** *Dados do Pedido de Compra*.
-      * Garante que o valor faturado corresponde ao contratado antes do lançamento.
+1.  **Estratégia Híbrida (Fallback):**
+    *   Tenta leitura nativa (`pdfplumber`) primeiro: **~0.1s/arquivo**.
+    *   Falha graciosamente para OCR (`Tesseract`) se necessário: **~3.0s/arquivo**.
+2.  **Normalização:** Converte valores monetários (`R$ 1.234,56`) e datas para formatos padrão de banco de dados (`float`, `ISO 8601`).
 
-### Modelo de Dados Extraídos
-
-Atualmente, o núcleo extrai e normaliza os seguintes campos:
+### Modelo de Dados
 
 | Campo | Descrição | Tipo |
 | :--- | :--- | :--- |
@@ -72,35 +103,23 @@ Atualmente, o núcleo extrai e normaliza os seguintes campos:
 | `numero_nota` | Número da NFS-e (higienizado) | `string` |
 | `data_emissao` | Data de competência (ISO 8601) | `date` |
 | `valor_total` | Valor líquido da nota | `float` |
-| `texto_bruto` | Conteúdo completo para auditoria | `text` |
 
 -----
 
-## 🤖 3. Automação (Ação)
+## 📂 Estrutura do Projeto
 
-A etapa final do pipeline, onde o dado validado se transforma em ação no ERP.
-
-  * **Input de Dados:** Criação da tabela final de *input*.
-  * **Integração Protheus:** Inserção automática da pré-nota ou nota classificada no sistema Protheus.
-  * **Logs de Auditoria:** Registro de todas as operações para rastreabilidade fiscal.
-
------
-
-## 📂 Estrutura do Código Fonte
-
-A organização do projeto segue princípios de *Clean Architecture* para facilitar a manutenção e escalabilidade para novos municípios.
+Organização seguindo princípios de *Clean Architecture*.
 
 ```bash
 extrator_nfse/
 │
-├── core/               # Kernel: Interfaces e Modelos de Dados
-├── strategies/         # Motores de Leitura (PDF Nativo vs OCR)
-├── extractors/         # Regras de Negócio por Município/Layout
-├── config/             # Configurações de Ambiente (Tesseract, Paths)
-├── main.py             # Ponto de entrada (CLI)
-└── requirements.txt    # Dependências do Projeto
+├── config/             # Settings e carregamento de .env
+├── core/               # Interfaces, Models e Exceptions
+├── extractors/         # Regras de Regex (GenericExtractor)
+├── ingestors/          # Conectores de E-mail (ImapIngestor)
+├── strategies/         # Motores de Leitura (Native vs OCR)
+├── tests/              # Testes Unitários e de Integração
+├── docs/               # Documentação MkDocs
+├── main.py             # CLI para processamento local
+└── run_ingestion.py    # CLI para ingestão de e-mail
 ```
-
------
-
-*© 2025 Master. Desenvolvido para modernização do setor fiscal.*
