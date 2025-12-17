@@ -9,7 +9,20 @@ sys.path.append(str(PROJECT_ROOT))
 
 from config import settings
 
-def move_failed_files():
+def move_failed_files() -> None:
+    """
+    Move arquivos PDF que falharam na extração para uma pasta de quarentena.
+
+    Lê o relatório de ingestão (`relatorio_ingestao.csv`), identifica os arquivos
+    com falha crítica (sem número de nota ou valor zerado) e os copia da pasta
+    temporária (`temp_email/`) para a pasta de análise manual (`nfs/`).
+
+    Isso permite que o desenvolvedor isole os casos de borda para criar novas
+    regras de extração sem precisar baixar os e-mails novamente.
+
+    Returns:
+        None: Exibe o progresso da cópia no console.
+    """
     csv_path = settings.DIR_SAIDA / "relatorio_ingestao.csv"
     # Destino: Pasta 'nfs' na raiz do projeto (para análise manual)
     target_dir = PROJECT_ROOT / "nfs"

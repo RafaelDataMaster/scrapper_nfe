@@ -62,3 +62,27 @@ Em testes reais, descobrimos que muitos fornecedores enviam arquivos com nomes g
 Inicialmente, para testes rápidos, as senhas estavam no código.
 *   **Ação:** Migração imediata para variáveis de ambiente (`.env`) usando `python-dotenv`.
 *   **Insight:** Além de segurança, isso facilita a troca de ambientes (Dev vs. Prod) sem alterar uma linha de código. O uso de "Senhas de Aplicativo" (App Passwords) provou-se essencial para contornar o 2FA de provedores modernos como Gmail.
+
+---
+
+## 6. Desafios de Extração e Padrões de Falha (Fase de Testes)
+
+Durante a validação com dados reais (Dez/2025), identificamos três categorias principais de falhas na extração de dados, mesmo quando o arquivo é baixado corretamente.
+
+### Falsos Positivos (Boletos e Recibos)
+Muitos e-mails contêm anexos que são PDFs válidos, mas não são Notas Fiscais de Serviço (NFSe).
+*   **Sintoma:** O extrator roda, não encontra campos de NF (Número, CNPJ Prestador) e retorna valores vazios ou nulos.
+*   **Exemplos:** `Boleto Locaweb.pdf`, `Comprovante de Entrega.pdf`.
+*   **Solução Proposta:** Implementar uma etapa de **Classificação de Documento** antes da extração. Se o texto contiver palavras-chave fortes como "Boleto", "Recibo de Entrega" ou "Fatura", o arquivo deve ser ignorado ou marcado com uma flag `tipo_documento="OUTROS"`, evitando poluir o dataset de notas fiscais.
+
+### Variação de Layout (Regex Específica Necessária)
+O extrator genérico (`GenericExtractor`) funciona bem para layouts padrão (ABRASF), mas falha em prefeituras com layouts proprietários.
+*   **Caso 1 (Vila Velha):** O campo "Número da Nota" aparece rotulado como `Número Cód`, o que foge da regex padrão `Número da Nota`.
+*   **Caso 2 (Repromaq/Outros):** O valor monetário às vezes não é capturado porque o OCR ou o layout insere caracteres estranhos ou quebras de linha inesperadas entre o símbolo `R$` e o número.
+*   **Solução Proposta:** Criação de **Extratores Específicos** (Strategy Pattern).
+    *   Criar `VilaVelhaExtractor` que herda de `BaseExtractor` mas sobrescreve as regexes problemáticas.
+    *   O `Processor` deve iterar sobre uma lista de extratores (`[VilaVelhaExtractor, GenericExtractor]`) e usar o primeiro que validar com sucesso (`can_handle()`).
+
+### Documentos Auxiliares de Locação
+Alguns documentos são híbridos (Recibos de Locação) que juridicamente funcionam como comprovante, mas não têm a estrutura de uma NFSe.
+*   **Insight:** Tentar forçar a extração de "Número de Nota" nesses documentos é um erro conceitual. Eles devem ser tratados como uma categoria à parte ou ignorados se o escopo for estritamente NFSe.

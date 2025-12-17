@@ -47,7 +47,21 @@ extrator_nfse/
 │
 ├── config/                     # Configurações (settings.py + .env)
 ├── core/                       # Interfaces e Classes Base
+├── data/                       # Dados (Entrada/Saída)
+│   ├── debug_output/           # Saída dos testes de regras (CSV de debug)
+│   └── output/                 # Relatórios finais de ingestão
+├── docs/                       # Documentação (MkDocs)
 ├── extractors/                 # Lógica de extração específica
+├── ingestors/                  # Conectores de E-mail (IMAP)
+├── nfs/                        # Pasta para análise manual de PDFs com falha
+├── scripts/                    # Scripts utilitários e de diagnóstico
+│   ├── diagnose_failures.py    # Analisa CSV e aponta erros
+│   ├── move_failed_files.py    # Move PDFs ruins para pasta 'nfs'
+│   └── test_rules_extractors.py # Testa regras apenas nos arquivos da pasta 'nfs'
+├── strategies/                 # Estratégias de leitura (PDF/OCR)
+├── temp_email/                 # Buffer temporário de downloads
+└── tests/                      # Testes Unitários
+```
 ├── ingestors/                  # Conectores de E-mail (IMAP)
 ├── strategies/                 # Estratégias de Leitura (PDF/OCR)
 ├── docs/                       # Documentação (MkDocs)

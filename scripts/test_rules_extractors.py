@@ -9,7 +9,22 @@ sys.path.append(str(PROJECT_ROOT))
 
 from core.processor import BaseInvoiceProcessor
 
-def main():
+def main() -> None:
+    """
+    Executa o pipeline de extração apenas nos arquivos da pasta de quarentena (`nfs/`).
+
+    Este script é usado para desenvolvimento e teste rápido de novas Regex.
+    Ele itera sobre todos os PDFs na pasta `nfs/`, aplica as regras atuais de extração
+    e gera um CSV de debug (`data/debug_output/carga_notas_fiscais_debug.csv`).
+
+    Diferente do `run_ingestion.py`, este script:
+    1.  Não conecta no e-mail.
+    2.  Não baixa arquivos.
+    3.  Foca apenas na lógica de `Processor` e `Extractors`.
+
+    Returns:
+        None: Gera um arquivo CSV e imprime o status no console.
+    """
     # --- CONFIGURAÇÃO DE DEBUG ---
     # Pasta onde estão os arquivos problemáticos (movidos pelo script anterior)
     pasta_entrada = PROJECT_ROOT / "nfs"

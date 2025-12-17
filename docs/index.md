@@ -113,13 +113,20 @@ Organização seguindo princípios de *Clean Architecture*.
 ```bash
 extrator_nfse/
 │
-├── config/             # Settings e carregamento de .env
-├── core/               # Interfaces, Models e Exceptions
-├── extractors/         # Regras de Regex (GenericExtractor)
-├── ingestors/          # Conectores de E-mail (ImapIngestor)
-├── strategies/         # Motores de Leitura (Native vs OCR)
-├── tests/              # Testes Unitários e de Integração
-├── docs/               # Documentação MkDocs
-├── main.py             # CLI para processamento local
-└── run_ingestion.py    # CLI para ingestão de e-mail
+├── config/                     # Settings e carregamento de .env
+├── core/                       # Interfaces, Models e Exceptions
+├── data/                       # Dados (Entrada/Saída)
+│   ├── debug_output/           # Saída dos testes de regras (CSV de debug)
+│   └── output/                 # Relatórios finais de ingestão
+├── docs/                       # Documentação MkDocs
+├── extractors/                 # Regras de Regex (GenericExtractor)
+├── ingestors/                  # Conectores de E-mail (ImapIngestor)
+├── nfs/                        # Pasta para análise manual de PDFs com falha
+├── scripts/                    # Scripts utilitários e de diagnóstico
+│   ├── diagnose_failures.py    # Analisa CSV e aponta erros
+│   ├── move_failed_files.py    # Move PDFs ruins para pasta 'nfs'
+│   └── test_rules_extractors.py # Testa regras apenas nos arquivos da pasta 'nfs'
+├── strategies/                 # Motores de Leitura (Native vs OCR)
+├── tests/                      # Testes Unitários e de Integração
+└── run_ingestion.py            # CLI para ingestão de e-mail
 ```

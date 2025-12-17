@@ -49,6 +49,33 @@ Verifica a integração com e-mail sem precisar de credenciais reais.
 
 Ao adicionar uma nova funcionalidade, crie um arquivo `test_nova_funcionalidade.py` na pasta `tests/`.
 
+---
+
+## Testes de Regras e Diagnóstico (Scripts Auxiliares)
+
+Além dos testes unitários, o projeto conta com scripts utilitários na pasta `scripts/` para validar regras de extração com dados reais e diagnosticar falhas em produção.
+
+### 1. Diagnóstico de Falhas (`scripts/diagnose_failures.py`)
+Analisa o CSV gerado pela ingestão (`data/output/relatorio_ingestao.csv`) e identifica padrões de erro.
+
+*   **Uso:** `python scripts/diagnose_failures.py`
+*   **Saída:** Gera um relatório em texto (`data/output/diagnostico_falhas.txt`) listando arquivos onde o Número da Nota ou Valor Total não foram capturados.
+*   **Classificação Automática:** Tenta identificar se o arquivo é um falso positivo (Boleto, Recibo) ou se é uma falha de Regex.
+
+### 2. Isolamento de Falhas (`scripts/move_failed_files.py`)
+Move fisicamente os arquivos PDF que falharam na ingestão para uma pasta dedicada (`nfs/`), facilitando a análise manual e o re-teste.
+
+*   **Uso:** `python scripts/move_failed_files.py`
+*   **Ação:** Copia arquivos de `temp_email/` para `nfs/` baseando-se no relatório de falhas.
+
+### 3. Teste de Regras (`scripts/test_rules_extractors.py`)
+Permite testar novas Regex e lógicas de extração apenas nos arquivos problemáticos, sem precisar rodar toda a ingestão de e-mail novamente.
+
+*   **Uso:** `python scripts/test_rules_extractors.py`
+*   **Entrada:** Lê PDFs da pasta `nfs/`.
+*   **Saída:** Gera um CSV de debug em `data/debug_output/carga_notas_fiscais_debug.csv`.
+*   **Objetivo:** Ciclo rápido de desenvolvimento (Editar Regex -> Rodar Script -> Verificar CSV).
+
 Exemplo de teste unitário simples:
 
 ```python

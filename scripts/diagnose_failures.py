@@ -6,7 +6,22 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-def analyze_failures():
+def analyze_failures() -> None:
+    """
+    Analisa o relatório de ingestão e gera um diagnóstico detalhado das falhas.
+
+    Lê o arquivo CSV gerado pelo processo de ingestão (`data/output/relatorio_ingestao.csv`),
+    filtra as linhas onde a extração falhou (Número da Nota vazio ou Valor zerado) e
+    gera um relatório legível em texto (`data/output/diagnostico_falhas.txt`).
+
+    O script tenta classificar automaticamente o tipo de falha:
+    - **BOLETO/RECIBO:** Se o nome do arquivo ou texto sugerir que não é uma NFSe.
+    - **LOCAÇÃO:** Se o texto contiver termos de locação (layout atípico).
+    - **REGEX:** Se for uma NFSe válida mas a regex falhou.
+
+    Returns:
+        None: A saída é impressa no console e salva em arquivo.
+    """
     # Caminhos relativos à raiz do projeto
     csv_path = PROJECT_ROOT / "data" / "output" / "relatorio_ingestao.csv"
     output_log = PROJECT_ROOT / "data" / "output" / "diagnostico_falhas.txt"
