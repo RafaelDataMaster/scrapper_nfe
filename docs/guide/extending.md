@@ -79,3 +79,61 @@ Basta colocar um PDF correspondente na pasta `nfs/` e rodar o `main.py`. O siste
 ## Prioridade de Execução
 
 O sistema verifica os extratores na ordem em que são importados. O `GenericExtractor` é geralmente o último recurso. Se você tiver conflitos (duas cidades com cabeçalhos muito parecidos), torne sua verificação no `can_handle` mais específica.
+
+---
+
+## Trabalhando com Boletos
+
+O sistema agora identifica e processa **boletos bancários** automaticamente, separando-os de notas fiscais. Para cada boleto, extraímos:
+
+### Campos Extraídos de Boletos
+
+- **CNPJ do Beneficiário**: Quem está recebendo o pagamento
+- **Valor do Documento**: Valor nominal do boleto
+- **Data de Vencimento**: Quando deve ser pago (formato YYYY-MM-DD)
+- **Número do Documento**: ID da fatura/documento
+- **Linha Digitável**: Código de barras do boleto
+- **Nosso Número**: Identificação interna do banco
+- **Referência NFSe**: Número da nota fiscal (se mencionado no boleto)
+
+### Vinculando Boletos a NFSe
+
+Você pode cruzar os dados dos boletos com as notas fiscais usando:
+
+1. **Campo `referencia_nfse`**: Alguns boletos incluem explicitamente "Ref. NF 12345"
+2. **Campo `numero_documento`**: Muitos fornecedores usam o número da NF como número do documento
+3. **Cruzamento por dados**: Compare CNPJ + Valor + Data aproximada entre os dois CSVs
+
+### Arquivos de Saída
+
+O sistema gera dois CSVs separados:
+- `relatorio_nfse.csv`: Contém todas as notas fiscais processadas
+- `relatorio_boletos.csv`: Contém todos os boletos identificados
+
+### Exemplo de Cruzamento com Pandas
+
+```python
+import pandas as pd
+
+# Carregar os dois relatórios
+df_nfse = pd.read_csv('data/output/relatorio_nfse.csv')
+df_boleto = pd.read_csv('data/output/relatorio_boletos.csv')
+
+# Vincular por referência explícita
+merged = pd.merge(
+    df_boleto, 
+    df_nfse, 
+    left_on='referencia_nfse', 
+    right_on='numero_nota',
+    how='left'
+)
+
+# Ou vincular por número do documento
+merged2 = pd.merge(
+    df_boleto,
+    df_nfse,
+    left_on='numero_documento',
+    right_on='numero_nota',
+    how='left'
+)
+```

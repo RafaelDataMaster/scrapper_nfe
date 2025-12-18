@@ -1,11 +1,9 @@
-import sys
 import shutil
 import pandas as pd
-from pathlib import Path
+from _init_env import setup_project_path
 
-# Adiciona a raiz do projeto ao path para importar config
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.append(str(PROJECT_ROOT))
+# Inicializa o ambiente do projeto
+setup_project_path()
 
 from config import settings
 

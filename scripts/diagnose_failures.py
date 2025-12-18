@@ -1,10 +1,12 @@
 import sys
 import pandas as pd
 from pathlib import Path
+from _init_env import setup_project_path
 
-# Adiciona a raiz do projeto ao path para garantir que os caminhos funcionem
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.append(str(PROJECT_ROOT))
+# Inicializa o ambiente do projeto
+PROJECT_ROOT = setup_project_path()
+
+from core.diagnostics import ExtractionDiagnostics
 
 def analyze_failures() -> None:
     """
@@ -75,14 +77,11 @@ def analyze_failures() -> None:
                 print(f"   ❌ Status: Nota: {num} | Valor: {val}")
                 print(f"   👀 Texto (Início): {texto_snippet}...")
                 
-                if "boleto" in arquivo.lower() or "recibo" in arquivo.lower():
-                    print("   💡 Diagnóstico: BOLETO/RECIBO (Ignorar se não for NF).")
-                elif "locação" in texto_snippet.lower():
-                    print("   💡 Diagnóstico: LOCAÇÃO (Layout atípico).")
-                elif pd.isna(val) or val == 0.0:
-                    print("   🔧 Ação: Regex de VALOR falhou.")
-                elif num == "VAZIO":
-                    print("   🔧 Ação: Regex de NÚMERO DA NOTA falhou.")
+                # Usa o diagnóstico centralizado
+                diagnostico = ExtractionDiagnostics.diagnosticar_tipo_falha(
+                    arquivo, texto_snippet, num, val
+                )
+                print(f"   💡 Diagnóstico: {diagnostico}")
                 
                 print("-" * 60)
                 

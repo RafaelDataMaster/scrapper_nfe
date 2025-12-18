@@ -16,16 +16,39 @@ class GenericExtractor(BaseExtractor):
     def can_handle(cls, text: str) -> bool:
         """
         Verifica se este extrator pode processar o texto fornecido.
+        
+        Este é o extrator genérico para NFSe. Ele aceita qualquer documento
+        QUE NÃO SEJA um boleto bancário.
 
         Args:
             text (str): Texto extraído do PDF.
 
         Returns:
-            bool: Sempre True (Fallback padrão).
+            bool: True se NÃO for um boleto (fallback padrão para NFSe).
         """
-        # Se nenhum outro pegar, este pega (ou defina uma regra específica)
-        # Como é um extrator genérico, ele deve ser o último recurso ou sempre retornar True se for o único
-        # Por enquanto, vamos assumir que ele sempre tenta se for chamado
+        text_upper = text.upper()
+        
+        # Indicadores fortes de que é um BOLETO (não deve ser processado aqui)
+        boleto_keywords = [
+            'LINHA DIGITÁVEL',
+            'LINHA DIGITAVEL',
+            'BENEFICIÁRIO',
+            'BENEFICIARIO',
+            'CÓDIGO DE BARRAS',
+            'CODIGO DE BARRAS',
+            'CEDENTE'
+        ]
+        
+        # Verifica linha digitável (padrão de boleto)
+        linha_digitavel = re.search(r'\d{5}[\.\s]\d{5}\s+\d{5}[\.\s]\d{6}\s+\d{5}[\.\s]\d{6}', text)
+        
+        boleto_score = sum(1 for kw in boleto_keywords if kw in text_upper)
+        
+        # Se parece com boleto, NÃO processa aqui
+        if boleto_score >= 2 or linha_digitavel:
+            return False
+        
+        # Caso contrário, aceita como NFSe (fallback)
         return True 
 
     def extract(self, text: str) -> Dict[str, Any]:
@@ -39,6 +62,7 @@ class GenericExtractor(BaseExtractor):
             Dict[str, Any]: Dicionário com os campos extraídos.
         """
         data = {}
+        data['tipo_documento'] = 'NFSE'  # Identifica como NFSe
         data['cnpj_prestador'] = self._extract_cnpj(text)
         data['numero_nota'] = self._extract_numero_nota(text)
         data['valor_total'] = self._extract_valor(text)
@@ -58,7 +82,6 @@ class GenericExtractor(BaseExtractor):
         return 0.0
 
     def _extract_data_emissao(self, text: str):
-        # Migrando converter_data_iso
         match = re.search(r'\d{2}/\d{2}/\d{4}', text)
         if match:
             try:
@@ -72,41 +95,26 @@ class GenericExtractor(BaseExtractor):
         if not text:
             return None
 
-        # --- 1. LIMPEZA CIRÚRGICA (Trazida do seu teste original) ---
+        # Limpeza: remove datas e identificadores auxiliares (RPS, Lote, Série)
         texto_limpo = text
-        
-        # Remove Datas (DD/MM/AAAA) para evitar confundir ano com número da nota
         texto_limpo = re.sub(r'\d{2}/\d{2}/\d{4}', ' ', texto_limpo)
-        
-        # Remove "RPS 1234", "Lote 1234", "Série 1", etc.
         padroes_lixo = r'(?i)\b(RPS|Lote|Protocolo|Recibo|S[eé]rie)\b\D{0,10}?\d+'
         texto_limpo = re.sub(padroes_lixo, ' ', texto_limpo)
 
-        # --- 2. LISTA DE PADRÕES (Sua lógica de ouro) ---
+        # Padrões de extração ordenados por especificidade
         padroes = [
-            # 1. CASO SALVADOR / MISTURADO (PRIORIDADE MÁXIMA)
             r'(?i)Número\s+da\s+Nota.*?(?<!\d)(\d{1,15})(?!\d)',
-
-            # 2. CASO NFS-e ESPECÍFICO
             r'(?i)(?:(?:Número|Numero|N[º°o])\s*da\s*)?NFS-e\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*\b(\d{1,15})\b',
-
-            # 3. CASO VERTICAL (MARÍLIA/OUTROS)
             r'(?i)Número\s+da\s+Nota[\s\S]*?\b(\d{1,15})\b',
-
-            # 4. CASO NOTA FISCAL (Genérico)
             r'(?i)Nota\s*Fiscal\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*(\d{1,15})',
-            
-            # 5. CASO BLINDADO FINAL
             r'(?i)(?<!RPS\s)(?<!Lote\s)(?<!S[eé]rie\s)(?:Número|N[º°o])\s*[:.-]?\s*(\d{1,15})',
         ]
-
-        # --- 3. LOOP DE TENTATIVAS ---
+        
         for regex in padroes:
             match = re.search(regex, texto_limpo, re.IGNORECASE)
             if match:
                 resultado = match.group(1)
-                
-                # Limpeza pós-match
+                # Remove pontos e espaços do número extraído
                 resultado = resultado.replace('.', '').replace(' ', '')
                 return resultado
         

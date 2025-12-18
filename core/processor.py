@@ -2,10 +2,12 @@ import re
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
-from core.models import InvoiceData
+from typing import Union
+from core.models import InvoiceData, BoletoData
 from strategies.fallback import SmartExtractionStrategy
 from core.extractors import EXTRACTOR_REGISTRY
 import extractors.generic
+import extractors.boleto
 
 class BaseInvoiceProcessor(ABC):
     """
@@ -13,12 +15,12 @@ class BaseInvoiceProcessor(ABC):
 
     Responsável por coordenar o fluxo completo:
     1.  **Leitura**: Converte PDF em texto (via `SmartExtractionStrategy`).
-    2.  **Seleção**: Escolhe o extrator adequado para o texto (via `EXTRACTOR_REGISTRY`).
-    3.  **Extração**: Executa a mineração de dados.
-    4.  **Normalização**: Retorna um objeto `InvoiceData`.
+    2.  **Classificação**: Identifica se é NFSe ou Boleto.
+    3.  **Seleção**: Escolhe o extrator adequado para o texto.
+    4.  **Extração**: Executa a mineração de dados.
+    5.  **Normalização**: Retorna objeto `InvoiceData` ou `BoletoData`.
     """
     def __init__(self):
-        # Instancia a estratégia de leitura que você já criou
         self.reader = SmartExtractionStrategy()
 
     def _get_extractor(self, text: str):
@@ -28,7 +30,7 @@ class BaseInvoiceProcessor(ABC):
                 return extractor_cls()
         raise ValueError("Nenhum extrator compatível encontrado para este documento.")
 
-    def process(self, file_path: str) -> InvoiceData:
+    def process(self, file_path: str) -> Union[InvoiceData, BoletoData]:
         """
         Executa o pipeline de processamento para um único arquivo.
 
@@ -36,35 +38,53 @@ class BaseInvoiceProcessor(ABC):
             file_path (str): Caminho absoluto ou relativo do arquivo PDF.
 
         Returns:
-            InvoiceData: Objeto contendo os dados extraídos e metadados.
+            Union[InvoiceData, BoletoData]: Objeto contendo os dados extraídos.
         """
-        # 1. Leitura (Já implementado nas suas strategies)
+        # 1. Leitura
         raw_text = self.reader.extract(file_path)
         
-        # 2. Inicializa o modelo
-        data = InvoiceData(
-            arquivo_origem=os.path.basename(file_path),
-            texto_bruto=raw_text[:100].replace('\n', ' ') # Guardando snippet como no seu teste
-        )
-
         if not raw_text or "Falha" in raw_text:
-            return data
+            # Retorna objeto vazio de NFSe por padrão
+            return InvoiceData(
+                arquivo_origem=os.path.basename(file_path),
+                texto_bruto="Falha na leitura"
+            )
 
-        # 3. Seleção do Extrator (Factory)
+        # 2. Seleção do Extrator
         try:
             extractor = self._get_extractor(raw_text)
             extracted_data = extractor.extract(raw_text)
             
-            # 4. Preenchimento do Modelo
-            data.cnpj_prestador = extracted_data.get('cnpj_prestador')
-            data.numero_nota = extracted_data.get('numero_nota')
-            data.valor_total = extracted_data.get('valor_total')
-            data.data_emissao = extracted_data.get('data_emissao')
+            # 3. Identifica o tipo e cria o modelo apropriado
+            if extracted_data.get('tipo_documento') == 'BOLETO':
+                return BoletoData(
+                    arquivo_origem=os.path.basename(file_path),
+                    texto_bruto=raw_text[:100].replace('\n', ' '),
+                    cnpj_beneficiario=extracted_data.get('cnpj_beneficiario'),
+                    valor_documento=extracted_data.get('valor_documento', 0.0),
+                    vencimento=extracted_data.get('vencimento'),
+                    numero_documento=extracted_data.get('numero_documento'),
+                    linha_digitavel=extracted_data.get('linha_digitavel'),
+                    nosso_numero=extracted_data.get('nosso_numero'),
+                    referencia_nfse=extracted_data.get('referencia_nfse')
+                )
+            else:
+                # NFSe
+                return InvoiceData(
+                    arquivo_origem=os.path.basename(file_path),
+                    texto_bruto=raw_text[:100].replace('\n', ' '),
+                    cnpj_prestador=extracted_data.get('cnpj_prestador'),
+                    numero_nota=extracted_data.get('numero_nota'),
+                    valor_total=extracted_data.get('valor_total', 0.0),
+                    data_emissao=extracted_data.get('data_emissao')
+                )
             
         except ValueError as e:
             print(f"Erro ao processar {file_path}: {e}")
-
-        return data
+            return InvoiceData(
+                arquivo_origem=os.path.basename(file_path),
+                texto_bruto=raw_text[:100].replace('\n', ' ')
+            )
 
 
 

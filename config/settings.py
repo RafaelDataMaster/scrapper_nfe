@@ -7,9 +7,17 @@ load_dotenv()
 
 # Caminhos Base
 BASE_DIR = Path(__file__).resolve().parent.parent
-DIR_ENTRADA = BASE_DIR / "nfs" # Mantendo compatibilidade com o código existente que espera 'nfs'
 DIR_SAIDA = BASE_DIR / "data" / "output"
 DIR_TEMP = BASE_DIR / "temp_email"  # Nova pasta temporária para o gap de ingestão
+
+# --- Caminhos de Debug (Test Rules) ---
+DIR_DEBUG_INPUT = BASE_DIR / "failed_cases_pdf"  # Pasta de input para testes de regras
+DIR_DEBUG_OUTPUT = BASE_DIR / "data" / "debug_output"
+DEBUG_CSV_NFSE_SUCESSO = DIR_DEBUG_OUTPUT / "nfse_sucesso.csv"
+DEBUG_CSV_NFSE_FALHA = DIR_DEBUG_OUTPUT / "nfse_falha.csv"
+DEBUG_CSV_BOLETO_SUCESSO = DIR_DEBUG_OUTPUT / "boletos_sucesso.csv"
+DEBUG_CSV_BOLETO_FALHA = DIR_DEBUG_OUTPUT / "boletos_falha.csv"
+DEBUG_RELATORIO_QUALIDADE = DIR_DEBUG_OUTPUT / "relatorio_qualidade.txt"
 
 # --- Caminhos de Binários Externos ---
 # Centralizamos aqui para não espalhar caminhos pelo código

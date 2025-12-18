@@ -70,9 +70,10 @@ def main():
 
     print(f"📦 {len(anexos)} anexo(s) encontrado(s). Iniciando processamento...")
 
-    # 5. Processamento
+    # 5. Processamento (separando NFSe e Boletos)
     processor = BaseInvoiceProcessor()
-    resultados = []
+    resultados_nfse = []
+    resultados_boleto = []
 
     for item in anexos:
         filename = item['filename']
@@ -87,32 +88,42 @@ def main():
             with open(file_path, 'wb') as f:
                 f.write(content_bytes)
                 
-            print(f"  Processing: {filename} (Salvo como: {unique_filename})...")
+            print(f"  Processing: {filename}...")
             
-            # O processador agora lê o arquivo que acabamos de salvar
             result = processor.process(str(file_path))
             
-            # Enriquece o resultado com dados do e-mail
-            data_dict = result.__dict__
+            # Enriquece com dados do e-mail
+            data_dict = result.__dict__.copy()
             data_dict['email_source'] = item['source']
             data_dict['email_subject'] = item['subject']
             
-            resultados.append(data_dict)
-            print(f"  ✅ Sucesso: {result.numero_nota} - {result.cnpj_prestador}")
+            # Separa por tipo
+            if hasattr(result, 'valor_documento'):  # É BoletoData
+                resultados_boleto.append(data_dict)
+                print(f"  💰 Boleto: Vencimento {result.vencimento} - R$ {result.valor_documento}")
+            else:  # É InvoiceData
+                resultados_nfse.append(data_dict)
+                print(f"  ✅ NFSe: {result.numero_nota} - {result.cnpj_prestador}")
             
         except Exception as e:
             print(f"  ⚠️ Falha ao processar {filename}: {e}")
 
-    # 6. Relatório Final
-    if resultados:
-        # Garante que o diretório de saída existe
-        os.makedirs(settings.DIR_SAIDA, exist_ok=True)
-        output_file = settings.DIR_SAIDA / "relatorio_ingestao.csv"
-        
-        df = pd.DataFrame(resultados)
-        df.to_csv(output_file, index=False, sep=',', encoding='utf-8-sig')
-        print(f"\n🚀 Processamento concluído! Relatório salvo em: {output_file}")
-    else:
+    # 6. Gera CSVs Separados
+    os.makedirs(settings.DIR_SAIDA, exist_ok=True)
+    
+    if resultados_nfse:
+        output_nfse = settings.DIR_SAIDA / "relatorio_nfse.csv"
+        df_nfse = pd.DataFrame(resultados_nfse)
+        df_nfse.to_csv(output_nfse, index=False, sep=',', encoding='utf-8-sig')
+        print(f"\n📊 {len(resultados_nfse)} NFSe processadas -> {output_nfse}")
+    
+    if resultados_boleto:
+        output_boleto = settings.DIR_SAIDA / "relatorio_boletos.csv"
+        df_boleto = pd.DataFrame(resultados_boleto)
+        df_boleto.to_csv(output_boleto, index=False, sep=',', encoding='utf-8-sig')
+        print(f"💰 {len(resultados_boleto)} Boletos processados -> {output_boleto}")
+    
+    if not resultados_nfse and not resultados_boleto:
         print("\n⚠️ Nenhum resultado processado com sucesso.")
     
     # Opcional: Limpeza
