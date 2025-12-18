@@ -1,60 +1,40 @@
-# Projeto de Scraping  de notas fiscais eletrônicas
+# Projeto de Scraping de notas fiscais eletrônicas
+
+## 🐳 Executando com Docker (Recomendado)
+
+```bash
+# Clone e configure
+git clone <repo>
+cd scrapper
+cp .env.example .env  # Edite com suas credenciais
+
+# Build e execute
+docker-compose up -d scrapper-cron
+
+# Ver logs
+docker-compose logs -f scrapper-cron
+```
+
+📖 **Guia completo:** [README-DOCKER.md](README-DOCKER.md)
+
+---
 
 # To Do
 - [ ] Conseguir o acesso ao maior número de pdfs e a tabela de verdades já catalogada dos dados pra conferir se a extração do PDF está de fato funcionando.
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros).
 - [ ] Conversar direito com a Melyssa, ou mesmo direto com o Paulo ou o Gustavo a respeito do redirecionamento de emails. Avaliar possíveis soluções e planejar como realmente as NFSE vai estar e em qual email.
-- [ ] Modelar o projeto pra rodar em servidor, organizar a docker file e descobrir como subir isso em produção do jeito certo!
+- [x] Modelar o projeto pra rodar em servidor, organizar a docker file e descobrir como subir isso em produção do jeito certo! ✅ **CONCLUÍDO 18/12/2025**
 
 
 
 
 # Done
 
-## 18/12/2025 - Refatoração e Organização Completa
-
-### 🔄 Refatoração de Código
+## 18/12/2025 
 - [x] Criado módulo centralizado `core/diagnostics.py` para análise de qualidade
-- [x] Eliminadas ~120 linhas de código duplicado entre scripts
 - [x] Criado `scripts/_init_env.py` para path resolution centralizado
-- [x] Refatorados 5 scripts para usar módulos centralizados
 - [x] Renomeado `test_rules_extractors.py` → `validate_extraction_rules.py` (clareza semântica)
 - [x] Removidos comentários redundantes no código (mantendo docstrings importantes)
-
-### 🧪 Testes Unitários
-- [x] Criada suite completa de testes em `tests/test_extractors.py`
-- [x] Implementados 23 testes unitários (todos passando ✅)
-- [x] Cobertura de: GenericExtractor, BoletoExtractor, roteamento, edge cases
-- [x] Testes executam em ~0.13s
-
-### 📚 Documentação Profissional
-- [x] Refatorada estrutura de documentação em subpastas organizadas
-- [x] Criada pasta `docs/api/` com 5 páginas especializadas:
-  - `overview.md` - Visão geral + diagrama Mermaid do fluxo
-  - `core.md` - Módulos centrais (Processor, Models, Interfaces, Exceções)
-  - `extractors.md` - Extratores (Generic, Boleto) com exemplos
-  - `strategies.md` - Estratégias (Native, OCR, Fallback) com benchmarks
-  - `diagnostics.md` - Sistema de qualidade e validação
-- [x] Criada seção "Desenvolvimento" em `docs/development/`
-- [x] Movidos arquivos MD da raiz para `docs/` (organização)
-- [x] Mantidos apenas `README.md` e `reuniao.md` na raiz
-- [x] Atualizado `mkdocs.yml` com navegação hierárquica
-- [x] Documentação com diagramas Mermaid, exemplos de código e tabelas comparativas
-
-### 📊 Qualidade do Projeto
-- [x] Zero erros de lint no código
-- [x] Estrutura modular e extensível
-- [x] Separação clara de responsabilidades
-- [x] Documentação inline com docstrings completas
-- [x] Site de documentação profissional (MkDocs)
-
-### 🎯 Melhorias de Arquitetura
-- [x] Redundâncias estratégicas mantidas (Strategy Pattern, validação em camadas)
-- [x] Lógica de negócio centralizada em módulos reutilizáveis
-- [x] Scripts simplificados e DRY (Don't Repeat Yourself)
-- [x] Facilidade para adicionar novos extratores e estratégias
-
-### 🎉 Processamento de Boletos
 - [x] Implementado suporte completo para processamento de **Boletos Bancários**
 - [x] Sistema identifica e separa automaticamente NFSe de Boletos
 - [x] Extração de dados específicos de boletos (linha digitável, vencimento, CNPJ beneficiário, etc.)

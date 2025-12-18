@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  scrapper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nfse-scrapper
+    
+    # Variáveis de ambiente (carregadas do .env)
+    env_file:
+      - .env
+    
+    # Sobrescreve os paths para ambiente Linux
+    environment:
+      - TESSERACT_CMD=/usr/bin/tesseract
+      - POPPLER_PATH=/usr/bin
+    
+    # Volumes para persistir dados e logs
+    volumes:
+      # Dados de saída (CSVs gerados)
+      - ./data/output:/app/data/output
+      # Dados de debug
+      - ./data/debug_output:/app/data/debug_output
+      # Pasta temporária de emails (é limpa a cada execução)
+      - temp_email:/app/temp_email
+      # PDFs de teste/falha (opcional, para debug)
+      - ./failed_cases_pdf:/app/failed_cases_pdf:ro
+    
+    # Políticas de restart
+    restart: unless-stopped
+    
+    # Recursos limitados (ajuste conforme necessidade)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Rede interna
+    networks:
+      - scrapper-network
+    
+    # Logging configurado
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Serviço opcional: Cron para executar periodicamente
+  scrapper-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nfse-scrapper-cron
+    
+    env_file:
+      - .env
+    
+    environment:
+      - TESSERACT_CMD=/usr/bin/tesseract
+      - POPPLER_PATH=/usr/bin
+    
+    volumes:
+      - ./data/output:/app/data/output
+      - ./data/debug_output:/app/data/debug_output
+      - temp_email:/app/temp_email
+      - ./failed_cases_pdf:/app/failed_cases_pdf:ro
+    
+    # Executa a cada 30 minutos (ajuste conforme necessário)
+    command: sh -c "while true; do python run_ingestion.py && sleep 1800; done"
+    
+    restart: unless-stopped
+    
+    networks:
+      - scrapper-network
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Volume nomeado para temp_email (limpo a cada execução)
+volumes:
+  temp_email:
+
+# Rede isolada
+networks:
+  scrapper-network:
+    driver: bridge

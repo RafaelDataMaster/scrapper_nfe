@@ -21,8 +21,17 @@ DEBUG_RELATORIO_QUALIDADE = DIR_DEBUG_OUTPUT / "relatorio_qualidade.txt"
 
 # --- Caminhos de Binários Externos ---
 # Centralizamos aqui para não espalhar caminhos pelo código
-TESSERACT_CMD = os.getenv('TESSERACT_CMD', r'C:\Program Files\Tesseract-OCR\tesseract.exe')
-POPPLER_PATH = os.getenv('POPPLER_PATH', r'C:\Poppler\Release-25.12.0-0\poppler-25.12.0\Library\bin')
+# Detecta automaticamente se está no Docker (Linux) ou Windows
+import platform
+is_linux = platform.system() == 'Linux'
+
+# Defaults diferentes para Linux (Docker) e Windows (desenvolvimento)
+if is_linux:
+    TESSERACT_CMD = os.getenv('TESSERACT_CMD', '/usr/bin/tesseract')
+    POPPLER_PATH = os.getenv('POPPLER_PATH', '/usr/bin')
+else:
+    TESSERACT_CMD = os.getenv('TESSERACT_CMD', r'C:\Program Files\Tesseract-OCR\tesseract.exe')
+    POPPLER_PATH = os.getenv('POPPLER_PATH', r'C:\Poppler\Release-25.12.0-0\poppler-25.12.0\Library\bin')
 
 # --- Parâmetros do OCR ---
 # --psm 6: Assume um bloco único de texto uniforme (vital para notas fiscais)
