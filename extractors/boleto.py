@@ -169,7 +169,10 @@ class BoletoExtractor(BaseExtractor):
     def _extract_vencimento(self, text: str) -> Optional[str]:
         """
         Extrai a data de vencimento do boleto.
+        
+        Tenta primeiro com rótulo explícito, depois busca qualquer data válida.
         """
+        # Padrões com rótulo explícito
         patterns = [
             r'(?i)Vencimento\s*[:\s]*(\d{2}/\d{2}/\d{4})',
             r'(?i)Data\s+Vencimento\s*[:\s]*(\d{2}/\d{2}/\d{4})',
@@ -185,24 +188,53 @@ class BoletoExtractor(BaseExtractor):
                 except ValueError:
                     continue
         
+        # Fallback: busca primeira data no formato DD/MM/YYYY (sem rótulo)
+        # Comum em boletos onde o vencimento está próximo ao rótulo mas separado por espaços
+        date_match = re.search(r'\b(\d{2}/\d{2}/\d{4})\b', text)
+        if date_match:
+            try:
+                dt = datetime.strptime(date_match.group(1), '%d/%m/%Y')
+                # Valida se é uma data futura razoável (até 2030)
+                if 2024 <= dt.year <= 2030:
+                    return dt.strftime('%Y-%m-%d')
+            except ValueError:
+                pass
+        
         return None
 
     def _extract_numero_documento(self, text: str) -> Optional[str]:
         """
         Extrai o número do documento/fatura referenciado no boleto.
+        
         Comum em boletos de serviços (pode conter o número da NF).
+        Evita capturar números muito curtos (1 dígito) que são genéricos.
+        Aceita formatos: "123", "2025.122", "NF-12345", etc.
         """
         patterns = [
-            r'(?i)N[úu]mero\s+do\s+Documento\s*[:\s]*(\d+)',
-            r'(?i)Documento\s*[:\s]*(\d+)',
-            r'(?i)N[º°]\s*Documento\s*[:\s]*(\d+)',
-            r'(?i)Num\.\s*Documento\s*[:\s]*(\d+)'
+            # Padrões específicos com diferentes variações de "número"
+            r'(?i)N[uú]mero\s+do\s+Documento\s*[:\s]*([0-9]+(?:\.[0-9]+)?)',  # Com ú ou u
+            r'(?i)Numero\s+do\s+Documento\s*[:\s]*([0-9]+(?:\.[0-9]+)?)',  # Sem acento
+            r'(?i)Num\.?\s*Documento\s*[:\s]*([0-9]+(?:\.[0-9]+)?)',
+            r'(?i)N[ºº°]\s*Documento\s*[:\s]*([0-9]+(?:\.[0-9]+)?)',
+            r'(?i)N\.\s*documento\s*[:\s]*([0-9]+(?:\.[0-9]+)?)',
+            
+            # Busca "Número do Documento" seguido do valor na próxima linha
+            r'(?i)N.mero\s+do\s+Documento\s+.+?\n\s+.+?\s+([0-9]+\.[0-9]+)',  # Qualquer char em "Número"
+            
+            # Padrão contextual: palavra "documento" seguida de número
+            r'(?i)documento\s+([0-9]+(?:\.[0-9]+)?)',
+            
+            # Genérico: busca por padrão ano.número (ex: 2025.122)
+            r'\b(20\d{2}\.\d+)\b'  # 2024.xxx, 2025.xxx, etc.
         ]
         
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                return match.group(1)
+                numero = match.group(1).strip()
+                # Valida: deve ter pelo menos 2 caracteres e não ser apenas "1"
+                if len(numero) >= 2 or (len(numero) == 1 and numero != '1'):
+                    return numero
         
         return None
 

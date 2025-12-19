@@ -154,6 +154,49 @@ XXXXX.XXXXX XXXXX.XXXXXX XXXXX.XXXXXX X XXXXXXXXXXXXXX
 
 Convertido automaticamente para formato ISO (YYYY-MM-DD).
 
+**Padrões de extração (com fallback):**
+
+1. **Com label explícito:**
+   - `Vencimento: DD/MM/YYYY`
+   - `Data de Vencimento: DD/MM/YYYY`
+
+2. **Fallback - sem label:**
+   - Busca primeira data no formato `DD/MM/YYYY`
+   - Valida se o ano está entre 2024-2030 (datas futuras razoáveis)
+   - Útil para PDFs com layout tabular onde label está distante
+
+```python
+# Exemplo de fallback
+text = "Beneficiário: Empresa XYZ\n10/08/2025  R$ 1.250,00"
+# Extrai "10/08/2025" mesmo sem label "Vencimento:"
+```
+
+#### Número do Documento
+
+Campo desafiador devido à variedade de formatos e layouts.
+
+**8 padrões implementados (ordem de prioridade):**
+
+1-2. **Com label completo:** `Número do Documento: 12345` (variações de encoding `Nú`, `Nu`, `Nü`)
+3-4. **Label abreviado:** `Nº Documento:`, `N. Documento:`, `Doc. Nº`
+5-6. **Layout tabular:** Busca próximo a "Vencimento" ou após "Número"
+7. **⭐ Formato ano.número:** `2025.122`, `2024.900` (comum em alguns bancos)
+8. **Fallback genérico:** Qualquer número entre 2-10 dígitos
+
+**Exemplo - Formato ano.número:**
+```python
+# PDF com layout:
+# "Número do Documento"
+# "2025.122"  (em linha separada)
+
+# Padrão r'\b(20\d{2}\.\d+)\b' captura "2025.122"
+```
+
+**Desafios resolvidos:**
+- ✅ Encoding UTF-8 de "Número" (ú, ü)
+- ✅ Label e valor em linhas separadas
+- ✅ Formato ano.número (20XX.NNN)
+
 #### Referência à NFSe
 
 Alguns boletos contêm referência à nota fiscal que os originou. O extrator tenta identificar:

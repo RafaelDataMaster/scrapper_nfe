@@ -59,7 +59,7 @@ class BaseInvoiceProcessor(ABC):
             if extracted_data.get('tipo_documento') == 'BOLETO':
                 return BoletoData(
                     arquivo_origem=os.path.basename(file_path),
-                    texto_bruto=raw_text[:100].replace('\n', ' '),
+                    texto_bruto=' '.join(raw_text.split())[:500],  # Remove whitespace, then take 500 chars
                     cnpj_beneficiario=extracted_data.get('cnpj_beneficiario'),
                     valor_documento=extracted_data.get('valor_documento', 0.0),
                     vencimento=extracted_data.get('vencimento'),
@@ -72,7 +72,7 @@ class BaseInvoiceProcessor(ABC):
                 # NFSe
                 return InvoiceData(
                     arquivo_origem=os.path.basename(file_path),
-                    texto_bruto=raw_text[:100].replace('\n', ' '),
+                    texto_bruto=' '.join(raw_text.split())[:500],  # Remove whitespace, then take 500 chars
                     cnpj_prestador=extracted_data.get('cnpj_prestador'),
                     numero_nota=extracted_data.get('numero_nota'),
                     valor_total=extracted_data.get('valor_total', 0.0),
@@ -83,7 +83,7 @@ class BaseInvoiceProcessor(ABC):
             print(f"Erro ao processar {file_path}: {e}")
             return InvoiceData(
                 arquivo_origem=os.path.basename(file_path),
-                texto_bruto=raw_text[:100].replace('\n', ' ')
+                texto_bruto=' '.join(raw_text.split())[:500]  # Remove whitespace, then take 500 chars
             )
 
 

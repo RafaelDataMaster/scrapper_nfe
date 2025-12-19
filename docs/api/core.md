@@ -47,7 +47,9 @@ Modelo para Notas Fiscais de Serviço Eletrônica (NFSe).
 
 **Campos:**
 - `arquivo_origem` (str): Nome do arquivo PDF original
-- `texto_bruto` (str): Snippet do texto extraído (debug)
+- `texto_bruto` (str): Primeiros 500 caracteres do texto limpo (útil para debug/auditoria)
+  - **Implementação:** Remove espaços/quebras primeiro, depois pega 500 chars
+  - **Formato:** `' '.join(raw_text.split())[:500]`
 - `cnpj_prestador` (Optional[str]): CNPJ do prestador formatado
 - `numero_nota` (Optional[str]): Número da nota fiscal
 - `data_emissao` (Optional[str]): Data no formato ISO (YYYY-MM-DD)
@@ -64,11 +66,16 @@ Modelo para Boletos Bancários.
 
 **Campos:**
 - `arquivo_origem` (str): Nome do arquivo PDF original
-- `texto_bruto` (str): Snippet do texto extraído
+- `texto_bruto` (str): Primeiros 500 caracteres do texto limpo
+  - **Implementação:** Remove espaços/quebras primeiro, depois pega 500 chars
+  - **Formato:** `' '.join(raw_text.split())[:500]`
+  - **Uso:** Debug, auditoria, treino de ML futuro
 - `cnpj_beneficiario` (Optional[str]): CNPJ do beneficiário
 - `valor_documento` (float): Valor nominal do boleto
 - `vencimento` (Optional[str]): Data de vencimento (YYYY-MM-DD)
+  - **Fallback:** Busca primeira data DD/MM/YYYY mesmo sem label "Vencimento:"
 - `numero_documento` (Optional[str]): Número do documento
+  - **Suporta:** Formato ano.número (ex: 2025.122) e 8 variações de padrão
 - `linha_digitavel` (Optional[str]): Código de barras
 - `nosso_numero` (Optional[str]): Identificação do banco
 - `referencia_nfse` (Optional[str]): NFSe vinculada (se encontrado)
