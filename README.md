@@ -13,6 +13,20 @@
 
 # Done
 
+## 19/12/2025 - Dia 6
+- [X] Validação completa dos 10 boletos extraídos (100% de taxa de sucesso)
+- [X] Corrigidos 3 casos críticos de extração:
+  - `numero_documento` capturando data em vez do valor correto (layout tabular)
+  - `nosso_numero` em layouts multi-linha (label e valor separados por \n)
+  - `nosso_numero` quando label está como imagem (fallback genérico)
+- [X] Implementados padrões regex robustos com `re.DOTALL` e diferenciação de formatos
+- [X] Documentação atualizada: `refactoring_history.md` (Fase 3 completa) e `extractors.md`
+- [X] Criado guia completo de debug de PDFs em `docs/development/debugging_guide.md`
+- [X] Criado script avançado de debug `scripts/debug_pdf.py` com:
+  - Output colorido, análise de campos, comparação de PDFs
+  - Biblioteca de padrões pré-testados, suporte a padrões customizados
+  - Detecção automática de quando `re.DOTALL` é necessário
+
 ## 18/12/2025 
 - [X] Conversar direito com a Melyssa, ou mesmo direto com o Paulo ou o Gustavo a respeito do redirecionamento de emails. Avaliar possíveis soluções e planejar como realmente as NFSE vai estar e em qual email.
 - [X] Criado configuração do projeto pra rodar em container.

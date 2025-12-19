@@ -123,31 +123,32 @@ pattern = r'(?i)Nosso\s+N.mero.*?(\d{2,3}/\d{7,}-\d+)'  # Específico
 | Agência/Conta | XXXX/XXXXXXX-X | 4 | Código de agência |
 | Nosso Número | XXX/XXXXXXXX-X | 2-3 | Código bancário |
 
-## 5. Script de Debug Rápido
+## 5. Script de Debug Pronto para Uso
 
-Crie um arquivo `scripts/debug_pdf.py`:
+O projeto já inclui um script completo de debug em `scripts/debug_pdf.py` com as seguintes funcionalidades:
 
-```python
-import pdfplumber
-import re
-from pathlib import Path
+### Recursos Disponíveis
 
-def debug_boleto(pdf_path, field_name):
-    """Extrai e testa campo específico de um PDF"""
-    with pdfplumber.open(pdf_path) as pdf:
-        text = pdf.pages[0].extract_text()
-        
-    print(f"{'='*60}")
-    print(f"PDF: {Path(pdf_path).name}")
-    print(f"Campo: {field_name}")
-    print(f"{'='*60}\n")
-    
-    # Mostra contexto do campo (50 chars antes e 100 depois)
-    patterns = {
-        'nosso_numero': r'Nosso.{0,20}Número',
-        'numero_documento': r'N.{0,5}Documento',
-        'vencimento': r'Vencimento',
-        'valor': r'Valor.{0,10}Documento'
+- 🎨 **Output colorido** no terminal para melhor visualização
+- 🔍 **Debug de campo específico** com contexto automático
+- 📊 **Análise geral** de todos os campos importantes
+- 🧪 **Biblioteca de padrões** pré-definidos testados
+- ✏️ **Padrões customizados** para testes específicos
+- 📋 **Lista TODAS ocorrências** de um formato no documento
+- 🔄 **Comparação lado a lado** de múltiplos PDFs
+- 🎯 **Detecta automaticamente** quando `re.DOTALL` faz diferença
+
+### Exemplos de Uso Básico
+
+```bash
+# Debug básico de um PDF
+python scripts/debug_pdf.py failed_cases_pdf/37e40903.pdf
+
+# Debug de campo específico
+python scripts/debug_pdf.py arquivo.pdf -f nosso_numero
+
+# Mostrar texto completo
+python scripts/debug_pdf.py arquivo.pdf --full-text
     }
     
     if field_name in patterns:
@@ -157,47 +158,81 @@ def debug_boleto(pdf_path, field_name):
             end = min(len(text), match.end() + 100)
             context = text[start:end]
             print(f"CONTEXTO:\n{repr(context)}\n")
-    
-    # Testa vários padrões
-    test_patterns = [
-        (r'\b(\d{3}/\d{8}-\d)\b', 'Nosso Número (3/8-1)'),
-        (r'\b(\d{2,3}/\d{7,}-\d+)\b', 'Nosso Número (2-3/7+-1+)'),
-        (r'(?i)Nosso.*?(\d+/\d+-\d+)', 'Nosso com label'),
-        (r'\d{2}/\d{2}/\d{4}', 'Data DD/MM/YYYY'),
-        (r'\d{4}\.\d+', 'Doc formato ano.número'),
-    ]
-    
-    print("TESTES DE PADRÕES:")
-    for pattern, desc in test_patterns:
-        try:
-            match = re.search(pattern, text, re.DOTALL)
-            result = match.group(1 if '(' in pattern else 0) if match else "❌ Não encontrado"
-            print(f"  {desc:30} → {result}")
-        except Exception as e:
-            print(f"  {desc:30} → Erro: {e}")
-    
-    print(f"\n{'='*60}\n")
 
-# Uso:
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 2:
-        print("Uso: python debug_pdf.py <arquivo.pdf> [campo]")
-        sys.exit(1)
-    
-    pdf_path = sys.argv[1]
-    field_name = sys.argv[2] if len(sys.argv) > 2 else 'nosso_numero'
-    debug_boleto(pdf_path, field_name)
+# Testar padrão customizado
+python scripts/debug_pdf.py arquivo.pdf -f nosso_numero -p "r'Nosso.*?(\\d+/\\d+-\\d+)'"
+
+# Comparar múltiplos boletos
+python scripts/debug_pdf.py file1.pdf file2.pdf file3.pdf --compare
+
+# Sem cores (para redirecionar output para arquivo)
+python scripts/debug_pdf.py arquivo.pdf --no-color > debug.txt
 ```
 
-**Como usar:**
+### Output Exemplo
+
+Quando você executa o script, o output é organizado e colorido:
+
+```
+======================================================================
+Debug de PDF: 37e40903.pdf
+======================================================================
+
+📄 Informações Básicas:
+  Caminho: failed_cases_pdf/37e40903.pdf
+  Tamanho do texto: 2456 caracteres
+  Linhas: 87
+
+📝 Preview (primeiros 300 caracteres):
+'Nosso Número\nCARRIER TELECOM - CNPJ\n109/00000507-1\n230.159.230/0001-64'...
+
+🔍 Debug do Campo: nosso_numero
+──────────────────────────────────────────────────────────────────────
+
+Contexto encontrado:
+'...Nosso Número\nCARRIER TELECOM - CNPJ\n109/00000507-1\n230.159.230...'
+
+Todas as ocorrências do formato:
+  1. 109/00000507-1
+  2. 2938/0053345-8
+  3. 230/0001-64
+
+Teste de Padrões:
+  ✓ Formato 3/8-1 (109/00000507-1)              → 109/00000507-1
+  ✓ Formato 2-3/7+-1+ flexível                  → 109/00000507-1
+  ✓ Com label + re.DOTALL                       → 109/00000507-1 (com DOTALL)
+  ✗ Com label mesma linha                       → ❌ Não encontrado
+
+======================================================================
+```
+
+### Biblioteca de Padrões Incluída
+
+O script já vem com padrões testados para:
+
+- **nosso_numero**: 4 padrões (formato 3/8-1, flexível, com label, etc.)
+- **numero_documento**: 5 padrões (layout tabular, ano.número, X/Y, etc.)
+- **vencimento**: 4 padrões (com label, abreviado, genérico, data de vencimento)
+- **valor**: 3 padrões (valor documento, genérico, apenas R$)
+- **cnpj**: 3 padrões (formatado, com label, sem formatação)
+- **linha_digitavel**: 2 padrões (formatada, sem espaços)
+
+### Integração com Workflow
+
+Use o script integrado com outros comandos:
 
 ```bash
-# Debug de campo específico
-python scripts/debug_pdf.py failed_cases_pdf/37e40903.pdf nosso_numero
+# 1. Identificar problema no CSV
+python -c "import pandas as pd; df = pd.read_csv('data/debug_output/boletos_sucesso.csv', encoding='utf-8-sig'); print(df[df['nosso_numero'].isna()])"
 
-# Ver todos os padrões
-python scripts/debug_pdf.py failed_cases_pdf/fe43b71e.pdf
+# 2. Debugar PDF problemático
+python scripts/debug_pdf.py failed_cases_pdf/37e40903.pdf -f nosso_numero
+
+# 3. Testar padrão novo
+python scripts/debug_pdf.py arquivo.pdf -p "r'\\b(\\d{3}/\\d{8}-\\d)\\b'"
+
+# 4. Validar correção
+python scripts/test_boleto_extractor.py
 ```
 
 ## 6. Validar com CSV Real
