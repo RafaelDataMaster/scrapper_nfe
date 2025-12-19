@@ -190,7 +190,8 @@ class TestSRPCompliance(unittest.TestCase):
     
     def test_attachment_downloader_exists(self):
         """AttachmentDownloader deve existir e salvar arquivos."""
-        from core.exporters import FileSystemManager, AttachmentDownloader
+        from core.exporters import FileSystemManager
+        from ingestors.utils import AttachmentDownloader
         
         with tempfile.TemporaryDirectory() as tmpdir:
             manager = FileSystemManager(

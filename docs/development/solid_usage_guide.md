@@ -115,8 +115,11 @@ pip install gspread oauth2client
 ### Passo 2: Completar a Implementação em `core/exporters.py`
 
 ```python
+import logging
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
+logger = logging.getLogger(__name__)
 
 class GoogleSheetsExporter(DataExporter):
     """Exportador para Google Sheets."""
@@ -172,7 +175,8 @@ class GoogleSheetsExporter(DataExporter):
         
         # Atualiza a planilha
         worksheet.update('A1', values)
-        print(f"✅ {len(data)} registros exportados para '{destination}'")
+        logger.info(f"✅ {len(data)} registros exportados para '{destination}'")
+```
 ```
 
 ### Passo 3: Usar no `run_ingestion.py`
@@ -200,9 +204,13 @@ for doc_type, documentos in documentos_por_tipo.items():
 ### Testando Processamento sem Arquivo Real
 
 ```python
+import logging
 from unittest.mock import Mock
 from core.processor import BaseInvoiceProcessor
 from core.interfaces import TextExtractionStrategy
+
+# Configurar logging para testes
+logging.basicConfig(level=logging.INFO)
 
 def test_processar_sem_arquivo_real():
     # Criar estratégia mock
@@ -224,12 +232,13 @@ def test_processar_sem_arquivo_real():
     assert result.doc_type == 'NFSE'
     assert result.numero_nota == '12345'
     assert result.cnpj_prestador == '12.345.678/0001-90'
-    print("✅ Teste passou sem arquivo real!")
+    logging.info("✅ Teste passou sem arquivo real!")
 ```
 
 ### Testando Ingestão sem Email Real
 
 ```python
+import logging
 from unittest.mock import Mock
 from run_ingestion import main
 from core.interfaces import EmailIngestorStrategy
@@ -252,7 +261,7 @@ def test_ingestao_sem_email_real():
     # Verificar que foi chamado
     mock_ingestor.connect.assert_called_once()
     mock_ingestor.fetch_attachments.assert_called_once()
-    print("✅ Ingestão testada sem conectar em email real!")
+    logging.info("✅ Ingestão testada sem conectar em email real!")
 ```
 
 ---

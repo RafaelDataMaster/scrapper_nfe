@@ -1,7 +1,10 @@
+import logging
 import pytesseract
 from pdf2image import convert_from_path
 from core.interfaces import TextExtractionStrategy
 from config import settings  # Importando suas configurações
+
+logger = logging.getLogger(__name__)
 
 class TesseractOcrStrategy(TextExtractionStrategy):
     """
@@ -53,11 +56,12 @@ class TesseractOcrStrategy(TextExtractionStrategy):
             
             # Validação: Se OCR retornou texto muito curto, considere falha
             if len(texto_final.strip()) < 50:
+                logger.warning(f"OCR extraiu texto insuficiente (<50 chars) de {file_path}")
                 return ""  # Falha recuperável, força próxima estratégia
             
             return texto_final
             
         except Exception as e:
-            # Retorna string vazia para permitir fallback
-            # Em vez de lançar exceção (violação LSP)
+            # Log do erro para rastreabilidade, mas mantém fluxo (LSP)
+            logger.warning(f"Falha na estratégia OCR para {file_path}: {e}")
             return ""

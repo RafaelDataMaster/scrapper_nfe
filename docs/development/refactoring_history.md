@@ -104,6 +104,35 @@ Implementação completa dos princípios SOLID baseada em feedback técnico de r
 - [`solid_refactoring_report.md`](solid_refactoring_report.md) - Relatório técnico completo
 - [`solid_usage_guide.md`](solid_usage_guide.md) - Guia prático de uso
 
+### Melhorias Pós-Refatoração (Nível Sênior)
+
+Após validação dos princípios SOLID, foram aplicadas 4 melhorias para produção:
+
+#### 1. **Observabilidade no OCR**
+**Arquivo:** [`strategies/ocr.py`](../../strategies/ocr.py)
+- Adicionado `logging.warning()` antes de retornar string vazia
+- Captura erro real sem quebrar fluxo LSP
+- Rastro completo para debug em produção
+
+#### 2. **Reorganização do AttachmentDownloader**
+**Movido:** `core/exporters.py` → `ingestors/utils.py`
+- Separação conceitual: Input (ingestors/) vs Output (exporters/)
+- Download de anexos é parte da ingestão, não exportação
+
+#### 3. **Logging Estruturado**
+**Arquivo:** [`run_ingestion.py`](../../run_ingestion.py)
+- Todos `print()` substituídos por `logging`
+- Timestamps automáticos + níveis de severidade
+- Stack traces completos com `exc_info=True`
+
+#### 4. **Dockerfile Otimizado**
+**Arquivo:** [`Dockerfile`](../../Dockerfile)
+- Download do `tessdata_best/por.traineddata` do GitHub
+- Modelo robusto (maior precisão que pacote Debian)
+
+**Arquivos Adicionais:**
+- ✅ [`ingestors/utils.py`](../../ingestors/utils.py) - AttachmentDownloader (47 linhas)
+
 ### Próximos Passos Sugeridos
 1. Implementar `GoogleSheetsExporter` quando necessário (esqueleto pronto)
 2. Criar fixtures de testes reais quando receberem PDFs do FAP

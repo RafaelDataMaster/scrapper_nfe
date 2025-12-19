@@ -20,13 +20,23 @@ Usage:
     python run_ingestion.py
 """
 
+import logging
 from collections import defaultdict
 from typing import Optional
 from config import settings
 from ingestors.imap import ImapIngestor
+from ingestors.utils import AttachmentDownloader
 from core.interfaces import EmailIngestorStrategy
 from core.processor import BaseInvoiceProcessor
-from core.exporters import FileSystemManager, AttachmentDownloader, CsvExporter
+from core.exporters import FileSystemManager, CsvExporter
+
+# Configurar logging estruturado
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 
 def create_ingestor_from_config() -> EmailIngestorStrategy:
@@ -68,7 +78,7 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
         if ingestor is None:
             ingestor = create_ingestor_from_config()
     except ValueError as e:
-        print(f"❌ Erro: {e}")
+        logger.error(f"Erro de configuração: {e}")
         return
 
     # 2. Preparar ambiente (SRP: FileSystemManager)
@@ -78,31 +88,31 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
     )
     file_manager.clean_temp_directory()
     file_manager.setup_directories()
-    print(f"📂 Diretório temporário criado: {settings.DIR_TEMP}")
+    logger.info(f"Diretório temporário criado: {settings.DIR_TEMP}")
 
     # 3. Conexão
-    print(f"🔌 Conectando a {settings.EMAIL_HOST} como {settings.EMAIL_USER}...")
+    logger.info(f"Conectando a {settings.EMAIL_HOST} como {settings.EMAIL_USER}...")
     try:
         ingestor.connect()
     except Exception as e:
-        print(f"❌ Falha na conexão: {e}")
+        logger.error(f"Falha na conexão: {e}", exc_info=True)
         return
 
     # 4. Busca (Fetch)
     assunto_teste = "ENC" 
-    print(f"🔍 Buscando e-mails com assunto: '{assunto_teste}'...")
+    logger.info(f"Buscando e-mails com assunto: '{assunto_teste}'...")
     
     try:
         anexos = ingestor.fetch_attachments(subject_filter=assunto_teste)
     except Exception as e:
-        print(f"❌ Erro ao buscar e-mails: {e}")
+        logger.error(f"Erro ao buscar e-mails: {e}", exc_info=True)
         return
     
     if not anexos:
-        print("📭 Nenhum anexo encontrado.")
+        logger.warning("Nenhum anexo encontrado.")
         return
 
-    print(f"📦 {len(anexos)} anexo(s) encontrado(s). Iniciando processamento...")
+    logger.info(f"{len(anexos)} anexo(s) encontrado(s). Iniciando processamento...")
 
     # 5. Processamento (SRP: AttachmentDownloader separado)
     downloader = AttachmentDownloader(file_manager)
@@ -119,7 +129,7 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
             # SRP: Downloader é responsável por salvar arquivos
             file_path = downloader.save_attachment(filename, content_bytes)
             
-            print(f"  Processando: {filename}...")
+            logger.info(f"Processando: {filename}...")
             
             # Processa o documento
             result = processor.process(str(file_path))
@@ -137,14 +147,14 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
             
             # Feedback específico por tipo
             if doc_type == 'BOLETO':
-                print(f"  💰 Boleto: Vencimento {result.vencimento} - R$ {result.valor_documento}")
+                logger.info(f"  Boleto: Vencimento {result.vencimento} - R$ {result.valor_documento}")
             elif doc_type == 'NFSE':
-                print(f"  ✅ NFSe: {result.numero_nota} - {result.cnpj_prestador}")
+                logger.info(f"  NFSe: {result.numero_nota} - {result.cnpj_prestador}")
             else:
-                print(f"  📄 {doc_type}: processado")
+                logger.info(f"  {doc_type}: processado")
             
         except Exception as e:
-            print(f"  ⚠️ Falha ao processar {filename}: {e}")
+            logger.warning(f"Falha ao processar {filename}: {e}")
 
     # 6. Exportação (SRP: CsvExporter responsável por gerar CSVs)
     exporter = CsvExporter()
@@ -172,11 +182,12 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
             df.to_csv(output_path, index=False, sep=';', encoding='utf-8-sig', decimal=',')
             
             total_processados += len(documentos)
-            emoji = "💰" if doc_type == "BOLETO" else "📊"
-            print(f"\n{emoji} {len(documentos)} {doc_type} processados -> {output_path}")
+            logger.info(f"{len(documentos)} {doc_type} processados -> {output_path}")
     
     if total_processados == 0:
-        print("\n⚠️ Nenhum resultado processado com sucesso.")
+        logger.warning("Nenhum resultado processado com sucesso.")
+    else:
+        logger.info(f"Processamento concluído: {total_processados} documento(s) no total.")
     
     # Opcional: Limpeza
     # file_manager.clean_temp_directory()
