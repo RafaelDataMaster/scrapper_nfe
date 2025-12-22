@@ -78,60 +78,13 @@ make docker-run
 
 ## To Do - Notas mentais
 
+- [ ] Focar em um primeiro momento a extração das seguintes colunas [(Data de emissão?),(setor que fez o pedido),EMPRESA,FORNECEDOR,NF,EMISSÃO,VALOR,VENCIMENTO,]
+- [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento
 - [ ] Concertar/adicionar a logica de extração das NSFE pra funcionar com os casos falhos.
-- [ ] Estudar os relatórios do PAF e refatorar as variáveis necessárias que eles pedem!
 - [ ] Conseguir o acesso ao maior número de pdfs e a tabela de verdades já catalogada dos dados pra conferir se a extração do PDF está de fato funcionando.
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros).
 - [ ] Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows.
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
-
-## To Do - Adequação aos Requisitos do PAF
-
-### 🎯 Dados Prioritários para Extração
-
-#### 📑 Identificação do Documento
-
-- [X] **Número da NF/TF** - Já extraído para NFSe (`numero_nota`) e Boletos (`numero_documento`)
-- [ ] **Série da NF** - Adicionar extração (não implementado)
-- [ ] **Tipo de documento** - Implementar classificação: fatura/boleto/taxa/imposto
-- [X] **Data de emissão** - Já extraído (`data_emissao`)
-
-#### 💰 Dados Bancários e Pagamento
-
-- [ ] **Forma de pagamento** - Adicionar detecção (PIX/Boleto/Depósito/Transferência)
-- [ ] **Valor total** - Já extraído (`valor_total` e `valor_documento`)
-- [X] **Data de vencimento** - Já extraído para boletos (`vencimento`), adicionar para NFSe
-- [ ] **Dados bancários do beneficiário** - Extrair banco, agência, conta (se presente no documento)
-
-#### 🏢 Classificação Contábil
-
-- [ ] **Centro de custo** - Não presente em PDF (origem: área solicitante)
-- [ ] **Classe de valor** - Não presente em PDF (origem: área solicitante)
-- [ ] **Natureza da operação** - Extrair se mencionada no PDF
-- [ ] **Conta contábil** - Não presente em PDF (classificação interna)
-
-#### 📊 Impostos e Tributos (Prioridade Alta)
-
-- [ ] **Base de cálculo ICMS** - Adicionar extração
-- [ ] **Valor ICMS** - Adicionar extração
-- [ ] **ISS (Imposto sobre Serviço)** - Adicionar extração para NFSe
-- [ ] **PIS/COFINS** - Adicionar extração se aplicável
-- [ ] **Retenções federais** - IR, INSS, CSLL (se houver)
-
-#### 🔗 Rastreabilidade e Integração
-
-- [ ] **Número do Pedido de Compra (PC)** - Adicionar extração (pode estar em campo de referência)
-- [ ] **CNPJ do fornecedor** - Já extraído (`cnpj_prestador`, `cnpj_beneficiario`)
-- [ ] **Razão Social do fornecedor** - Adicionar extração
-- [ ] **Link do documento** - Implementar campo para URL da pasta no Drive
-- [ ] **Histórico/Justificativa** - Campo manual (não extraível de PDF)
-
-#### ⚙️ Validações Fiscais (TES/CFOP/CST)
-
-- [ ] **CFOP (Código Fiscal)** - Adicionar extração se presente na NFSe
-- [ ] **CST (Código de Situação Tributária)** - Adicionar extração
-- [ ] **TES (Tipo Entrada/Saída)** - Não presente em PDF (classificação interna via planilha TES BASE SA)
-- [ ] **NCM (Nomenclatura Comum do Mercosul)** - Adicionar extração se aplicável
 
 ### 🔧 Refatorações Técnicas Necessárias
 

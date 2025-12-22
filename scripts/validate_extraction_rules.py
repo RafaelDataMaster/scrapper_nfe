@@ -4,12 +4,13 @@ Script de validação de regras de extração para NFSe e Boletos.
 Este script processa PDFs da pasta failed_cases_pdf e gera relatórios
 detalhados separando sucessos e falhas, auxiliando no ajuste fino das regex.
 
-⚠️ MODO DE VALIDAÇÃO DE PRAZO:
+⚠️ MODOS IMPORTANTES (MVP):
 - Por padrão, IGNORA a validação de prazo de 4 dias úteis (útil para documentos antigos)
-- Para validar prazo, execute: python scripts/validate_extraction_rules.py --validar-prazo
+    Para validar prazo: python scripts/validate_extraction_rules.py --validar-prazo
+- Por padrão, NÃO exige o número da NF (coluna NF fica vazia e será preenchida via ingestão)
+    Para exigir NF: python scripts/validate_extraction_rules.py --exigir-nf
 """
 import os
-import sys
 import argparse
 import pandas as pd
 from _init_env import setup_project_path
@@ -43,9 +44,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Valida regras de extração de PDFs')
     parser.add_argument('--validar-prazo', action='store_true',
                        help='Valida prazo de 4 dias úteis (ignora por padrão para docs antigos)')
+    parser.add_argument('--exigir-nf', action='store_true',
+                        help='Exige numero_nota na NFSe (por padrão não exige no MVP)')
     args = parser.parse_args()
     
     validar_prazo = args.validar_prazo
+    exigir_nf = args.exigir_nf
     
     # Cria pasta de saída se não existir
     DIR_DEBUG_OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -59,6 +63,10 @@ def main() -> None:
         print("⏰ Validação de prazo: ATIVA (requer 4 dias úteis)")
     else:
         print("⏰ Validação de prazo: DESATIVADA (documentos antigos)")
+    if exigir_nf:
+        print("🧾 NF (numero_nota): EXIGIDA")
+    else:
+        print("🧾 NF (numero_nota): NÃO exigida (será preenchida via ingestão)")
     print("=" * 80)
 
     processor = BaseInvoiceProcessor()
@@ -117,7 +125,11 @@ def main() -> None:
             
             # === NFSe ===
             elif isinstance(result, InvoiceData):
-                eh_sucesso, motivos = ExtractionDiagnostics.classificar_nfse(result, validar_prazo=validar_prazo)
+                eh_sucesso, motivos = ExtractionDiagnostics.classificar_nfse(
+                    result,
+                    validar_prazo=validar_prazo,
+                    exigir_numero_nf=exigir_nf,
+                )
                 
                 if eh_sucesso:
                     count_nfse_ok += 1

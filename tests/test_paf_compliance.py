@@ -229,7 +229,8 @@ class TestModelsToSheetsRow:
         assert len(row) == 18
         
         # Verifica alguns campos específicos
-        assert row[4] == "12345"  # Número da nota
+        # MVP: coluna NF fica vazia (preenchimento via ingestão)
+        assert row[4] == ""
         assert row[6] == 1500.50  # Valor
         assert row[3] == "EMPRESA TESTE LTDA"  # Fornecedor
     
@@ -252,6 +253,8 @@ class TestModelsToSheetsRow:
         # Campos não preenchidos devem ser "" ou 0.0
         assert row[3] == ""  # Fornecedor vazio
         assert row[7] == ""  # Número pedido vazio
+        # MVP: NF é exportado em branco
+        assert row[4] == ""
     
     def test_boleto_to_sheets_row_completo(self):
         """Testa conversão de Boleto com todos os campos"""

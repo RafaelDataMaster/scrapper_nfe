@@ -116,7 +116,8 @@ class TestModelsToSheetsRow:
         # Valida campos texto
         assert row[1] == "TI"      # SETOR
         assert row[3] == "EMPRESA TESTE LTDA"  # FORNECEDOR
-        assert row[4] == "12345"   # NF
+        # MVP: coluna NF fica vazia (preenchimento via ingestão)
+        assert row[4] == ""
         assert row[13] == "NF"     # TP DOC
         assert row[14] == "SISTEMA_AUTO"  # TRAT PAF
         assert row[15] == "PENDENTE"      # LANC SISTEMA

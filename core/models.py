@@ -234,13 +234,22 @@ class InvoiceData(DocumentData):
         def fmt_str(value: Optional[str]) -> str:
             """Converte None para string vazia."""
             return value if value is not None else ""
+
+        # MVP: número de NF será preenchido via ingestão (e-mail), então exportamos vazio.
+        try:
+            from config.settings import PAF_EXPORT_NF_EMPTY
+        except Exception:
+            PAF_EXPORT_NF_EMPTY = False
+
+        nf_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_nota)
+        fat_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_fatura)
         
         return [
             fmt_date(self.data_processamento),  # 1. DATA
             fmt_str(self.setor),                 # 2. SETOR
             fmt_str(self.empresa),               # 3. EMPRESA
             fmt_str(self.fornecedor_nome),       # 4. FORNECEDOR
-            fmt_str(self.numero_nota),           # 5. NF
+            nf_value,                            # 5. NF
             fmt_date(self.data_emissao),         # 6. EMISSÃO
             fmt_num(self.valor_total),           # 7. VALOR
             fmt_str(self.numero_pedido),         # 8. Nº PEDIDO
@@ -248,7 +257,7 @@ class InvoiceData(DocumentData):
             fmt_str(self.forma_pagamento),       # 10. FORMA PAGTO
             "",                                  # 11. (coluna vazia/índice)
             fmt_date(self.dt_classificacao),     # 12. DT CLASS
-            fmt_str(self.numero_fatura),         # 13. Nº FAT
+            fat_value,                           # 13. Nº FAT
             fmt_str(self.tipo_doc_paf),          # 14. TP DOC
             fmt_str(self.trat_paf),              # 15. TRAT PAF
             fmt_str(self.lanc_sistema),          # 16. LANC SISTEMA
@@ -301,7 +310,7 @@ class BoletoData(DocumentData):
     fornecedor_nome: Optional[str] = None
     valor_documento: float = 0.0
     vencimento: Optional[str] = None
-    forma_pagamento: str = "BOLETO"
+    forma_pagamento: Optional[str] = None
     numero_documento: Optional[str] = None
     linha_digitavel: Optional[str] = None
     nosso_numero: Optional[str] = None
@@ -366,7 +375,7 @@ class BoletoData(DocumentData):
         Mapeia campos de boleto para estrutura PAF:
         - numero_documento → coluna NF
         - valor_documento → coluna VALOR
-        - forma_pagamento = "BOLETO" (default)
+        - forma_pagamento = None (default)  #ToDo tem que ser implementado de acordo com uma lista de contrato"
         - tipo_doc_paf = "FT" (Fatura/Título Financeiro)
         
         Ordem das colunas PAF:
@@ -396,13 +405,22 @@ class BoletoData(DocumentData):
         def fmt_str(value: Optional[str]) -> str:
             """Converte None para string vazia."""
             return value if value is not None else ""
+
+        # MVP: coluna NF será preenchida via ingestão (e-mail), então exportamos vazio.
+        try:
+            from config.settings import PAF_EXPORT_NF_EMPTY
+        except Exception:
+            PAF_EXPORT_NF_EMPTY = False
+
+        nf_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_documento)
+        fat_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_documento)
         
         return [
             fmt_date(self.data_processamento),  # 1. DATA
             fmt_str(self.setor),                 # 2. SETOR
             fmt_str(self.empresa),               # 3. EMPRESA
             fmt_str(self.fornecedor_nome),       # 4. FORNECEDOR
-            fmt_str(self.numero_documento),      # 5. NF (número do documento)
+            nf_value,                             # 5. NF (MVP: vazio)
             "",                                  # 6. EMISSÃO (boleto não tem emissão, apenas vencimento)
             fmt_num(self.valor_documento),       # 7. VALOR
             fmt_str(self.numero_pedido),         # 8. Nº PEDIDO
@@ -410,7 +428,7 @@ class BoletoData(DocumentData):
             fmt_str(self.forma_pagamento),       # 10. FORMA PAGTO
             "",                                  # 11. (coluna vazia/índice)
             fmt_date(self.dt_classificacao),     # 12. DT CLASS
-            fmt_str(self.numero_documento),      # 13. Nº FAT (mesmo que NF para boletos)
+            fat_value,                            # 13. Nº FAT (MVP: vazio)
             fmt_str(self.tipo_doc_paf),          # 14. TP DOC
             fmt_str(self.trat_paf),              # 15. TRAT PAF
             fmt_str(self.lanc_sistema),          # 16. LANC SISTEMA

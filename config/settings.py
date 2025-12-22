@@ -57,6 +57,22 @@ if not all([EMAIL_HOST, EMAIL_USER, EMAIL_PASS]):
 # Responsável pela classificação que aparecerá na coluna 15 (TRAT PAF) da planilha
 TRAT_PAF_RESPONSAVEL = os.getenv('TRAT_PAF_RESPONSAVEL', 'SISTEMA_AUTO')
 
+# --- Modo MVP (primeira entrega) ---
+# Objetivo: focar nas colunas principais e permitir evolução por etapas.
+#
+# Neste primeiro momento, o número de NF (coluna 5) será preenchido via ingestão de e-mail
+# (metadata / assunto / contexto) e NÃO via extração do PDF.
+# Por isso:
+# - Exportação PAF deixa a coluna NF vazia
+# - Diagnóstico NÃO exige numero_nota para considerar NFSe como "sucesso" (por padrão)
+
+# Se True, a coluna NF (e Nº FAT relacionado) é exportada em branco no to_sheets_row().
+PAF_EXPORT_NF_EMPTY = os.getenv('PAF_EXPORT_NF_EMPTY', '1') == '1'
+
+# Se True, a validação/diagnóstico exige número de NF na NFSe (numero_nota).
+# Para o MVP, default é False.
+PAF_EXIGIR_NUMERO_NF = os.getenv('PAF_EXIGIR_NUMERO_NF', '0') == '1'
+
 # --- Configuração de Logging com Rotação ---
 # Conformidade: Rastreabilidade exigida pela Política Interna
 # RotatingFileHandler evita crescimento descontrolado de logs

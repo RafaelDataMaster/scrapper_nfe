@@ -105,7 +105,11 @@ class ExtractionDiagnostics:
             return (False, 0)
     
     @staticmethod
-    def classificar_nfse(result: InvoiceData, validar_prazo: bool = True) -> Tuple[bool, List[str]]:
+    def classificar_nfse(
+        result: InvoiceData,
+        validar_prazo: bool = True,
+        exigir_numero_nf: Optional[bool] = None,
+    ) -> Tuple[bool, List[str]]:
         """
         Classifica uma NFSe como sucesso ou falha.
         
@@ -118,6 +122,7 @@ class ExtractionDiagnostics:
         Args:
             result: Dados extraídos da NFSe
             validar_prazo: Se False, ignora validação de prazo (útil para documentos antigos)
+            exigir_numero_nf: Se False, NÃO exige numero_nota (MVP: preenchimento via ingestão de e-mail)
             
         Returns:
             Tupla (é_sucesso, lista_de_motivos_falha)
@@ -128,12 +133,20 @@ class ExtractionDiagnostics:
         """
         motivos = []
         
+        # Config padrão (MVP): não exigir NF
+        if exigir_numero_nf is None:
+            try:
+                from config.settings import PAF_EXIGIR_NUMERO_NF
+                exigir_numero_nf = PAF_EXIGIR_NUMERO_NF
+            except Exception:
+                exigir_numero_nf = True
+
         # Validações básicas
-        tem_numero = result.numero_nota and result.numero_nota.strip()
+        tem_numero = bool(result.numero_nota and result.numero_nota.strip())
         tem_valor = result.valor_total > 0
         tem_fornecedor = bool(result.fornecedor_nome and result.fornecedor_nome.strip())
         
-        if not tem_numero:
+        if exigir_numero_nf and not tem_numero:
             motivos.append('SEM_NUMERO')
         if not tem_valor:
             motivos.append('VALOR_ZERO')
@@ -151,7 +164,9 @@ class ExtractionDiagnostics:
                 motivos.append(f'PRAZO_INSUFICIENTE_{dias_uteis}d')
         
         # Sucesso: tem campos obrigatórios + prazo OK (se aplicável)
-        sucesso = tem_numero and tem_valor and tem_fornecedor
+        sucesso = tem_valor and tem_fornecedor
+        if exigir_numero_nf:
+            sucesso = sucesso and tem_numero
         if validar_prazo and result.vencimento:
             prazo_ok, _ = ExtractionDiagnostics.validar_prazo_vencimento(
                 result.dt_classificacao, result.vencimento
