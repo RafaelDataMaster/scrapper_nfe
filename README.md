@@ -18,21 +18,22 @@ O **MVP atual** está focado em gerar as colunas essenciais da planilha PAF:
 
 ## To Do - Notas mentais
 
-- [ ] Focar em um primeiro momento a extração das seguintes colunas [(Data inicio/recebimento do pedido),(setor que fez o pedido aparentemente pode deixar pra la mas se tiver bom),EMPRESA(nós),FORNECEDOR(eles),NF,EMISSÃO,VALOR,VENCIMENTO,]
+- [ ] Fazer a limpeza e catalogação dos pdfs na pasta de C:Dados
 - [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento
-- [ ] Concertar/adicionar a logica de extração das NSFE pra funcionar com os casos falhos.
-- [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros).
-- [ ] Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows.
+- [ ] **Concertar/adicionar a logica de extração das NSFE, DANFES, etc, pra funcionar com os casos falhos.**
+- [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
+- [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
 
 # Estudar por agora
 
-Quebrar os dados em pontos principais. A primeira coluna era a data que o pedido chegou/foi feito
+Concertar e diferencias NFSE danfe e outros. Tentar entender quais são os casos mesmos. Catalogar os pdfs absorvidos na pasta dados.
 
 ## Done
 
 ### 23/12/2025 - Dia 8
 
+- [X] Focar em um primeiro momento a extração das seguintes colunas [(Data inicio/recebimento do pedido),(setor que fez o pedido aparentemente pode deixar pra la mas se tiver bom),EMPRESA(nós),FORNECEDOR(eles),NF,EMISSÃO,VALOR,VENCIMENTO,]
 - [X] Boletos: FORNECEDOR robusto (não captura linha digitável e não fica vazio por falso positivo de "empresa nossa")
 - [X] Classificação de boleto mais resiliente a OCR/quebras (keywords corrompidas)
 
