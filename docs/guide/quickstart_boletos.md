@@ -12,7 +12,7 @@ python scripts/test_boleto_extractor.py
 
 - ✅ BoletoExtractor reconheceu o boleto
 - ✅ BoletoExtractor corretamente rejeitou a NFSe
-- ✅ GenericExtractor reconheceu a NFSe
+- ✅ NfseGenericExtractor reconheceu a NFSe
 
 ### 2. Executar Processamento Completo
 

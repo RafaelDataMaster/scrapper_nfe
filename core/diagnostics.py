@@ -286,6 +286,26 @@ class ExtractionDiagnostics:
         linhas.append("")
         linhas.append(f"❌ Erros: {dados.get('erros', 0)}")
 
+        # DANFE
+        danfe_total = dados.get('danfe_ok', 0) + dados.get('danfe_falha', 0)
+        if danfe_total > 0:
+            linhas.append("")
+            linhas.append("--- DANFE ---")
+            linhas.append(f"✅ Completos: {dados.get('danfe_ok', 0)}")
+            linhas.append(f"⚠️ Com falhas: {dados.get('danfe_falha', 0)}")
+            taxa = (dados.get('danfe_ok', 0) / danfe_total) * 100
+            linhas.append(f"📈 Taxa de sucesso: {taxa:.1f}%")
+
+        # OUTROS
+        outros_total = dados.get('outros_ok', 0) + dados.get('outros_falha', 0)
+        if outros_total > 0:
+            linhas.append("")
+            linhas.append("--- Outros ---")
+            linhas.append(f"✅ Completos: {dados.get('outros_ok', 0)}")
+            linhas.append(f"⚠️ Com falhas: {dados.get('outros_falha', 0)}")
+            taxa = (dados.get('outros_ok', 0) / outros_total) * 100
+            linhas.append(f"📈 Taxa de sucesso: {taxa:.1f}%")
+
         # Detalhes das falhas NFSe
         nfse_falhas = dados.get('nfse_falhas_detalhe') or []
         if nfse_falhas:
@@ -317,6 +337,41 @@ class ExtractionDiagnostics:
                 linhas.append(f"   Motivo: {item.get('motivo_falha', 'N/A')}")
                 try:
                     valor = float(item.get('valor_documento', 0) or 0)
+                except Exception:
+                    valor = 0.0
+                linhas.append(f"   Valor: R$ {valor:,.2f}")
+
+        # Detalhes das falhas DANFE
+        danfe_falhas = dados.get('danfe_falhas_detalhe') or []
+        if danfe_falhas:
+            linhas.append("")
+            linhas.append("=" * 80)
+            linhas.append("🔍 FALHAS - DANFE")
+            linhas.append("=" * 80)
+            for item in danfe_falhas:
+                linhas.append("")
+                linhas.append(f"📄 {item.get('arquivo_origem', 'N/A')}")
+                linhas.append(f"   Motivo: {item.get('motivo_falha', 'N/A')}")
+                linhas.append(f"   Número: {item.get('numero_nota', 'N/A')}")
+                try:
+                    valor = float(item.get('valor_total', 0) or 0)
+                except Exception:
+                    valor = 0.0
+                linhas.append(f"   Valor: R$ {valor:,.2f}")
+
+        # Detalhes das falhas OUTROS
+        outros_falhas = dados.get('outros_falhas_detalhe') or []
+        if outros_falhas:
+            linhas.append("")
+            linhas.append("=" * 80)
+            linhas.append("🔍 FALHAS - OUTROS")
+            linhas.append("=" * 80)
+            for item in outros_falhas:
+                linhas.append("")
+                linhas.append(f"📄 {item.get('arquivo_origem', 'N/A')}")
+                linhas.append(f"   Motivo: {item.get('motivo_falha', 'N/A')}")
+                try:
+                    valor = float(item.get('valor_total', 0) or 0)
                 except Exception:
                     valor = 0.0
                 linhas.append(f"   Valor: R$ {valor:,.2f}")

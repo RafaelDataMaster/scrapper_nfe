@@ -119,7 +119,7 @@ extrator_nfse/
 │   ├── debug_output/           # Saída dos testes de regras (CSV de debug)
 │   └── output/                 # Relatórios finais de ingestão
 ├── docs/                       # Documentação MkDocs
-├── extractors/                 # Regras de Regex (GenericExtractor)
+├── extractors/                 # Regras de Regex (NfseGenericExtractor)
 ├── ingestors/                  # Conectores de E-mail (ImapIngestor)
 ├── nfs/                        # Pasta para análise manual de PDFs com falha
 ├── scripts/                    # Scripts utilitários e de diagnóstico

@@ -78,7 +78,7 @@ Basta colocar um PDF correspondente na pasta `nfs/` e rodar o `main.py`. O siste
 
 ## Prioridade de Execução
 
-O sistema verifica os extratores na ordem em que são importados. O `GenericExtractor` é geralmente o último recurso. Se você tiver conflitos (duas cidades com cabeçalhos muito parecidos), torne sua verificação no `can_handle` mais específica.
+O sistema verifica os extratores na ordem em que são importados. O `NfseGenericExtractor` é geralmente o último recurso para NFS-e. Se você tiver conflitos (duas cidades com cabeçalhos muito parecidos), torne sua verificação no `can_handle` mais específica.
 
 ---
 

@@ -19,6 +19,10 @@ DEBUG_CSV_NFSE_SUCESSO = DIR_DEBUG_OUTPUT / "nfse_sucesso.csv"
 DEBUG_CSV_NFSE_FALHA = DIR_DEBUG_OUTPUT / "nfse_falha.csv"
 DEBUG_CSV_BOLETO_SUCESSO = DIR_DEBUG_OUTPUT / "boletos_sucesso.csv"
 DEBUG_CSV_BOLETO_FALHA = DIR_DEBUG_OUTPUT / "boletos_falha.csv"
+DEBUG_CSV_DANFE_SUCESSO = DIR_DEBUG_OUTPUT / "danfe_sucesso.csv"
+DEBUG_CSV_DANFE_FALHA = DIR_DEBUG_OUTPUT / "danfe_falha.csv"
+DEBUG_CSV_OUTROS_SUCESSO = DIR_DEBUG_OUTPUT / "outros_sucesso.csv"
+DEBUG_CSV_OUTROS_FALHA = DIR_DEBUG_OUTPUT / "outros_falha.csv"
 DEBUG_RELATORIO_QUALIDADE = DIR_DEBUG_OUTPUT / "relatorio_qualidade.txt"
 
 # --- Caminhos de Binários Externos ---

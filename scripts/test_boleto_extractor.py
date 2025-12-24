@@ -8,7 +8,7 @@ from _init_env import setup_project_path
 setup_project_path()
 
 from extractors.boleto import BoletoExtractor
-from extractors.generic import GenericExtractor
+from extractors.nfse_generic import NfseGenericExtractor
 
 # Exemplo de texto de um boleto
 texto_boleto = """
@@ -66,9 +66,9 @@ if BoletoExtractor.can_handle(texto_nfse):
 else:
     print("✅ BoletoExtractor corretamente rejeitou a NFSe")
 
-if GenericExtractor.can_handle(texto_nfse):
-    print("✅ GenericExtractor reconheceu a NFSe")
-    extractor = GenericExtractor()
+if NfseGenericExtractor.can_handle(texto_nfse):
+    print("✅ NfseGenericExtractor reconheceu a NFSe")
+    extractor = NfseGenericExtractor()
     dados = extractor.extract(texto_nfse)
     print(f"  - CNPJ Prestador: {dados.get('cnpj_prestador')}")
     print(f"  - Número Nota: {dados.get('numero_nota')}")

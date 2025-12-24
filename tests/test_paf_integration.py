@@ -8,7 +8,7 @@ from config.feriados_sp import SPBusinessCalendar
 from core.models import InvoiceData, BoletoData
 from core.diagnostics import ExtractionDiagnostics
 from extractors.boleto import BoletoExtractor
-from extractors.generic import GenericExtractor
+from extractors.nfse_generic import NfseGenericExtractor
 from config.bancos import NOMES_BANCOS
 
 
@@ -203,7 +203,7 @@ class TestExtractors:
     
     def test_generic_extractor_fornecedor(self):
         """Testa extração de razão social em NFSe"""
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         
         texto_nfse = """
         NOTA FISCAL DE SERVIÇOS ELETRÔNICA - NFS-e
@@ -222,7 +222,7 @@ class TestExtractors:
     
     def test_generic_extractor_impostos(self):
         """Testa extração de impostos individuais"""
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         
         texto_nfse = """
         VALORES FISCAIS

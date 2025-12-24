@@ -6,14 +6,16 @@ Os extratores são responsáveis por interpretar o texto bruto e extrair campos 
 
 Cada extrator implementa a interface `BaseExtractor` e é especializado em um tipo de documento:
 
-- **GenericExtractor**: NFSe de qualquer prefeitura (baseado em regex)
+- **NfseGenericExtractor**: NFSe (fallback baseado em regex)
 - **BoletoExtractor**: Boletos bancários (linha digitável, vencimento, etc.)
+
+> Nota: o antigo `GenericExtractor` foi renomeado para `NfseGenericExtractor`.
 
 **Padrão de Design:** Chain of Responsibility + Strategy
 
-## GenericExtractor
+## NfseGenericExtractor
 
-Extrator genérico para Notas Fiscais de Serviço Eletrônica usando expressões regulares.
+Extrator fallback para Notas Fiscais de Serviço Eletrônica usando expressões regulares.
 
 ### Características
 
@@ -27,7 +29,7 @@ Extrator genérico para Notas Fiscais de Serviço Eletrônica usando expressões
 
 ### Lógica de Identificação
 
-O `GenericExtractor` aceita qualquer documento que **não seja** um boleto bancário **nem DANFE** (Nota Fiscal Eletrônica de Produto).
+O `NfseGenericExtractor` aceita qualquer documento que **não seja** um boleto bancário **nem DANFE** (Nota Fiscal Eletrônica de Produto).
 
 **Indicadores de rejeição - Boletos:**
 
@@ -66,7 +68,7 @@ Antes da extração, o texto passa por limpeza:
 - Remove datas (DD/MM/AAAA) para evitar confusão com números
 - Remove identificadores auxiliares (RPS, Lote, Protocolo, Série)
 
-::: extractors.generic.GenericExtractor
+::: extractors.nfse_generic.NfseGenericExtractor
     options:
       show_root_heading: true
       show_source: false
@@ -305,8 +307,8 @@ O sistema automaticamente testa cada extrator registrado até encontrar um que a
 graph TB
     A[Texto Extraído] --> B{BoletoExtractor.can_handle?}
     B -->|Sim| C[BoletoExtractor.extract]
-    B -->|Não| D{GenericExtractor.can_handle?}
-    D -->|Sim| E[GenericExtractor.extract]
+  B -->|Não| D{NfseGenericExtractor.can_handle?}
+  D -->|Sim| E[NfseGenericExtractor.extract]
     D -->|Não| F[Erro: Nenhum extrator disponível]
     C --> G[BoletoData]
     E --> H[InvoiceData]

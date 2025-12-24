@@ -258,6 +258,191 @@ class InvoiceData(DocumentData):
             "",                                  # 11. (coluna vazia/índice)
             fmt_date(self.dt_classificacao),     # 12. DT CLASS
             fat_value,                           # 13. Nº FAT
+            fmt_str(self.tipo_doc_paf),           # 14. TP DOC
+            fmt_str(self.trat_paf),               # 15. TRAT PAF
+            fmt_str(self.lanc_sistema),           # 16. LANC SISTEMA
+            fmt_str(self.observacoes),            # 17. OBSERVAÇÕES
+            fmt_str(self.obs_interna),            # 18. OBS INTERNA
+        ]
+
+
+@dataclass
+class DanfeData(DocumentData):
+    """Modelo para DANFE / NF-e (produto) - modelo 55.
+
+    Mantém compatibilidade com exportação PAF (18 colunas) usando os mesmos
+    campos principais: fornecedor, NF, emissão, valor, vencimento.
+    """
+
+    cnpj_emitente: Optional[str] = None
+    fornecedor_nome: Optional[str] = None
+    numero_nota: Optional[str] = None
+    serie_nf: Optional[str] = None
+    data_emissao: Optional[str] = None
+    valor_total: float = 0.0
+    vencimento: Optional[str] = None
+    forma_pagamento: Optional[str] = None
+    numero_pedido: Optional[str] = None
+    numero_fatura: Optional[str] = None
+    tipo_doc_paf: str = "NF"
+    dt_classificacao: Optional[str] = None
+    trat_paf: Optional[str] = None
+    lanc_sistema: str = "PENDENTE"
+
+    chave_acesso: Optional[str] = None
+
+    @property
+    def doc_type(self) -> str:
+        return 'DANFE'
+
+    def to_dict(self) -> dict:
+        return {
+            'tipo_documento': self.doc_type,
+            'arquivo_origem': self.arquivo_origem,
+            'data_processamento': self.data_processamento,
+            'setor': self.setor,
+            'empresa': self.empresa,
+            'observacoes': self.observacoes,
+            'obs_interna': self.obs_interna,
+            'cnpj_emitente': self.cnpj_emitente,
+            'fornecedor_nome': self.fornecedor_nome,
+            'numero_nota': self.numero_nota,
+            'serie_nf': self.serie_nf,
+            'data_emissao': self.data_emissao,
+            'valor_total': self.valor_total,
+            'vencimento': self.vencimento,
+            'forma_pagamento': self.forma_pagamento,
+            'numero_pedido': self.numero_pedido,
+            'numero_fatura': self.numero_fatura,
+            'tipo_doc_paf': self.tipo_doc_paf,
+            'dt_classificacao': self.dt_classificacao,
+            'trat_paf': self.trat_paf,
+            'lanc_sistema': self.lanc_sistema,
+            'chave_acesso': self.chave_acesso,
+            'texto_bruto': self.texto_bruto[:200] if self.texto_bruto else None,
+        }
+
+    def to_sheets_row(self) -> list:
+        def fmt_date(iso_date: Optional[str]) -> str:
+            if not iso_date:
+                return ""
+            try:
+                dt = datetime.strptime(iso_date, '%Y-%m-%d')
+                return dt.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                return ""
+
+        def fmt_num(value: Optional[float]) -> float:
+            return value if value is not None else 0.0
+
+        def fmt_str(value: Optional[str]) -> str:
+            return value if value is not None else ""
+
+        try:
+            from config.settings import PAF_EXPORT_NF_EMPTY
+        except Exception:
+            PAF_EXPORT_NF_EMPTY = False
+
+        nf_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_nota)
+        fat_value = "" if PAF_EXPORT_NF_EMPTY else fmt_str(self.numero_fatura)
+
+        return [
+            fmt_date(self.data_processamento),  # 1. DATA
+            fmt_str(self.setor),                 # 2. SETOR
+            fmt_str(self.empresa),               # 3. EMPRESA
+            fmt_str(self.fornecedor_nome),       # 4. FORNECEDOR
+            nf_value,                            # 5. NF
+            fmt_date(self.data_emissao),         # 6. EMISSÃO
+            fmt_num(self.valor_total),           # 7. VALOR
+            fmt_str(self.numero_pedido),         # 8. Nº PEDIDO
+            fmt_date(self.vencimento),           # 9. VENCIMENTO
+            fmt_str(self.forma_pagamento),       # 10. FORMA PAGTO
+            "",                                  # 11. (vazio)
+            fmt_date(self.dt_classificacao),     # 12. DT CLASS
+            fat_value,                           # 13. Nº FAT
+            "NF",                                # 14. TP DOC
+            fmt_str(self.trat_paf),              # 15. TRAT PAF
+            fmt_str(self.lanc_sistema),          # 16. LANC SISTEMA
+            fmt_str(self.observacoes),           # 17. OBSERVAÇÕES
+            fmt_str(self.obs_interna),           # 18. OBS INTERNA
+        ]
+
+
+@dataclass
+class OtherDocumentData(DocumentData):
+    """Modelo genérico para documentos que não são NFSe nem Boleto nem DANFE."""
+
+    fornecedor_nome: Optional[str] = None
+    cnpj_fornecedor: Optional[str] = None
+    data_emissao: Optional[str] = None
+    vencimento: Optional[str] = None
+    valor_total: float = 0.0
+    numero_documento: Optional[str] = None
+
+    tipo_doc_paf: str = "OT"
+    dt_classificacao: Optional[str] = None
+    trat_paf: Optional[str] = None
+    lanc_sistema: str = "PENDENTE"
+
+    subtipo: Optional[str] = None
+
+    @property
+    def doc_type(self) -> str:
+        return 'OUTRO'
+
+    def to_dict(self) -> dict:
+        return {
+            'tipo_documento': self.doc_type,
+            'arquivo_origem': self.arquivo_origem,
+            'data_processamento': self.data_processamento,
+            'setor': self.setor,
+            'empresa': self.empresa,
+            'observacoes': self.observacoes,
+            'obs_interna': self.obs_interna,
+            'fornecedor_nome': self.fornecedor_nome,
+            'cnpj_fornecedor': self.cnpj_fornecedor,
+            'data_emissao': self.data_emissao,
+            'vencimento': self.vencimento,
+            'valor_total': self.valor_total,
+            'numero_documento': self.numero_documento,
+            'tipo_doc_paf': self.tipo_doc_paf,
+            'dt_classificacao': self.dt_classificacao,
+            'trat_paf': self.trat_paf,
+            'lanc_sistema': self.lanc_sistema,
+            'subtipo': self.subtipo,
+            'texto_bruto': self.texto_bruto[:200] if self.texto_bruto else None,
+        }
+
+    def to_sheets_row(self) -> list:
+        def fmt_date(iso_date: Optional[str]) -> str:
+            if not iso_date:
+                return ""
+            try:
+                dt = datetime.strptime(iso_date, '%Y-%m-%d')
+                return dt.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                return ""
+
+        def fmt_num(value: Optional[float]) -> float:
+            return value if value is not None else 0.0
+
+        def fmt_str(value: Optional[str]) -> str:
+            return value if value is not None else ""
+
+        return [
+            fmt_date(self.data_processamento),  # 1. DATA
+            fmt_str(self.setor),                 # 2. SETOR
+            fmt_str(self.empresa),               # 3. EMPRESA
+            fmt_str(self.fornecedor_nome),       # 4. FORNECEDOR
+            "",                                  # 5. NF (não aplicável)
+            fmt_date(self.data_emissao),         # 6. EMISSÃO
+            fmt_num(self.valor_total),           # 7. VALOR
+            "",                                  # 8. Nº PEDIDO
+            fmt_date(self.vencimento),           # 9. VENCIMENTO
+            "",                                  # 10. FORMA PAGTO
+            "",                                  # 11. (vazio)
+            fmt_date(self.dt_classificacao),     # 12. DT CLASS
+            "",                                  # 13. Nº FAT
             fmt_str(self.tipo_doc_paf),          # 14. TP DOC
             fmt_str(self.trat_paf),              # 15. TRAT PAF
             fmt_str(self.lanc_sistema),          # 16. LANC SISTEMA

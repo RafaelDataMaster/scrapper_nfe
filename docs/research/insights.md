@@ -92,13 +92,13 @@ Muitos e-mails contêm anexos que são PDFs válidos, mas não são Notas Fiscai
 
 ### Variação de Layout (Regex Específica Necessária)
 
-O extrator genérico (`GenericExtractor`) funciona bem para layouts padrão (ABRASF), mas falha em prefeituras com layouts proprietários.
+O extrator fallback de NFSe (`NfseGenericExtractor`) funciona bem para layouts padrão (ABRASF), mas falha em prefeituras com layouts proprietários.
 
 * **Caso 1 (Vila Velha):** O campo "Número da Nota" aparece rotulado como `Número Cód`, o que foge da regex padrão `Número da Nota`.
 * **Caso 2 (Repromaq/Outros):** O valor monetário às vezes não é capturado porque o OCR ou o layout insere caracteres estranhos ou quebras de linha inesperadas entre o símbolo `R$` e o número.
 * **Solução Proposta:** Criação de **Extratores Específicos** (Strategy Pattern).
   * Criar `VilaVelhaExtractor` que herda de `BaseExtractor` mas sobrescreve as regexes problemáticas.
-  * O `Processor` deve iterar sobre uma lista de extratores (`[VilaVelhaExtractor, GenericExtractor]`) e usar o primeiro que validar com sucesso (`can_handle()`).
+  * O `Processor` deve iterar sobre uma lista de extratores (`[VilaVelhaExtractor, NfseGenericExtractor]`) e usar o primeiro que validar com sucesso (`can_handle()`).
 
 ### Documentos Auxiliares de Locação
 
@@ -123,7 +123,7 @@ Durante a validação com boletos reais (Dez/2025) apareceu um padrão onde o pr
 2) **Classificação de boleto frágil com OCR/híbrido**
 
 - PDFs híbridos podem corromper palavras-chave (“NÚMERO” → “NMERO”, “BENEFICIÁRIO” → variações) e quebrar palavras no meio.
-- Se a classificação falha, o `GenericExtractor` pode ser escolhido e deixar campos de boleto incompletos.
+- Se a classificação falha, o `NfseGenericExtractor` pode ser escolhido e deixar campos de boleto incompletos.
 
 ### Solução implementada
 

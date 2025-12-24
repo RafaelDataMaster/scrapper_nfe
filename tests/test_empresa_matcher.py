@@ -11,6 +11,14 @@ def test_find_empresa_no_texto_by_cnpj_digits_or_spaced():
     assert m.codigo == "CSC"
 
 
+def test_find_empresa_no_texto_by_email_domain_fallback_master():
+    # Documento não contém CNPJ nosso, mas contém e-mail/dominio corporativo.
+    txt = "Login: courrier ti@soumaster.com.br VENCIMENTO TOTAL A PAGAR"
+    m = find_empresa_no_texto(txt)
+    assert m is not None
+    assert m.codigo == "MASTER"
+
+
 def test_infer_fornecedor_prefers_labelled_line_and_excludes_our_company():
     # Documento contém uma empresa nossa (CSC) e um fornecedor com CNPJ em formato "espaçado".
     txt = """

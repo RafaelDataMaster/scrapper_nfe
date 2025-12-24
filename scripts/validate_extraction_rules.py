@@ -14,13 +14,14 @@ import os
 import argparse
 import pandas as pd
 import re
+import sys
 from _init_env import setup_project_path
 
 # Inicializa o ambiente do projeto
 setup_project_path()
 
 from core.processor import BaseInvoiceProcessor
-from core.models import BoletoData, InvoiceData
+from core.models import BoletoData, InvoiceData, DanfeData, OtherDocumentData
 from core.diagnostics import ExtractionDiagnostics
 from config.settings import (
     DIR_DEBUG_INPUT,
@@ -29,6 +30,10 @@ from config.settings import (
     DEBUG_CSV_NFSE_FALHA,
     DEBUG_CSV_BOLETO_SUCESSO,
     DEBUG_CSV_BOLETO_FALHA,
+    DEBUG_CSV_DANFE_SUCESSO,
+    DEBUG_CSV_DANFE_FALHA,
+    DEBUG_CSV_OUTROS_SUCESSO,
+    DEBUG_CSV_OUTROS_FALHA,
     DEBUG_RELATORIO_QUALIDADE
 )
 
@@ -62,6 +67,14 @@ def main() -> None:
     - boletos_sucesso.csv / boletos_falha.csv (com coluna motivo_falha)
     - relatorio_qualidade.txt (estatísticas gerais)
     """
+    # Garantia de UTF-8 no Windows (evita UnicodeEncodeError com emojis no print)
+    for stream in (getattr(sys, "stdout", None), getattr(sys, "stderr", None)):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
     # Parse argumentos
     parser = argparse.ArgumentParser(description='Valida regras de extração de PDFs')
     parser.add_argument('--validar-prazo', action='store_true',
@@ -98,12 +111,20 @@ def main() -> None:
     nfse_falha = []
     boletos_sucesso = []
     boletos_falha = []
+    danfe_sucesso = []
+    danfe_falha = []
+    outros_sucesso = []
+    outros_falha = []
     
     # Contadores
     count_nfse_ok = 0
     count_nfse_falha = 0
     count_boleto_ok = 0
     count_boleto_falha = 0
+    count_danfe_ok = 0
+    count_danfe_falha = 0
+    count_outros_ok = 0
+    count_outros_falha = 0
     count_erro = 0
 
     if not DIR_DEBUG_INPUT.exists():
@@ -169,6 +190,57 @@ def main() -> None:
                     result_dict.update(_nf_candidate_fields_from_obs(result_dict.get('obs_interna')))
                     nfse_falha.append(result_dict)
                     print(f"⚠️ NFSe INCOMPLETA: {result_dict['motivo_falha']}")
+
+            # === DANFE ===
+            elif isinstance(result, DanfeData):
+                # Critério mínimo (sem criar uma regra PAF rígida ainda): valor>0 e fornecedor
+                motivos = []
+                if (result.valor_total or 0) <= 0:
+                    motivos.append('VALOR_ZERO')
+                if not (result.fornecedor_nome and result.fornecedor_nome.strip()):
+                    motivos.append('SEM_RAZAO_SOCIAL')
+                if not result.cnpj_emitente:
+                    motivos.append('SEM_CNPJ')
+
+                eh_sucesso = len(motivos) == 0
+
+                if eh_sucesso:
+                    count_danfe_ok += 1
+                    danfe_sucesso.append({'object': result, **result.__dict__, **_nf_candidate_fields_from_obs(result.obs_interna)})
+                    print(f"✅ DANFE COMPLETO")
+                    print(f"   • Número: {result.numero_nota}")
+                    print(f"   • Valor: R$ {result.valor_total:,.2f}")
+                else:
+                    count_danfe_falha += 1
+                    result_dict = result.__dict__
+                    result_dict['motivo_falha'] = '|'.join(motivos)
+                    result_dict.update(_nf_candidate_fields_from_obs(result_dict.get('obs_interna')))
+                    danfe_falha.append(result_dict)
+                    print(f"⚠️ DANFE INCOMPLETO: {result_dict['motivo_falha']}")
+
+            # === OUTROS ===
+            elif isinstance(result, OtherDocumentData):
+                motivos = []
+                if (result.valor_total or 0) <= 0:
+                    motivos.append('VALOR_ZERO')
+                if not (result.fornecedor_nome and result.fornecedor_nome.strip()):
+                    motivos.append('SEM_RAZAO_SOCIAL')
+
+                eh_sucesso = len(motivos) == 0
+
+                if eh_sucesso:
+                    count_outros_ok += 1
+                    outros_sucesso.append({'object': result, **result.__dict__, **_nf_candidate_fields_from_obs(result.obs_interna)})
+                    print(f"✅ OUTRO COMPLETO")
+                    print(f"   • Subtipo: {result.subtipo or 'N/A'}")
+                    print(f"   • Valor: R$ {result.valor_total:,.2f}")
+                else:
+                    count_outros_falha += 1
+                    result_dict = result.__dict__
+                    result_dict['motivo_falha'] = '|'.join(motivos)
+                    result_dict.update(_nf_candidate_fields_from_obs(result_dict.get('obs_interna')))
+                    outros_falha.append(result_dict)
+                    print(f"⚠️ OUTRO INCOMPLETO: {result_dict['motivo_falha']}")
             
             else:
                 count_erro += 1
@@ -229,6 +301,38 @@ def main() -> None:
         df_falha.to_csv(DEBUG_CSV_BOLETO_FALHA, index=False, encoding='utf-8-sig')
         print(f"⚠️ {DEBUG_CSV_BOLETO_FALHA.name} ({len(boletos_falha)} registros) - Debug completo")
 
+    if danfe_sucesso:
+        rows_paf = [item['object'].to_sheets_row() for item in danfe_sucesso]
+        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)
+        df_paf.to_csv(DEBUG_CSV_DANFE_SUCESSO, index=False, encoding='utf-8-sig')
+        print(f"✅ {DEBUG_CSV_DANFE_SUCESSO.name} ({len(danfe_sucesso)} registros) - Formato PAF")
+
+        df_ok_debug = pd.DataFrame([{k: v for k, v in item.items() if k != 'object'} for item in danfe_sucesso])
+        debug_ok_path = DIR_DEBUG_OUTPUT / "danfe_sucesso_debug.csv"
+        df_ok_debug.to_csv(debug_ok_path, index=False, encoding='utf-8-sig')
+        print(f"ℹ️ {debug_ok_path.name} ({len(danfe_sucesso)} registros) - Debug completo (inclui nf_candidate)")
+
+    if danfe_falha:
+        df_falha = pd.DataFrame(danfe_falha)
+        df_falha.to_csv(DEBUG_CSV_DANFE_FALHA, index=False, encoding='utf-8-sig')
+        print(f"⚠️ {DEBUG_CSV_DANFE_FALHA.name} ({len(danfe_falha)} registros) - Debug completo")
+
+    if outros_sucesso:
+        rows_paf = [item['object'].to_sheets_row() for item in outros_sucesso]
+        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)
+        df_paf.to_csv(DEBUG_CSV_OUTROS_SUCESSO, index=False, encoding='utf-8-sig')
+        print(f"✅ {DEBUG_CSV_OUTROS_SUCESSO.name} ({len(outros_sucesso)} registros) - Formato PAF")
+
+        df_ok_debug = pd.DataFrame([{k: v for k, v in item.items() if k != 'object'} for item in outros_sucesso])
+        debug_ok_path = DIR_DEBUG_OUTPUT / "outros_sucesso_debug.csv"
+        df_ok_debug.to_csv(debug_ok_path, index=False, encoding='utf-8-sig')
+        print(f"ℹ️ {debug_ok_path.name} ({len(outros_sucesso)} registros) - Debug completo (inclui nf_candidate)")
+
+    if outros_falha:
+        df_falha = pd.DataFrame(outros_falha)
+        df_falha.to_csv(DEBUG_CSV_OUTROS_FALHA, index=False, encoding='utf-8-sig')
+        print(f"⚠️ {DEBUG_CSV_OUTROS_FALHA.name} ({len(outros_falha)} registros) - Debug completo")
+
     # === RELATÓRIO ===
     dados_relatorio = {
         'total': len(arquivos),
@@ -236,9 +340,15 @@ def main() -> None:
         'nfse_falha': count_nfse_falha,
         'boleto_ok': count_boleto_ok,
         'boleto_falha': count_boleto_falha,
+        'danfe_ok': count_danfe_ok,
+        'danfe_falha': count_danfe_falha,
+        'outros_ok': count_outros_ok,
+        'outros_falha': count_outros_falha,
         'erros': count_erro,
         'nfse_falhas_detalhe': nfse_falha,
-        'boleto_falhas_detalhe': boletos_falha
+        'boleto_falhas_detalhe': boletos_falha,
+        'danfe_falhas_detalhe': danfe_falha,
+        'outros_falhas_detalhe': outros_falha,
     }
     
     # Usa o módulo centralizado de diagnósticos
@@ -251,6 +361,8 @@ def main() -> None:
     print("=" * 80)
     print(f"\n📈 NFSe: {count_nfse_ok} OK / {count_nfse_falha} Falhas")
     print(f"📈 Boletos: {count_boleto_ok} OK / {count_boleto_falha} Falhas")
+    print(f"📈 DANFE: {count_danfe_ok} OK / {count_danfe_falha} Falhas")
+    print(f"📈 Outros: {count_outros_ok} OK / {count_outros_falha} Falhas")
     print(f"❌ Erros: {count_erro}")
     print("\n" + "=" * 80)
 

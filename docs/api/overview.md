@@ -75,10 +75,12 @@ scrapper/
 
 **Implementações especializadas para diferentes tipos de documentos:**
 
-- **`GenericExtractor`** - Extrator baseado em regex para NFSe de qualquer prefeitura
+- **`NfseGenericExtractor`** - Fallback baseado em regex para NFSe (quando não há extrator específico)
 - **`BoletoExtractor`** - Extrator especializado em boletos bancários (linha digitável, vencimento, valor)
 
-::: extractors.generic.GenericExtractor
+ - **`NfseGenericExtractor`** - Fallback baseado em regex para NFSe (quando não há extrator específico)
+
+::: extractors.nfse_generic.NfseGenericExtractor
     options:
       show_root_heading: true
       show_source: false
@@ -157,7 +159,7 @@ graph TB
     H --> G
     G -->|Sim| I{Tipo?}
     I -->|Boleto| J[BoletoExtractor]
-    I -->|NFSe| K[GenericExtractor]
+    I -->|NFSe| K[NfseGenericExtractor]
     J --> L[Validation]
     K --> L
     L --> M[ExtractionDiagnostics]

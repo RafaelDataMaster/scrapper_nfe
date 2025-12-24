@@ -3,13 +3,15 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Union, Optional
-from core.models import InvoiceData, BoletoData
+from core.models import InvoiceData, BoletoData, DanfeData, OtherDocumentData, DocumentData
 from core.interfaces import TextExtractionStrategy
 from strategies.fallback import SmartExtractionStrategy
 from core.extractors import EXTRACTOR_REGISTRY
 from config.settings import TRAT_PAF_RESPONSAVEL
-import extractors.generic
+import extractors.nfse_generic
 import extractors.boleto
+import extractors.danfe
+import extractors.outros
 from core.nf_candidate import extract_nf_candidate
 from core.empresa_matcher import (
     find_empresa_no_texto,
@@ -45,7 +47,7 @@ class BaseInvoiceProcessor(ABC):
                 return extractor_cls()
         raise ValueError("Nenhum extrator compatível encontrado para este documento.")
 
-    def process(self, file_path: str) -> Union[InvoiceData, BoletoData]:
+    def process(self, file_path: str) -> DocumentData:
         """
         Executa o pipeline de processamento para um único arquivo.
 
@@ -150,6 +152,39 @@ class BaseInvoiceProcessor(ABC):
                     agencia=extracted_data.get('agencia'),
                     conta_corrente=extracted_data.get('conta_corrente'),
                     numero_pedido=extracted_data.get('numero_pedido'),
+                )
+            elif extracted_data.get('tipo_documento') == 'DANFE':
+                return DanfeData(
+                    arquivo_origem=os.path.basename(file_path),
+                    texto_bruto=' '.join(raw_text.split())[:500],
+                    # Campos PAF comuns
+                    **common_data,
+                    # Campos do DANFE
+                    cnpj_emitente=extracted_data.get('cnpj_emitente') or extracted_data.get('cnpj_prestador'),
+                    fornecedor_nome=extracted_data.get('fornecedor_nome'),
+                    numero_nota=extracted_data.get('numero_nota'),
+                    serie_nf=extracted_data.get('serie_nf'),
+                    data_emissao=extracted_data.get('data_emissao'),
+                    valor_total=extracted_data.get('valor_total', 0.0),
+                    vencimento=extracted_data.get('vencimento'),
+                    forma_pagamento=extracted_data.get('forma_pagamento'),
+                    numero_pedido=extracted_data.get('numero_pedido'),
+                    numero_fatura=extracted_data.get('numero_fatura'),
+                    chave_acesso=extracted_data.get('chave_acesso'),
+                )
+            elif extracted_data.get('tipo_documento') == 'OUTRO':
+                return OtherDocumentData(
+                    arquivo_origem=os.path.basename(file_path),
+                    texto_bruto=' '.join(raw_text.split())[:500],
+                    # Campos PAF comuns
+                    **common_data,
+                    fornecedor_nome=extracted_data.get('fornecedor_nome'),
+                    cnpj_fornecedor=extracted_data.get('cnpj_fornecedor'),
+                    data_emissao=extracted_data.get('data_emissao'),
+                    vencimento=extracted_data.get('vencimento'),
+                    valor_total=extracted_data.get('valor_total', 0.0),
+                    numero_documento=extracted_data.get('numero_documento'),
+                    subtipo=extracted_data.get('subtipo'),
                 )
             else:
                 # NFSe

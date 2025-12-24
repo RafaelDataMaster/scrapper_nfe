@@ -11,8 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import unittest
-from extractors.generic import GenericExtractor
+from extractors.nfse_generic import NfseGenericExtractor
 from extractors.boleto import BoletoExtractor
+from extractors.danfe import DanfeExtractor
+from extractors.outros import OutrosExtractor
 from core.models import InvoiceData, BoletoData
 
 
@@ -21,17 +23,17 @@ class TestGenericExtractor(unittest.TestCase):
     
     def setUp(self):
         """Inicializa o extrator antes de cada teste."""
-        self.extractor = GenericExtractor()
+        self.extractor = NfseGenericExtractor()
     
     def test_can_handle_nfse(self):
         """Verifica se identifica NFSe corretamente."""
         texto_nfse = "PREFEITURA MUNICIPAL NOTA FISCAL ELETRÔNICA Número: 12345"
-        self.assertTrue(GenericExtractor.can_handle(texto_nfse))
+        self.assertTrue(NfseGenericExtractor.can_handle(texto_nfse))
     
     def test_reject_boleto(self):
         """Verifica se rejeita boletos corretamente."""
         texto_boleto = "BANCO BRADESCO LINHA DIGITÁVEL CÓDIGO DE BARRAS BENEFICIÁRIO"
-        self.assertFalse(GenericExtractor.can_handle(texto_boleto))
+        self.assertFalse(NfseGenericExtractor.can_handle(texto_boleto))
     
     def test_extract_numero_nota_success(self):
         """Testa extração bem-sucedida de número de nota."""
@@ -184,12 +186,12 @@ class TestExtractionIntegration(unittest.TestCase):
         texto_nfse = "PREFEITURA MUNICIPAL NOTA FISCAL ELETRÔNICA"
         texto_boleto = "BANCO BRADESCO LINHA DIGITÁVEL BENEFICIÁRIO VENCIMENTO CÓDIGO DE BARRAS"
         
-        # NFSe deve ser aceita pelo GenericExtractor e rejeitada pelo BoletoExtractor
-        self.assertTrue(GenericExtractor.can_handle(texto_nfse))
+        # NFSe deve ser aceita pelo NfseGenericExtractor e rejeitada pelo BoletoExtractor
+        self.assertTrue(NfseGenericExtractor.can_handle(texto_nfse))
         self.assertFalse(BoletoExtractor.can_handle(texto_nfse))
         
-        # Boleto deve ser rejeitado pelo GenericExtractor e aceito pelo BoletoExtractor
-        self.assertFalse(GenericExtractor.can_handle(texto_boleto))
+        # Boleto deve ser rejeitado pelo NfseGenericExtractor e aceito pelo BoletoExtractor
+        self.assertFalse(NfseGenericExtractor.can_handle(texto_boleto))
         self.assertTrue(BoletoExtractor.can_handle(texto_boleto))
     
     def test_extract_nfse_campos_minimos(self):
@@ -199,7 +201,7 @@ class TestExtractionIntegration(unittest.TestCase):
         NFS-e 12345
         Valor: R$ 500,00
         """
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         result = extractor.extract(texto)
         
         # Deve ter número ou valor (critério mínimo)
@@ -231,12 +233,70 @@ class TestExtractionIntegration(unittest.TestCase):
                        "Boleto deve ter vencimento ou linha digitável")
 
 
+class TestDanfeExtractor(unittest.TestCase):
+    def test_can_handle_danfe(self):
+        texto = (
+            "Recebemos de EMC TECNOLOGIA LTDA os produtos constantes na Nota Fiscal NF-e. "
+            "DANFE EMC TECNOLOGIA LTDA DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRÔNICA "
+            "CHAVE DE ACESSO 3125 1122 2610 9300 0140 5500 1000 0877 3414 6437 6981 "
+            "Valor total: 6.000,00 Emissão 07/11/2025"
+        )
+        self.assertTrue(DanfeExtractor.can_handle(texto))
+        self.assertFalse(NfseGenericExtractor.can_handle(texto))
+
+    def test_extract_valor_total_da_nota_picking_last_value(self):
+        texto = (
+            "CALCULO DO IMPOSTO\n"
+            "BASE DE CÁLCULO DO ICMS VALOR DO ICMS BASE DE CÁLCULO DO ICMS ST VALOR DO ICMS ST VALOR TOTAL DOS PRODUTOS\n"
+            "0,00 0,00 0,00 0,00 4.800,00\n"
+            "VALOR DO FRETE VALOR DO SEGURO DESCONTO OUTRAS DESPESAS ACESSÓRIAS VALOR DO IPI VALOR TOTAL DA NOTA\n"
+            "0,00 0,00 0,00 0,00 0,00 4.800,00\n"
+        )
+        extractor = DanfeExtractor()
+        result = extractor.extract(texto)
+        self.assertAlmostEqual(float(result.get('valor_total') or 0.0), 4800.00, places=2)
+
+    def test_extract_valor_total_da_nota_small_value(self):
+        texto = (
+            "VALOR DO FRETE VALOR DO SEG. DESCONTO OUT. DESP. ACESSÓRIAS FCP FCP ST VALOR DO PIS VALOR DA COFINS VALOR TOTAL DA NOTA\n"
+            "0,00 0,00 0,00 0,00 0,00 0,00 0,00 0,00 22,16\n"
+        )
+        extractor = DanfeExtractor()
+        result = extractor.extract(texto)
+        self.assertAlmostEqual(float(result.get('valor_total') or 0.0), 22.16, places=2)
+
+
+class TestOutrosExtractor(unittest.TestCase):
+    def test_can_handle_locacao(self):
+        texto = (
+            "DEMONSTRATIVO DE LOCAÇÃO\n"
+            "VALOR DA LOCAÇÃO 2.855,00\n"
+            "REPROMAQ COMERCIO E SERVICOS DE TECNOLOGIA LTDA"
+        )
+        self.assertTrue(OutrosExtractor.can_handle(texto))
+        self.assertFalse(NfseGenericExtractor.can_handle(texto))
+
+    def test_extract_locacao_total_a_pagar_mes(self):
+        extractor = OutrosExtractor()
+        texto = (
+            "DEMONSTRATIVO DE LOCAÇÃO ANALÍTICO GLOBAL\n"
+            "7 - Descontos 0,00\n"
+            "8 - Acréscimos 0,00\n"
+            "9 - Serviços 0,00000\n"
+            "Total a Pagar no Mês (1 + 6 - 7 + 8 + 9) 2.855,00\n"
+            "Cliente: 00003222 CSC GESTAO INTEGRADA S/A\n"
+        )
+        data = extractor.extract(texto)
+        self.assertEqual(data.get('subtipo'), 'LOCACAO')
+        self.assertAlmostEqual(data.get('valor_total', 0.0), 2855.0, places=2)
+
+
 class TestEdgeCases(unittest.TestCase):
     """Testes para casos extremos e situações adversas."""
     
     def test_texto_vazio(self):
         """Testa comportamento com texto vazio."""
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         result = extractor.extract("")
         
         # Não deve lançar exceção
@@ -244,7 +304,7 @@ class TestEdgeCases(unittest.TestCase):
     
     def test_texto_sem_numeros(self):
         """Testa extração quando não há números no texto."""
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         texto = "TEXTO SEM NENHUM DIGITO"
         result = extractor.extract(texto)
         
@@ -254,7 +314,7 @@ class TestEdgeCases(unittest.TestCase):
     
     def test_valor_com_formato_invalido(self):
         """Testa extração de valor com formato inesperado."""
-        extractor = GenericExtractor()
+        extractor = NfseGenericExtractor()
         texto = "Valor: 1.234.567,89 reais"  # Sem R$
         result = extractor._extract_valor(texto)
         

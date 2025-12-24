@@ -16,6 +16,18 @@ _CNPJ_ANY_RE = re.compile(
 )
 
 
+_EMAIL_DOMAIN_RE = re.compile(
+    r"\b[a-z0-9._%+\-]+@([a-z0-9\-]+(?:\.[a-z0-9\-]+)+)\b",
+    flags=re.IGNORECASE,
+)
+
+# Captura domínios comuns quando aparecem sem @ (ex.: "soumaster.com.br")
+_DOMAIN_RE = re.compile(
+    r"\b(?:[a-z0-9\-]+\.)+(?:[a-z]{2,})(?:\.[a-z]{2,})?\b",
+    flags=re.IGNORECASE,
+)
+
+
 @dataclass(frozen=True)
 class EmpresaMatch:
     cnpj_digits: str
@@ -84,6 +96,27 @@ def iter_cnpjs_in_text(text: str) -> Iterable[Tuple[str, int, int, str]]:
         yield (digits, m.start(), m.end(), raw)
 
 
+def iter_domains_in_text(text: str) -> Iterable[str]:
+    """Itera domínios encontrados no texto (a partir de e-mails e domínios soltos)."""
+    if not text:
+        return []
+
+    seen = set()
+
+    for m in _EMAIL_DOMAIN_RE.finditer(text):
+        dom = (m.group(1) or "").strip().lower()
+        if dom and dom not in seen:
+            seen.add(dom)
+            yield dom
+
+    for m in _DOMAIN_RE.finditer(text):
+        dom = (m.group(0) or "").strip().lower()
+        # Evita capturar coisas tipo "r$" etc; já filtrado por regex.
+        if dom and dom not in seen:
+            seen.add(dom)
+            yield dom
+
+
 def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
     """Detecta a empresa "nossa" no documento via CNPJ (preferencial) e fallback por nome.
 
@@ -144,6 +177,48 @@ def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
                 method="nome",
                 score=5,
             )
+
+    # 3) Fallback por domínio/e-mail: útil quando o documento não traz nosso CNPJ,
+    # mas traz e-mail/dominio corporativo (ex.: fatura Locaweb com "soumaster.com.br").
+    domains = list(iter_domains_in_text(text))
+    if domains:
+        best_domain: Optional[EmpresaMatch] = None
+        domains_up = [d.upper() for d in domains]
+
+        for cnpj_digits, payload in cadastro.items():
+            razao = (payload.get("razao_social") or "").strip()
+            if not razao:
+                continue
+            codigo = _empresa_codigo_from_razao(razao)
+            codigo_up = (codigo or "").upper().strip()
+            if not codigo_up:
+                continue
+
+            # Conservador: só usa códigos curtos/distintivos (mesma regra do is_nome_nosso)
+            if len(codigo_up) < 2 or len(codigo_up) > 10:
+                continue
+
+            score = 0
+            for dom_up in domains_up:
+                if codigo_up in dom_up:
+                    # pontua por match no domínio; quanto mais "limpo" o match, maior o score
+                    score = max(score, 7 + min(3, len(codigo_up)))
+
+            if score <= 0:
+                continue
+
+            cand = EmpresaMatch(
+                cnpj_digits=cnpj_digits,
+                razao_social=razao,
+                codigo=codigo_up,
+                method="domain",
+                score=score,
+            )
+            if best_domain is None or cand.score > best_domain.score:
+                best_domain = cand
+
+        if best_domain:
+            return best_domain
 
     return None
 

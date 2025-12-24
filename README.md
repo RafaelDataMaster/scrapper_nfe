@@ -18,9 +18,8 @@ O **MVP atual** está focado em gerar as colunas essenciais da planilha PAF:
 
 ## To Do - Notas mentais
 
-- [ ] Fazer a limpeza e catalogação dos pdfs na pasta de C:Dados
+- [ ] **Fazer a limpeza e catalogação dos pdfs na pasta de C:Dados**
 - [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento
-- [ ] **Concertar/adicionar a logica de extração das NSFE, DANFES, etc, pra funcionar com os casos falhos.**
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
@@ -30,6 +29,19 @@ O **MVP atual** está focado em gerar as colunas essenciais da planilha PAF:
 Concertar e diferencias NFSE danfe e outros. Tentar entender quais são os casos mesmos. Catalogar os pdfs absorvidos na pasta dados.
 
 ## Done
+
+### 24/12/2025 - Dia 9
+
+- [X] **Concertar/adicionar a logica de extração das NSFE, DANFES, etc, pra funcionar com os casos falhos.**
+  - Suporte completo a múltiplos tipos além de NFSe: **DANFE** e **OUTROS** (faturas/demonstrativos)
+  - Roteamento por extrator via `can_handle()` (plugins) para evitar DANFE/OUTROS caindo como NFSe
+  - Novos extratores especializados: `DanfeExtractor` e `OutrosExtractor`
+  - Novos modelos de dados: `DanfeData` e `OtherDocumentData` (padronizando `DocumentData`)
+  - Relatórios/CSVs de validação separados e debug por tipo (incluindo `danfe_sucesso_debug.csv` e `outros_sucesso_debug.csv`)
+  - Renomeação do fallback de NFSe: `GenericExtractor` → `NfseGenericExtractor` (módulo legado removido)
+  - Correção do script de validação no Windows: stdout/stderr em UTF-8 (evita `UnicodeEncodeError`)
+  - OUTROS/Locaweb: preenchimento de `empresa` via fallback por domínio/e-mail quando não existe CNPJ nosso no texto
+  - OUTROS/Locação: correção de extração de valor quando aparece como “Total a Pagar no Mês … 2.855,00” (sem “R$”) + teste unitário
 
 ### 23/12/2025 - Dia 8
 
@@ -67,7 +79,7 @@ Concertar e diferencias NFSE danfe e outros. Tentar entender quais são os casos
   - Biblioteca de padrões pré-testados, suporte a padrões customizados
   - Detecção automática de quando `re.DOTALL` é necessário
 
-### 18/12/2025
+### 18/12/2025 - Dia 5
 
 - [X] Conversar direito com a Melyssa, ou mesmo direto com o Paulo ou o Gustavo a respeito do redirecionamento de emails. Avaliar possíveis soluções e planejar como realmente as NFSE vai estar e em qual email.
 - [X] Criado configuração do projeto pra rodar em container.
@@ -84,22 +96,22 @@ Concertar e diferencias NFSE danfe e outros. Tentar entender quais são os casos
 - [x] Adicionada documentação completa em `docs/guide/boletos.md` e `docs/guide/quickstart_boletos.md`
 - [x] Criados scripts de teste e análise (`test_boleto_extractor.py`, `analyze_boletos.py`)
 
-### 17/12/2025
+### 17/12/2025 - Dia 4
 
 - [x] Configurar o email para testes em ambiente real de scraping
 - [x] **Nota**: Email `scrapper.nfse@gmail.com` configurado com autenticação em `rafael.ferreira@soumaster.com.br` e Google Authenticator
 
-### 16/12/2025
+### 16/12/2025 - Dia 3
 
 - [x] Estudar scraping de diferentes tipos de email
 - [x] Terminar de organizar a documentação por completo
 
-### 15/12/2025
+### 15/12/2025 - Dia 2
 
 - [x] Montar site da documentação (MkDocs)
 - [x] Organizar estrutura do projeto
 
-### 11/12/2025
+### 11/12/2025 - Dia 1
 
 - [x] Debugar PDFs para entender cada caso
 - [x] Extração de dados para CSV baseados em PDFs de diferentes casos

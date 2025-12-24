@@ -370,14 +370,14 @@ def _extract_nosso_numero(self, text: str) -> Optional[str]:
 ---
 
 ### 2. **Detecção e Rejeição de DANFE**
-**Arquivo:** [`extractors/generic.py`](../../extractors/generic.py)
+**Arquivo:** [`extractors/nfse_generic.py`](../../extractors/nfse_generic.py)
 
 #### Problema
 - Sistema tentava processar DANFEs (NFe de produto) como NFSe (serviço)
 - Estrutura completamente diferente causava extrações incorretas
 
 #### Solução
-Adicionada verificação específica no `GenericExtractor.can_handle()`:
+Adicionada verificação específica no `NfseGenericExtractor.can_handle()`:
 
 ```python
 danfe_keywords = [
@@ -397,7 +397,7 @@ if danfe_score >= 2 and 'SERVICO' not in text_upper:
 ---
 
 ### 3. **Regex Flexível para Valores (NFSe)**
-**Arquivo:** [`extractors/generic.py`](../../extractors/generic.py)
+**Arquivo:** [`extractors/nfse_generic.py`](../../extractors/nfse_generic.py)
 
 #### Melhoria
 Expandidos padrões de extração de valor de 4 para 8:
@@ -572,7 +572,7 @@ setup_project_path()
 **Arquivo:** [`tests/test_extractors.py`](tests/test_extractors.py)
 
 - ✅ Criado suite completa de testes unitários com **23 testes**
-- ✅ Testa extratores `GenericExtractor` e `BoletoExtractor`
+- ✅ Testa extratores `NfseGenericExtractor` e `BoletoExtractor`
 - ✅ Testes de integração para roteamento NFSe vs Boleto
 - ✅ Testes de edge cases (texto vazio, sem números, formatos inválidos)
 
