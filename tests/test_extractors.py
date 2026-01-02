@@ -310,6 +310,27 @@ class TestDanfeExtractor(unittest.TestCase):
         result = extractor.extract(texto)
         self.assertEqual(result.get('data_emissao'), '2023-03-24')
 
+    def test_extract_data_emissao_formato_hifen(self):
+        """Testa extração de data de emissão com hífen (dd-mm-yyyy).
+
+        Alguns DANFEs usam formato com hífen em vez de barra.
+        Ex: ZOOM COMUNICACAO, MAGAZINE ELETRONICO, LUCIMAR EUSTAQUIO.
+        """
+        casos = [
+            ("EMISSÃO: 24-02-2025 - VALOR TOTAL: R$ 3.200,00", "2025-02-24"),
+            ("EMISSÃO: 07-04-2025 - VALOR TOTAL: R$ 8.700,00", "2025-04-07"),
+            ("EMISSÃO: 05-06-2025 - VALOR TOTAL: R$ 900,00", "2025-06-05"),
+            ("EMISSÃO: 08-05-2024 - VALOR TOTAL: R$ 627,00", "2024-05-08"),
+        ]
+        extractor = DanfeExtractor()
+        for texto_emissao, esperado in casos:
+            texto = f"DANFE\nCHAVE DE ACESSO\n{texto_emissao}\n"
+            result = extractor.extract(texto)
+            self.assertEqual(
+                result.get('data_emissao'), esperado,
+                f"Falhou para: {texto_emissao}"
+            )
+
     def test_extract_duplicatas_multiplas(self):
         """Testa extração de múltiplas duplicatas/faturas."""
         texto = (

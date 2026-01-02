@@ -24,9 +24,11 @@ def _parse_date_br(value: str) -> Optional[str]:
         return None
     # Remove espaços extras que podem aparecer em PDFs
     value = re.sub(r"\s+", "", value.strip())
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"):
+    # Normaliza separadores: substitui hífen por barra para parsing uniforme
+    normalized = value.replace("-", "/")
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
         try:
-            dt = datetime.strptime(value, fmt)
+            dt = datetime.strptime(normalized, fmt)
             # Para anos de 2 dígitos, ajusta se necessário
             if dt.year < 100:
                 dt = dt.replace(year=dt.year + 2000)
@@ -118,21 +120,32 @@ def _extract_data_emissao(text: str) -> Optional[str]:
     if not text:
         return None
 
+    # Regex para data brasileira: aceita tanto barra (/) quanto hífen (-)
+    # Formatos: dd/mm/yyyy, dd-mm-yyyy, dd/mm/yy, dd-mm-yy
+    DATE_PATTERN = r"(\d{2}[/-]\d{2}[/-]\d{2,4})"
+
     # Padrão 1: "DATA DA EMISSÃO" ou "DATA DE EMISSÃO" seguido de data
     # Considerando caracteres problemáticos (□ = caractere não renderizado)
     patterns = [
         # Padrão mais específico: DATA DA EMISSÃO no mesmo contexto que nome/CNPJ
         # Ex: "NOME RAZÃO SOCIAL CNPJ/CPF DATA DA EMISSÃO\nXXX 00.000.000/0000-00 24/03/2023"
-        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS[ÃA□]O[^\d]{0,30}(\d{2}/\d{2}/\d{4})",
+        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS[ÃA□]O[^\d]{0,30}" + DATE_PATTERN,
 
         # Padrão com caractere especial (□)
-        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS.O[^\d]{0,30}(\d{2}/\d{2}/\d{4})",
+        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS.O[^\d]{0,30}" + DATE_PATTERN,
 
         # Padrão em contexto de linha do destinatário
-        r"(?i)CNPJ/CPF\s+DATA\s*(?:DA|DE)?\s*EMISS[ÃA□O]O?[^\d]*(\d{2}/\d{2}/\d{4})",
+        r"(?i)CNPJ/CPF\s+DATA\s*(?:DA|DE)?\s*EMISS[ÃA□O]O?[^\d]*" + DATE_PATTERN,
 
         # Padrão genérico - EMISSÃO seguido de data na mesma linha ou próxima
-        r"(?i)\bEMISS[ÃA□O]O?\b[^\d\n]{0,50}(\d{2}/\d{2}/\d{4})",
+        # Ex: "EMISSÃO: 24-02-2025" ou "EMISSÃO: 24/02/2025"
+        r"(?i)\bEMISS[ÃA□O]O?\s*[:\-]?\s*" + DATE_PATTERN,
+
+        # Padrão para formato "- EMISSÃO: dd-mm-yyyy -" comum em alguns DANFEs
+        r"(?i)-\s*EMISS[ÃA]O\s*[:\-]?\s*" + DATE_PATTERN,
+
+        # Padrão para "Emissão:" no início de linha ou após espaço
+        r"(?i)(?:^|\s)Emiss[ãa]o\s*[:\-]?\s*" + DATE_PATTERN,
     ]
 
     for pat in patterns:
@@ -146,9 +159,9 @@ def _extract_data_emissao(text: str) -> Optional[str]:
     # Fallback: Procura na estrutura típica do DANFE onde a data aparece após CNPJ
     # em formato de tabela linearizada
     # Ex: "... 38.323.230/0001-64 10/03/2025\n..."
-    # Procura linha que contenha CNPJ seguido de data
+    # Procura linha que contenha CNPJ seguido de data (aceita / ou -)
     cnpj_date_pattern = re.compile(
-        r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s+(\d{2}/\d{2}/\d{4})"
+        r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s+" + DATE_PATTERN
     )
     matches = cnpj_date_pattern.findall(text)
 
