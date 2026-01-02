@@ -1,3 +1,26 @@
+"""
+Módulo de heurística para extração de número de NF (DEPRECATED).
+
+⚠️ AVISO: Este módulo NÃO é mais usado no pipeline principal de processamento.
+A extração de número de NF agora é feita via:
+1. Contexto do e-mail (assunto, corpo) via EmailMetadata
+2. Correlação entre documentos do mesmo lote via CorrelationService
+3. Extratores específicos (DanfeExtractor, NfseGenericExtractor)
+
+Este módulo é mantido apenas para:
+- Scripts de debug (debug_pdf.py)
+- Análise/auditoria manual de documentos
+- Referência de padrões de regex para NF
+
+Para processamento em produção, use:
+- core.batch_processor.BatchProcessor
+- core.correlation_service.CorrelationService
+- core.metadata.EmailMetadata
+
+Histórico:
+- v1.0: Usado no pipeline principal para sugerir NF quando extração falhava
+- v2.0 (atual): Removido do pipeline, mantido como utilitário de debug
+"""
 from __future__ import annotations
 
 import re

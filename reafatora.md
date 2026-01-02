@@ -1,4 +1,11 @@
-# Poruque refatorar o scrapper para cruzar dados entre DANFE e Boleto?
+# Refatoração do Scrapper para Processamento em Lote
+
+> ✅ **STATUS: IMPLEMENTADO** (Janeiro 2025)
+>
+> Este documento descreve o plano de refatoração que foi implementado.
+> Para guia de migração, veja `docs/MIGRATION_BATCH_PROCESSING.md`.
+
+## Por que refatorar o scrapper para cruzar dados entre DANFE e Boleto?
 
 1. **Falta de dados:** A DANFE não tem vencimento, mas o Boleto tem.
 2. **OCR falho:** O OCR errou o nome do fornecedor, mas o "Remetente do E-mail" está correto.
@@ -265,9 +272,62 @@ cleaner:
 
 ### Visão Geral da Refatoração
 
-1.  **Ingestão Inteligente** (Pastas organizadas + XMLs).
-2.  **Processamento Híbrido** (Router de Extratores).
-3.  **Correlação/Inteligência** (Regras de negócio e validação).
-4.  **Saída** (Planilha Enriquecida).
-5.  **Modelagem de Dados** (Suporte a parcelas e ids espelhados).
-6.  **Infraestrutura** (Limpeza automática e saúde do disco).
+1.  **Ingestão Inteligente** (Pastas organizadas + XMLs). ✅
+2.  **Processamento Híbrido** (Router de Extratores). ✅
+3.  **Correlação/Inteligência** (Regras de negócio e validação). ✅
+4.  **Saída** (Planilha Enriquecida). ✅
+5.  **Modelagem de Dados** (Suporte a parcelas e ids espelhados). ✅
+6.  **Infraestrutura** (Limpeza automática e saúde do disco). ✅
+
+---
+
+## Arquivos Criados/Modificados na Implementação
+
+### Novos Módulos (core/)
+
+| Arquivo                       | Descrição                                          |
+| ----------------------------- | -------------------------------------------------- |
+| `core/metadata.py`            | Classe `EmailMetadata` para contexto do e-mail     |
+| `core/batch_processor.py`     | Classe `BatchProcessor` para processamento em lote |
+| `core/batch_result.py`        | Classes `BatchResult` e `CorrelationResult`        |
+| `core/correlation_service.py` | Serviço de correlação entre documentos             |
+
+### Novos Módulos (services/)
+
+| Arquivo                         | Descrição                                    |
+| ------------------------------- | -------------------------------------------- |
+| `services/__init__.py`          | Exports do módulo services                   |
+| `services/ingestion_service.py` | Serviço de ingestão e organização de e-mails |
+
+### Scripts Atualizados
+
+| Arquivo                                | Mudanças                             |
+| -------------------------------------- | ------------------------------------ |
+| `scripts/validate_extraction_rules.py` | Suporte a modo lote (`--batch-mode`) |
+| `scripts/example_batch_processing.py`  | Script de exemplo da nova estrutura  |
+| `run_ingestion.py`                     | Usa nova estrutura de lotes          |
+
+### Modelos Atualizados
+
+| Arquivo             | Mudanças                                                         |
+| ------------------- | ---------------------------------------------------------------- |
+| `core/models.py`    | Campos novos: `batch_id`, `source_email_*`, `status_conciliacao` |
+| `core/processor.py` | Removida lógica de NF_CANDIDATE (agora via contexto)             |
+| `core/__init__.py`  | Exports atualizados                                              |
+
+### Infraestrutura
+
+| Arquivo                              | Mudanças                                  |
+| ------------------------------------ | ----------------------------------------- |
+| `docker-compose.yml`                 | Serviço `cleaner` para limpeza automática |
+| `docs/MIGRATION_BATCH_PROCESSING.md` | Guia de migração                          |
+
+### Notas sobre NF_CANDIDATE
+
+A lógica de `NF_CANDIDATE` foi **removida** do pipeline principal porque:
+
+- O número da NF agora vem do contexto do e-mail (assunto/corpo)
+- O `CorrelationService` herda o número entre documentos do mesmo lote
+- Os extratores específicos já extraem o número da NF
+
+O módulo `core/nf_candidate.py` foi mantido apenas para scripts de debug.

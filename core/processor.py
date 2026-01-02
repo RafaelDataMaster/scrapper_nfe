@@ -28,7 +28,6 @@ from core.models import (
     InvoiceData,
     OtherDocumentData,
 )
-from core.nf_candidate import extract_nf_candidate
 from strategies.fallback import SmartExtractionStrategy
 
 
@@ -43,12 +42,18 @@ class BaseInvoiceProcessor(ABC):
     4.  **Extração**: Executa a mineração de dados.
     5.  **Normalização**: Retorna objeto `InvoiceData` ou `BoletoData`.
 
+    Princípios SOLID aplicados:
+    - SRP: Foca apenas em orquestrar o pipeline de processamento
+    - OCP: Extensível via registro de novos extratores sem modificar código
+    - DIP: Depende de abstrações (TextExtractionStrategy), não de implementações
+
     Args:
         reader: Estratégia de extração de texto. Se None, usa SmartExtractionStrategy.
                 Permite injeção de dependência para testes (DIP).
     """
     def __init__(self, reader: Optional[TextExtractionStrategy] = None):
         self.reader = reader if reader is not None else SmartExtractionStrategy()
+        self.last_extractor: Optional[str] = None
 
     def _get_extractor(self, text: str):
         """Factory Method: Escolhe o extrator certo para o texto."""
@@ -67,13 +72,10 @@ class BaseInvoiceProcessor(ABC):
             file_path (str): Caminho absoluto ou relativo do arquivo PDF.
 
         Returns:
-            Union[InvoiceData, BoletoData]: Objeto contendo os dados extraídos.
+            DocumentData: Objeto contendo os dados extraídos (InvoiceData, BoletoData, etc.).
         """
         # 1. Leitura
         raw_text = self.reader.extract(file_path)
-
-        # Sugestão de NF (debug/auditoria): não altera o MVP
-        nf_sugestao = extract_nf_candidate(raw_text or "")
 
         if not raw_text or "Falha" in raw_text:
             # Retorna objeto vazio de NFSe por padrão
@@ -145,11 +147,6 @@ class BaseInvoiceProcessor(ABC):
                 inferred = infer_fornecedor_from_text(raw_text or "", empresa_match.cnpj_digits)
                 if inferred:
                     extracted_data['fornecedor_nome'] = inferred
-
-            if nf_sugestao.value:
-                obs_prev = extracted_data.get('obs_interna')
-                obs_nf = f"NF_CANDIDATE={nf_sugestao.value} (conf={nf_sugestao.confidence:.2f}, {nf_sugestao.reason})"
-                common_data['obs_interna'] = f"{obs_prev} | {obs_nf}" if obs_prev else obs_nf
 
             # 3. Identifica o tipo e cria o modelo apropriado
             if extracted_data.get('tipo_documento') == 'BOLETO':

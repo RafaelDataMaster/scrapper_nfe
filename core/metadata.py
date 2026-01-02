@@ -1,0 +1,212 @@
+"""
+Metadados de contexto para processamento em lote.
+
+Este módulo define estruturas de dados para armazenar contexto
+do e-mail (assunto, remetente, corpo) que enriquece a extração.
+
+Princípios SOLID aplicados:
+- SRP: Classe focada apenas em metadados de e-mail/lote
+- OCP: Extensível via herança sem modificar código existente
+"""
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+
+@dataclass
+class EmailMetadata:
+    """
+    Metadados de contexto do e-mail original.
+
+    Armazena informações que não estão no PDF mas são úteis para
+    enriquecimento e fallback na extração de dados.
+
+    Attributes:
+        batch_id: Identificador único do lote (pasta)
+        email_subject: Assunto do e-mail (usado para tabela MVP)
+        email_sender_name: Nome do remetente (fallback para fornecedor)
+        email_sender_address: Endereço de e-mail do remetente
+        email_body_text: Corpo do e-mail (para buscar CNPJs/pedidos)
+        received_date: Data de recebimento do e-mail (ISO format)
+        attachments: Lista de nomes dos arquivos anexos
+        created_at: Data de criação do metadata (ISO format)
+    """
+    batch_id: str
+    email_subject: Optional[str] = None
+    email_sender_name: Optional[str] = None
+    email_sender_address: Optional[str] = None
+    email_body_text: Optional[str] = None
+    received_date: Optional[str] = None
+    attachments: List[str] = field(default_factory=list)
+    created_at: str = field(default_factory=lambda: datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
+
+    # Campos extras para extensibilidade
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converte para dicionário serializável."""
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Serializa para JSON formatado."""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
+    def save(self, folder_path: Path) -> Path:
+        """
+        Salva metadata.json na pasta do lote.
+
+        Args:
+            folder_path: Caminho da pasta do lote
+
+        Returns:
+            Path do arquivo salvo
+        """
+        folder_path = Path(folder_path)
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+        metadata_file = folder_path / "metadata.json"
+        metadata_file.write_text(self.to_json(), encoding='utf-8')
+
+        return metadata_file
+
+    @classmethod
+    def load(cls, folder_path: Path) -> Optional['EmailMetadata']:
+        """
+        Carrega metadata.json de uma pasta de lote.
+
+        Args:
+            folder_path: Caminho da pasta do lote
+
+        Returns:
+            EmailMetadata ou None se não existir
+        """
+        metadata_file = Path(folder_path) / "metadata.json"
+
+        if not metadata_file.exists():
+            return None
+
+        try:
+            data = json.loads(metadata_file.read_text(encoding='utf-8'))
+            return cls(**data)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            return None
+
+    @classmethod
+    def create_for_batch(
+        cls,
+        batch_id: str,
+        subject: Optional[str] = None,
+        sender_name: Optional[str] = None,
+        sender_address: Optional[str] = None,
+        body_text: Optional[str] = None,
+        received_date: Optional[str] = None,
+        attachments: Optional[List[str]] = None,
+    ) -> 'EmailMetadata':
+        """
+        Factory method para criar metadata de um lote de e-mail.
+
+        Args:
+            batch_id: ID único do lote
+            subject: Assunto do e-mail
+            sender_name: Nome do remetente
+            sender_address: E-mail do remetente
+            body_text: Corpo do e-mail
+            received_date: Data de recebimento
+            attachments: Lista de anexos
+
+        Returns:
+            EmailMetadata configurado
+        """
+        return cls(
+            batch_id=batch_id,
+            email_subject=subject,
+            email_sender_name=sender_name,
+            email_sender_address=sender_address,
+            email_body_text=body_text,
+            received_date=received_date,
+            attachments=attachments or [],
+        )
+
+    @classmethod
+    def create_legacy(cls, batch_id: str, file_paths: List[str]) -> 'EmailMetadata':
+        """
+        Factory method para criar metadata simulado para PDFs legados.
+
+        Usado pelo script de validação quando não há e-mail de origem
+        (failed_cases_pdf com documentos antigos).
+
+        Args:
+            batch_id: ID do lote (geralmente nome da pasta)
+            file_paths: Lista de caminhos dos arquivos
+
+        Returns:
+            EmailMetadata com campos mínimos preenchidos
+        """
+        return cls(
+            batch_id=batch_id,
+            attachments=[Path(p).name for p in file_paths],
+            extra={'legacy_mode': True, 'source': 'failed_cases_pdf'}
+        )
+
+    def get_fallback_fornecedor(self) -> Optional[str]:
+        """
+        Retorna nome do remetente como fallback para fornecedor.
+
+        Útil quando OCR falha ao extrair o nome do fornecedor.
+        """
+        return self.email_sender_name
+
+    def extract_cnpj_from_body(self) -> Optional[str]:
+        """
+        Tenta extrair CNPJ do corpo do e-mail.
+
+        Útil quando o PDF não contém CNPJ legível.
+
+        Returns:
+            CNPJ formatado ou None
+        """
+        import re
+
+        if not self.email_body_text:
+            return None
+
+        # Padrão CNPJ: 00.000.000/0000-00
+        pattern = r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b'
+        match = re.search(pattern, self.email_body_text)
+
+        return match.group(0) if match else None
+
+    def extract_numero_pedido_from_context(self) -> Optional[str]:
+        """
+        Tenta extrair número de pedido do assunto ou corpo do e-mail.
+
+        Returns:
+            Número do pedido ou None
+        """
+        import re
+
+        # Combina assunto e corpo para busca
+        text = f"{self.email_subject or ''} {self.email_body_text or ''}"
+
+        if not text.strip():
+            return None
+
+        # Padrões comuns de número de pedido
+        patterns = [
+            r'\b(?:PEDIDO|PC|PED)[:\s#]*(\d{4,10})\b',
+            r'\b(?:ORDEM|OC)[:\s#]*(\d{4,10})\b',
+            r'\bNR\.?\s*PEDIDO[:\s#]*(\d{4,10})\b',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def is_legacy(self) -> bool:
+        """Verifica se este metadata é de modo legado (sem e-mail real)."""
+        return self.extra.get('legacy_mode', False)

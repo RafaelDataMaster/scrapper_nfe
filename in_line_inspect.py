@@ -2,7 +2,7 @@ from core.processor import BaseInvoiceProcessor
 
 p=BaseInvoiceProcessor()
 
-doc=p.process(r"C:\Users\rafael.ferreira\Documents\scrapper\failed_cases_pdf\0018271130013\04-18 RBC NF114906 AZUL DISTRIBUIDORA.pdf")
+doc=p.process(r"C:\Users\rafael.ferreira\Documents\scrapper\failed_cases_pdf\0017124910099\12-08 EXATA NF3595 MOTOSSERAS E C C E M LTDA.pdf")
 
 print('last_extractor', getattr(p,'last_extractor',None))
 

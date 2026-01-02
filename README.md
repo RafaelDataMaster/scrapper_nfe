@@ -27,6 +27,14 @@ O **MVP atual** está focado em gerar as colunas essenciais da planilha PAF:
 
 # Estudar por agora
 
+### Comandos de terminal uteis
+
+Procurar pdfs com nome de empresas específicas ao identificar casos falhos nos debugs do validate
+
+```bash
+Get-ChildItem -Path .\failed_cases_pdf\ -Recurse -Filter "*MOTO*" -Name
+```
+
 ### Nova estratégia camada Prata.
 
 Alterar o modelo de ingestão para guardar o contexto do email em json e utilizar os dados de diferentes pdfs para validarem entre si. Criar nova coluna identificando o email de origem.

@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.extractors import BaseExtractor, register_extractor
 
@@ -19,11 +19,18 @@ def _parse_br_money(value: str) -> float:
 
 
 def _parse_date_br(value: str) -> Optional[str]:
+    """Converte data brasileira para formato ISO (YYYY-MM-DD)."""
     if not value:
         return None
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
+    # Remove espaços extras que podem aparecer em PDFs
+    value = re.sub(r"\s+", "", value.strip())
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"):
         try:
-            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
+            dt = datetime.strptime(value, fmt)
+            # Para anos de 2 dígitos, ajusta se necessário
+            if dt.year < 100:
+                dt = dt.replace(year=dt.year + 2000)
+            return dt.strftime("%Y-%m-%d")
         except ValueError:
             continue
     return None
@@ -82,6 +89,119 @@ def _extract_danfe_valor_total(text: str) -> float:
     return best_overall
 
 
+def _extract_chave_acesso(text: str) -> Optional[str]:
+    """Extrai a chave de acesso de 44 dígitos do DANFE."""
+    if not text:
+        return None
+
+    # Primeiro, tenta encontrar 44 dígitos consecutivos
+    # Alguns PDFs têm a chave no formato: 31250114169885000595550010000308381189120506
+    digits = _normalize_digits(text)
+    m = re.search(r"(\d{44})", digits)
+    if m:
+        return m.group(1)
+
+    # Tenta encontrar no formato espaçado: 3125 0114 1698 8500 ...
+    # Procura padrões de 4 dígitos espaçados que somem 44
+    spaced_pattern = re.compile(r"(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})")
+    m = spaced_pattern.search(text)
+    if m:
+        chave = _normalize_digits(m.group(1))
+        if len(chave) == 44:
+            return chave
+
+    return None
+
+
+def _extract_data_emissao(text: str) -> Optional[str]:
+    """Extrai a data de emissão do DANFE com padrões mais robustos."""
+    if not text:
+        return None
+
+    # Padrão 1: "DATA DA EMISSÃO" ou "DATA DE EMISSÃO" seguido de data
+    # Considerando caracteres problemáticos (□ = caractere não renderizado)
+    patterns = [
+        # Padrão mais específico: DATA DA EMISSÃO no mesmo contexto que nome/CNPJ
+        # Ex: "NOME RAZÃO SOCIAL CNPJ/CPF DATA DA EMISSÃO\nXXX 00.000.000/0000-00 24/03/2023"
+        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS[ÃA□]O[^\d]{0,30}(\d{2}/\d{2}/\d{4})",
+
+        # Padrão com caractere especial (□)
+        r"(?i)DATA\s*(?:DA|DE)?\s*EMISS.O[^\d]{0,30}(\d{2}/\d{2}/\d{4})",
+
+        # Padrão em contexto de linha do destinatário
+        r"(?i)CNPJ/CPF\s+DATA\s*(?:DA|DE)?\s*EMISS[ÃA□O]O?[^\d]*(\d{2}/\d{2}/\d{4})",
+
+        # Padrão genérico - EMISSÃO seguido de data na mesma linha ou próxima
+        r"(?i)\bEMISS[ÃA□O]O?\b[^\d\n]{0,50}(\d{2}/\d{2}/\d{4})",
+    ]
+
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m:
+            date_str = m.group(1)
+            parsed = _parse_date_br(date_str)
+            if parsed:
+                return parsed
+
+    # Fallback: Procura na estrutura típica do DANFE onde a data aparece após CNPJ
+    # em formato de tabela linearizada
+    # Ex: "... 38.323.230/0001-64 10/03/2025\n..."
+    # Procura linha que contenha CNPJ seguido de data
+    cnpj_date_pattern = re.compile(
+        r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s+(\d{2}/\d{2}/\d{4})"
+    )
+    matches = cnpj_date_pattern.findall(text)
+
+    # Retorna a primeira data encontrada (geralmente é a data de emissão)
+    for date_str in matches:
+        parsed = _parse_date_br(date_str)
+        if parsed:
+            return parsed
+
+    return None
+
+
+def _extract_duplicatas(text: str) -> List[Tuple[str, str, float]]:
+    """
+    Extrai faturas/duplicatas do DANFE.
+    Retorna lista de tuplas: (numero_parcela, vencimento, valor)
+    Ex: [("1/3", "2023-04-23", 2859.34), ("2/3", "2023-05-23", 2679.33)]
+    """
+    duplicatas = []
+    if not text:
+        return duplicatas
+
+    # Padrão típico: "1/3 23/04/23 2.859,34" ou "1/6 19/01/25 626,65"
+    # Número da parcela, data (dd/mm/aa ou dd/mm/aaaa), valor
+    dup_pattern = re.compile(
+        r"(\d{1,2}/\d{1,2})\s+(\d{2}/\d{2}/\d{2,4})\s+([\d\.]+,\d{2})"
+    )
+
+    for m in dup_pattern.finditer(text):
+        parcela = m.group(1)
+        data_str = m.group(2)
+        valor_str = m.group(3)
+
+        # Converte data
+        data_iso = _parse_date_br(data_str)
+        valor = _parse_br_money(valor_str)
+
+        if data_iso and valor > 0:
+            duplicatas.append((parcela, data_iso, valor))
+
+    return duplicatas
+
+
+def _extract_primeiro_vencimento(text: str) -> Optional[str]:
+    """Extrai o primeiro vencimento das duplicatas/faturas."""
+    duplicatas = _extract_duplicatas(text)
+    if duplicatas:
+        # Ordena por número da parcela para garantir pegar a primeira
+        duplicatas_sorted = sorted(duplicatas, key=lambda x: x[0])
+        return duplicatas_sorted[0][1]
+    return None
+
+
 @register_extractor
 class DanfeExtractor(BaseExtractor):
     """Extrator para DANFE (NF-e modelo 55)."""
@@ -115,17 +235,20 @@ class DanfeExtractor(BaseExtractor):
         data: Dict[str, Any] = {"tipo_documento": "DANFE"}
 
         # Chave de acesso (44 dígitos)
-        digits = _normalize_digits(text)
-        m_key = re.search(r"\b(\d{44})\b", digits)
-        if m_key:
-            data["chave_acesso"] = m_key.group(1)
+        chave = _extract_chave_acesso(text)
+        if chave:
+            data["chave_acesso"] = chave
 
         # Número da NF (várias formas). Importante: em DANFE o número pode vir como
         # 'NF-E Nº000.084.653' (com pontos). Por isso capturamos também '.' e limpamos.
+        # Também pode vir como 'N. 000003595' (com ponto e espaço).
+        # Formato adicional: 'Nº. 000.006.941' (com ponto após º e pontos como separadores)
         patterns_num = [
-            r"(?i)\bNF-?E\b[^\n]{0,120}?\bN[º°o]?\s*[:\-]?\s*([0-9\.]{1,20})",
-            r"(?i)\bN[º°o]?\s*[:\-]?\s*([0-9\.]{1,20})\b\s*(?:S[ÉE]RIE|SERIE)\b",
-            r"(?i)\bN[º°o]?\s*[:\-]?\s*([0-9\.]{1,20})\b",
+            # Formato com ponto após Nº: "Nº. 000.006.941"
+            r"(?i)\bN[º°o]\.?\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)*)",
+            r"(?i)\bNF-?E\b[^\n]{0,120}?\bN[º°o\.]?\s*[:\-]?\s*([0-9\.]{1,20})",
+            r"(?i)\bN[º°o\.]?\s*[:\-]?\s*([0-9\.]{1,20})\b\s*(?:S[ÉE]RIE|SERIE)\b",
+            r"(?i)\bN[º°o\.]?\s*[:\-]?\s*([0-9\.]{1,20})\b",
         ]
         for pat in patterns_num:
             m = re.search(pat, text)
@@ -142,17 +265,10 @@ class DanfeExtractor(BaseExtractor):
         if m_serie:
             data["serie_nf"] = m_serie.group(1)
 
-        # Data de emissão
-        # Em DANFE frequentemente aparece como 'Emissão 07/11/2025' ou 'DATA DE EMISSÃO'
-        date_patterns = [
-            r"(?i)\bEMISS[ÃA]O\b\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})",
-            r"(?i)\bDATA\s+DE\s+EMISS[ÃA]O\b\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})",
-        ]
-        for pat in date_patterns:
-            m = re.search(pat, text)
-            if m:
-                data["data_emissao"] = _parse_date_br(m.group(1))
-                break
+        # Data de emissão - usando função melhorada
+        data_emissao = _extract_data_emissao(text)
+        if data_emissao:
+            data["data_emissao"] = data_emissao
 
         # Valor total
         data["valor_total"] = _extract_danfe_valor_total(text)
@@ -177,5 +293,44 @@ class DanfeExtractor(BaseExtractor):
                 # Evita capturar lixo muito longo
                 if 4 <= len(name) <= 120:
                     data["fornecedor_nome"] = name
+
+        # Extrai duplicatas/faturas
+        duplicatas = _extract_duplicatas(text)
+        if duplicatas:
+            # Primeiro vencimento (da primeira parcela)
+            primeiro_venc = _extract_primeiro_vencimento(text)
+            if primeiro_venc:
+                data["vencimento"] = primeiro_venc
+
+            # Número da fatura (formato: "numero_nota/parcela")
+            # Ex: "114906-1/3" ou apenas usa a referência da primeira
+            if data.get("numero_nota") and duplicatas:
+                data["numero_fatura"] = f"{data['numero_nota']}-{duplicatas[0][0]}"
+
+            # Armazena todas as duplicatas para referência
+            data["duplicatas"] = [
+                {"parcela": d[0], "vencimento": d[1], "valor": d[2]}
+                for d in duplicatas
+            ]
+
+        # Extração adicional: Número do pedido (comum em DANFEs)
+        pedido_patterns = [
+            r"(?i)\bPEDIDO\s*(?:DE\s*COMPRAS?)?\s*[:\-]?\s*(\d+)",
+            r"(?i)\bNR\.?\s*PEDIDO\s*[:\-]?\s*(\d+)",
+            r"(?i)\bORDEM\s*(?:DE\s*COMPRA)?\s*[:\-]?\s*(\d+)",
+        ]
+        for pat in pedido_patterns:
+            m = re.search(pat, text)
+            if m:
+                data["numero_pedido"] = m.group(1)
+                break
+
+        # Extração: Natureza da operação
+        m_nat = re.search(r"(?i)\bNATUREZA\s+(?:DA\s+)?OPERA[ÇC][ÃA]O\s*[:\-]?\s*([^\n]+)", text)
+        if m_nat:
+            natureza = re.sub(r"\s+", " ", m_nat.group(1)).strip()
+            # Remove padrões que não são a natureza (como "DADOS DA NF-e")
+            if not re.search(r"(?i)DADOS|NF-?E|INSCRI", natureza):
+                data["natureza_operacao"] = natureza[:100]  # Limita tamanho
 
         return data

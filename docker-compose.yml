@@ -1,95 +1,141 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  scrapper:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: nfse-scrapper
-    
-    # Variáveis de ambiente (carregadas do .env)
-    env_file:
-      - .env
-    
-    # Sobrescreve os paths para ambiente Linux
-    environment:
-      - TESSERACT_CMD=/usr/bin/tesseract
-      - POPPLER_PATH=/usr/bin
-    
-    # Volumes para persistir dados e logs
-    volumes:
-      # Dados de saída (CSVs gerados)
-      - ./data/output:/app/data/output
-      # Dados de debug
-      - ./data/debug_output:/app/data/debug_output
-      # Pasta temporária de emails (é limpa a cada execução)
-      - temp_email:/app/temp_email
-      # PDFs de teste/falha (opcional, para debug)
-      - ./failed_cases_pdf:/app/failed_cases_pdf:ro
-    
-    # Políticas de restart
-    restart: unless-stopped
-    
-    # Recursos limitados (ajuste conforme necessidade)
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    
-    # Rede interna
-    networks:
-      - scrapper-network
-    
-    # Logging configurado
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    scrapper:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: nfse-scrapper
 
-  # Serviço opcional: Cron para executar periodicamente
-  scrapper-cron:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: nfse-scrapper-cron
-    
-    env_file:
-      - .env
-    
-    environment:
-      - TESSERACT_CMD=/usr/bin/tesseract
-      - POPPLER_PATH=/usr/bin
-    
-    volumes:
-      - ./data/output:/app/data/output
-      - ./data/debug_output:/app/data/debug_output
-      - temp_email:/app/temp_email
-      - ./failed_cases_pdf:/app/failed_cases_pdf:ro
-    
-    # Executa a cada 30 minutos (ajuste conforme necessário)
-    command: sh -c "while true; do python run_ingestion.py && sleep 1800; done"
-    
-    restart: unless-stopped
-    
-    networks:
-      - scrapper-network
-    
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+        # Variáveis de ambiente (carregadas do .env)
+        env_file:
+            - .env
 
-# Volume nomeado para temp_email (limpo a cada execução)
+        # Sobrescreve os paths para ambiente Linux
+        environment:
+            - TESSERACT_CMD=/usr/bin/tesseract
+            - POPPLER_PATH=/usr/bin
+
+        # Volumes para persistir dados e logs
+        volumes:
+            # Dados de saída (CSVs gerados)
+            - ./data/output:/app/data/output
+            # Dados de debug
+            - ./data/debug_output:/app/data/debug_output
+            # Pasta temporária de emails (compartilhada com cleaner)
+            - temp_email:/app/temp_email
+            # PDFs de teste/falha (opcional, para debug)
+            - ./failed_cases_pdf:/app/failed_cases_pdf:ro
+
+        # Políticas de restart
+        restart: unless-stopped
+
+        # Recursos limitados (ajuste conforme necessidade)
+        deploy:
+            resources:
+                limits:
+                    cpus: "2.0"
+                    memory: 2G
+                reservations:
+                    cpus: "0.5"
+                    memory: 512M
+
+        # Rede interna
+        networks:
+            - scrapper-network
+
+        # Logging configurado
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "10m"
+                max-file: "3"
+
+    # Serviço opcional: Cron para executar periodicamente
+    scrapper-cron:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: nfse-scrapper-cron
+
+        env_file:
+            - .env
+
+        environment:
+            - TESSERACT_CMD=/usr/bin/tesseract
+            - POPPLER_PATH=/usr/bin
+
+        volumes:
+            - ./data/output:/app/data/output
+            - ./data/debug_output:/app/data/debug_output
+            - temp_email:/app/temp_email
+            - ./failed_cases_pdf:/app/failed_cases_pdf:ro
+
+        # Executa a cada 30 minutos (ajuste conforme necessário)
+        command: sh -c "while true; do python run_ingestion.py && sleep 1800; done"
+
+        restart: unless-stopped
+
+        networks:
+            - scrapper-network
+
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "10m"
+                max-file: "3"
+
+    # Serviço Sidecar para Garbage Collection (limpeza automática)
+    # Remove arquivos temporários com mais de 48 horas
+    cleaner:
+        image: alpine:latest
+        container_name: scrapper_nfe_cleaner
+        depends_on:
+            - scrapper
+        volumes:
+            # Compartilha o MESMO volume temp da aplicação
+            - temp_email:/app/temp_email
+        command: >
+            sh -c "echo '🧹 Iniciando serviço de limpeza automática...' &&
+                   echo '📋 Política: Arquivos > 48h serão removidos' &&
+                   echo '⏰ Intervalo: A cada 24 horas' &&
+                   while true; do
+                     echo '--- [GC] Rodando limpeza de arquivos temporários (> 48h) ---' &&
+                     echo \"[GC] Data/Hora: $$(date '+%Y-%m-%d %H:%M:%S')\" &&
+                     # 1. Deleta arquivos modificados há mais de 2 dias
+                     find /app/temp_email -type f -mtime +2 -delete 2>/dev/null &&
+                     # 2. Deleta pastas vazias que sobraram (lotes processados)
+                     find /app/temp_email -type d -empty -delete 2>/dev/null &&
+                     # 3. Log do espaço liberado
+                     echo \"[GC] Espaço em uso: $$(du -sh /app/temp_email 2>/dev/null | cut -f1)\" &&
+                     echo '--- [GC] Limpeza concluída. Dormindo por 24h... ---' &&
+                     sleep 86400;
+                   done"
+        restart: always
+        # Recursos mínimos (o cleaner é muito leve)
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.1"
+                    memory: 32M
+                reservations:
+                    cpus: "0.01"
+                    memory: 8M
+
+        networks:
+            - scrapper-network
+
+        logging:
+            driver: "json-file"
+            options:
+                max-size: "5m"
+                max-file: "2"
+
+# Volume nomeado para temp_email (compartilhado entre app e cleaner)
 volumes:
-  temp_email:
+    temp_email:
 
 # Rede isolada
 networks:
-  scrapper-network:
-    driver: bridge
+    scrapper-network:
+        driver: bridge
