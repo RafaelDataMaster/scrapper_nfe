@@ -1,53 +1,14 @@
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.extractors import BaseExtractor, register_extractor
-
-
-def _normalize_digits(value: str) -> str:
-    return re.sub(r"\D", "", value or "")
-
-
-def _parse_br_money(value: str) -> float:
-    if not value:
-        return 0.0
-    try:
-        return float(value.replace(".", "").replace(",", "."))
-    except ValueError:
-        return 0.0
-
-
-def _parse_date_br(value: str) -> Optional[str]:
-    """Converte data brasileira para formato ISO (YYYY-MM-DD)."""
-    if not value:
-        return None
-    # Remove espaços extras que podem aparecer em PDFs
-    value = re.sub(r"\s+", "", value.strip())
-    # Normaliza separadores: substitui hífen por barra para parsing uniforme
-    normalized = value.replace("-", "/")
-    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
-        try:
-            dt = datetime.strptime(normalized, fmt)
-            # Para anos de 2 dígitos, ajusta se necessário
-            if dt.year < 100:
-                dt = dt.replace(year=dt.year + 2000)
-            return dt.strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-    return None
-
-
-_MONEY_BR_RE = re.compile(r"\b(\d{1,3}(?:\.\d{3})*,\d{2})\b")
-
-
-def _extract_best_money_from_segment(segment: str) -> float:
-    values = []
-    for raw in _MONEY_BR_RE.findall(segment or ""):
-        v = _parse_br_money(raw.replace(" ", ""))
-        if v > 0:
-            values.append(v)
-    return max(values) if values else 0.0
+from extractors.utils import (
+    CNPJ_RE,
+    extract_best_money_from_segment,
+    normalize_digits,
+    parse_br_money,
+    parse_date_br,
+)
 
 
 def _extract_danfe_valor_total(text: str) -> float:
@@ -72,7 +33,7 @@ def _extract_danfe_valor_total(text: str) -> float:
             if line_end == -1:
                 line_end = min(len(text), start + 350)
             segment = text[start:line_end]
-            best = _extract_best_money_from_segment(segment)
+            best = extract_best_money_from_segment(segment)
             if best > 0:
                 return best
 
@@ -81,13 +42,13 @@ def _extract_danfe_valor_total(text: str) -> float:
             if next_end == -1:
                 next_end = min(len(text), line_end + 350)
             segment2 = text[start:next_end]
-            best2 = _extract_best_money_from_segment(segment2)
+            best2 = extract_best_money_from_segment(segment2)
             if best2 > 0:
                 return best2
 
     # Fallback conservador: escolhe o maior valor monetário no documento.
     # Em DANFE, o maior valor quase sempre corresponde ao total da nota.
-    best_overall = _extract_best_money_from_segment(text)
+    best_overall = extract_best_money_from_segment(text)
     return best_overall
 
 
@@ -98,7 +59,7 @@ def _extract_chave_acesso(text: str) -> Optional[str]:
 
     # Primeiro, tenta encontrar 44 dígitos consecutivos
     # Alguns PDFs têm a chave no formato: 31250114169885000595550010000308381189120506
-    digits = _normalize_digits(text)
+    digits = normalize_digits(text)
     m = re.search(r"(\d{44})", digits)
     if m:
         return m.group(1)
@@ -108,7 +69,7 @@ def _extract_chave_acesso(text: str) -> Optional[str]:
     spaced_pattern = re.compile(r"(\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4}\s+\d{4})")
     m = spaced_pattern.search(text)
     if m:
-        chave = _normalize_digits(m.group(1))
+        chave = normalize_digits(m.group(1))
         if len(chave) == 44:
             return chave
 
@@ -152,7 +113,7 @@ def _extract_data_emissao(text: str) -> Optional[str]:
         m = re.search(pat, text)
         if m:
             date_str = m.group(1)
-            parsed = _parse_date_br(date_str)
+            parsed = parse_date_br(date_str)
             if parsed:
                 return parsed
 
@@ -167,7 +128,7 @@ def _extract_data_emissao(text: str) -> Optional[str]:
 
     # Retorna a primeira data encontrada (geralmente é a data de emissão)
     for date_str in matches:
-        parsed = _parse_date_br(date_str)
+        parsed = parse_date_br(date_str)
         if parsed:
             return parsed
 
@@ -196,8 +157,8 @@ def _extract_duplicatas(text: str) -> List[Tuple[str, str, float]]:
         valor_str = m.group(3)
 
         # Converte data
-        data_iso = _parse_date_br(data_str)
-        valor = _parse_br_money(valor_str)
+        data_iso = parse_date_br(data_str)
+        valor = parse_br_money(valor_str)
 
         if data_iso and valor > 0:
             duplicatas.append((parcela, data_iso, valor))
@@ -234,7 +195,7 @@ class DanfeExtractor(BaseExtractor):
             return True
 
         # Chave de acesso (44 dígitos), muitas vezes espaçada
-        digits = _normalize_digits(text)
+        digits = normalize_digits(text)
         if re.search(r"\b\d{44}\b", digits):
             return True
 

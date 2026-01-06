@@ -4,6 +4,12 @@ Metadados de contexto para processamento em lote.
 Este módulo define estruturas de dados para armazenar contexto
 do e-mail (assunto, remetente, corpo) que enriquece a extração.
 
+Inclui extração de:
+- Links de NF-e de prefeituras (SP, RJ, etc.)
+- Códigos de verificação/autenticação
+- Números de nota fiscal da URL
+- Nome do fornecedor do assunto do e-mail
+
 Princípios SOLID aplicados:
 - SRP: Classe focada apenas em metadados de e-mail/lote
 - OCP: Extensível via herança sem modificar código existente
@@ -323,6 +329,405 @@ class EmailMetadata:
                     if numero.isdigit() and len(numero) == 4 and numero.startswith('20'):
                         continue  # Provavelmente é só um ano, pula
                     return numero
+
+        return None
+
+    def extract_link_nfe_from_context(self) -> Optional[str]:
+        """
+        Extrai link de NF-e/verificação do corpo do e-mail.
+
+        Prioriza links de prefeituras conhecidas:
+        - nfe.prefeitura.sp.gov.br
+        - notacarioca.rio.gov.br
+        - Outros portais gov.br
+
+        Returns:
+            URL do link de NF-e ou None
+        """
+        import re
+
+        if not self.email_body_text:
+            return None
+
+        text = self.email_body_text
+
+        # Padrões de links de prefeituras (ordem de prioridade)
+        patterns_prioritarios = [
+            # Prefeitura SP - padrão com verificação
+            r'(https?://nfe\.prefeitura\.sp\.gov\.br/contribuinte/notaprint\.aspx\?[^\s<>"\']+)',
+            # Prefeitura SP - padrão simples
+            r'(https?://nfe\.prefeitura\.sp\.gov\.br/nfe\.aspx\?[^\s<>"\']+)',
+            # Nota Carioca RJ
+            r'(https?://notacarioca\.rio\.gov\.br/nfse\.aspx\?[^\s<>"\']+)',
+            # Qualquer prefeitura gov.br com nf/nfe
+            r'(https?://[^\s]*\.gov\.br/[^\s]*(?:nf|nfse|nota)[^\s<>"\']*)',
+            # ISSNet, Ginfes, Betha (sistemas de NFS-e)
+            r'(https?://[^\s]*(?:issnet|ginfes|betha)[^\s]*\.com\.br[^\s<>"\']+)',
+            # Omie - links de tracking (contém URL real codificada)
+            r'(https?://click\.omie\.com\.br/[^\s<>"\']+)',
+            # Omie - links diretos de NFS-e
+            r'(https?://[^\s]*omie\.com\.br[^\s]*nfse[^\s<>"\']*)',
+        ]
+
+        for pattern in patterns_prioritarios:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                url = match.group(1)
+                # Remove entidades HTML escapadas
+                url = url.replace('&amp;', '&')
+                # Remove trailing de pontuação
+                url = re.sub(r'[.,;:!?\)\]]+$', '', url)
+                return url
+
+        return None
+
+    def extract_codigo_verificacao_from_link(self, link: Optional[str] = None) -> Optional[str]:
+        """
+        Extrai código de verificação/autenticação de um link de NF-e.
+
+        Padrões suportados:
+        - verificacao=BTE1S3EG (Prefeitura SP)
+        - cod=R4ZF (Prefeitura SP/RJ)
+        - codigo=XXXX (genérico)
+
+        Args:
+            link: URL para extrair código. Se None, usa extract_link_nfe_from_context()
+
+        Returns:
+            Código de verificação ou None
+        """
+        import re
+
+        if link is None:
+            link = self.extract_link_nfe_from_context()
+
+        if not link:
+            # Se não tem link, tenta extrair do corpo diretamente
+            return self.extract_codigo_verificacao_from_body()
+
+        # Padrões de código na URL (ordem de prioridade)
+        patterns = [
+            r'verificacao=([A-Za-z0-9]{4,12})',
+            r'cod=([A-Za-z0-9]{4,12})',
+            r'codigo=([A-Za-z0-9]{4,12})',
+            r'auth=([A-Za-z0-9]{4,20})',
+            r'token=([A-Za-z0-9\-_]{8,})',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, link, re.IGNORECASE)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def extract_codigo_verificacao_from_body(self) -> Optional[str]:
+        """
+        Extrai código de verificação/autenticação do corpo do e-mail.
+
+        Procura padrões como:
+        - "Código de Autenticação: BTE1S3EG"
+        - "Código de Verificação: 77CC8D93D"
+        - "Código: O1IGTTNV"
+
+        Returns:
+            Código de verificação ou None
+        """
+        import re
+
+        text = f"{self.email_subject or ''} {self.email_body_text or ''}"
+
+        if not text.strip():
+            return None
+
+        # Padrões de código no texto (ordem de prioridade)
+        patterns = [
+            # Padrões explícitos com label
+            r'[Cc]ódigo\s*(?:de\s+)?[Aa]utenticação[:\s]+([A-Z0-9]{4,12})',
+            r'[Cc]ódigo\s*(?:de\s+)?[Vv]erificação[:\s]+([A-Z0-9]{4,12})',
+            r'[Cc]ód\.?\s*(?:de\s+)?[Aa]ut(?:enticação)?\.?[:\s]+([A-Z0-9]{4,12})',
+            r'[Cc]ód\.?\s*(?:de\s+)?[Vv]erif(?:icação)?\.?[:\s]+([A-Z0-9]{4,12})',
+            # Padrão Omie/genérico: "Código: XXXXXXXX"
+            r'[Cc]ódigo[:\s]+([A-Z0-9]{6,12})\b',
+            # Padrão com "Cód." abreviado
+            r'[Cc]ód\.?[:\s]+([A-Z0-9]{6,12})\b',
+            # Padrão "Autenticação:" ou "Verificação:" sem "Código"
+            r'[Aa]utenticação[:\s]+([A-Z0-9]{6,12})\b',
+            r'[Vv]erificação[:\s]+([A-Z0-9]{6,12})\b',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                codigo = match.group(1)
+                # Filtra falsos positivos (palavras comuns)
+                if codigo.upper() not in ['PENDENTE', 'AGUARDANDO', 'CONFIRMA', 'CONSULTA']:
+                    return codigo
+
+        return None
+
+    def extract_numero_nf_from_link(self, link: Optional[str] = None) -> Optional[str]:
+        """
+        Extrai número da NF de um link de prefeitura.
+
+        Padrões suportados:
+        - nf=255046631
+        - nf=4219090
+        - numero=12345
+
+        Args:
+            link: URL para extrair número. Se None, usa extract_link_nfe_from_context()
+
+        Returns:
+            Número da NF ou None
+        """
+        import re
+
+        if link is None:
+            link = self.extract_link_nfe_from_context()
+
+        if not link:
+            return None
+
+        # Padrões de número de NF na URL
+        patterns = [
+            r'nf=(\d{3,15})',
+            r'numero=(\d{3,15})',
+            r'nota=(\d{3,15})',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, link, re.IGNORECASE)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def format_aviso_email_sem_anexo(self) -> Optional[str]:
+        """
+        Formata string de aviso para e-mails sem anexo.
+
+        Combina link + código de verificação em formato padronizado
+        para a coluna de observações/avisos.
+
+        Returns:
+            String formatada ou None se não houver dados relevantes
+
+        Exemplo:
+            "[SEM ANEXO] Link: https://nfe.prefeitura.sp.gov.br/... | Código: BTE1S3EG | NF: 4219090"
+        """
+        link = self.extract_link_nfe_from_context()
+        codigo = self.extract_codigo_verificacao_from_link(link) or self.extract_codigo_verificacao_from_body()
+        numero_nf = self.extract_numero_nf_from_link(link) or self.extract_numero_nota_from_context()
+
+        partes = ["[SEM ANEXO]"]
+
+        if link:
+            # Trunca link se muito longo
+            link_display = link if len(link) <= 100 else link[:97] + "..."
+            # Indica se é link de tracking (Omie)
+            if 'click.omie.com.br' in link:
+                partes.append(f"Link (Omie): {link_display}")
+            else:
+                partes.append(f"Link: {link_display}")
+
+        if codigo:
+            partes.append(f"Código: {codigo}")
+
+        if numero_nf:
+            partes.append(f"NF: {numero_nf}")
+
+        # Se não encontrou nada útil além do marcador
+        if len(partes) == 1:
+            return None
+
+        return " | ".join(partes)
+
+    def extract_fornecedor_from_subject(self) -> Optional[str]:
+        """
+        Extrai nome do fornecedor do assunto do e-mail.
+
+        Analisa o assunto para identificar o nome da empresa emissora,
+        filtrando empresas próprias do grupo (soumaster, master, etc.).
+
+        Padrões suportados:
+        - "Movidesk - NFS-e + Boleto Nº 193866" → "Movidesk"
+        - "Interfocus Tecnologia - NFS-e + Boleto Nº 10227" → "Interfocus Tecnologia"
+        - "Nota Fiscal de Serviços Eletrônica - NFS-e No. 255046631" → None (genérico)
+        - "Nota Carioca No. 00002764 emitida" → None (portal, não fornecedor)
+
+        Returns:
+            Nome do fornecedor ou None
+        """
+        import re
+
+        if not self.email_subject:
+            return None
+
+        subject = self.email_subject
+
+        # Remove prefixos de encaminhamento
+        subject = re.sub(r'^(ENC|FW|FWD|RE|RES)[:\s]+', '', subject, flags=re.IGNORECASE).strip()
+
+        # Lista de termos a ignorar (não são fornecedores)
+        termos_ignorar = [
+            # Portais de NF-e
+            'nota fiscal', 'nfs-e', 'nfse', 'nf-e', 'nfe', 'danfe',
+            'nota carioca', 'nota do milhão', 'nota eletrônica', 'nota eletronica',
+            # Termos genéricos
+            'fatura', 'boleto', 'cobrança', 'cobranca', 'pagamento',
+            'serviços eletrônica', 'servicos eletronica',
+            # Campanhas e slogans (não são fornecedores)
+            'agora com pix', 'pague com pix', 'aceita pix', 'via pix',
+            'faturamento', 'fatura eletronica', 'fatura eletrônica',
+            # Empresas próprias do grupo (soumaster/master)
+            'soumaster', 'master internet', 'master-tv', 'master tv',
+            'rbc', 'rede brasileira', 'vip comunicacao', 'vip comunicação',
+            'ative', 'vale telecom', 'minas digital', 'hd telecom',
+            'netlog', 'gyga', 'prime service', 'csc', 'carrier',
+            'op11', 'zeus', 'exata', 'orion', 'device company',
+            'moc comunicacao', 'omc provedor',
+        ]
+
+        # Lista de domínios de e-mail próprios a ignorar como fornecedor
+        dominios_proprios = [
+            'soumaster.com.br', 'masterinternet.com.br', 'rbctelecom.com.br',
+            'vipcomunicacao.com.br', 'ativetelecom.com.br',
+        ]
+
+        # Verifica se o remetente é de empresa própria
+        if self.email_sender_address:
+            sender_lower = self.email_sender_address.lower()
+            for dominio in dominios_proprios:
+                if dominio in sender_lower:
+                    # Remetente é interno, tenta extrair fornecedor do assunto
+                    break
+
+        # Padrão 1: "NomeFornecedor - NFS-e + Boleto Nº XXXX"
+        # Captura tudo antes do primeiro " - NFS" ou " - Boleto" ou " - Fatura"
+        match = re.match(r'^([^-]+?)\s*-\s*(?:NFS|Boleto|Fatura|Nota)', subject, re.IGNORECASE)
+        if match:
+            fornecedor = match.group(1).strip()
+
+            # Verifica se não é termo a ignorar
+            fornecedor_lower = fornecedor.lower()
+            if not any(termo in fornecedor_lower for termo in termos_ignorar):
+                # Limpa caracteres extras
+                fornecedor = re.sub(r'\s+', ' ', fornecedor).strip()
+                if len(fornecedor) >= 3:  # Mínimo 3 caracteres
+                    return fornecedor
+
+        # Padrão 2: "Agora com Pix - Nota Fiscal Eletronica - Faturamento - RPS No - XXXX - UNE - Cliente - CODIGO"
+        # Este é padrão TOTVS/UNE - tenta extrair do corpo do e-mail
+        if 'UNE - Cliente -' in subject or 'Agora com Pix' in subject:
+            # Formato TOTVS: busca fornecedor no corpo do e-mail
+            fornecedor_body = self._extract_fornecedor_from_body()
+            if fornecedor_body:
+                return fornecedor_body
+            return None
+
+        # Padrão 3: Busca nome de empresa conhecido no assunto
+        # Empresas conhecidas (fornecedores comuns)
+        empresas_conhecidas = [
+            'movidesk', 'interfocus', 'totvs', 'zendesk', 'omie',
+            'locaweb', 'uol', 'google', 'microsoft', 'adobe',
+            'amazon', 'aws', 'azure', 'salesforce', 'hubspot',
+            'resultados digitais', 'rd station', 'conta azul',
+            'pipefy', 'monday', 'asana', 'trello', 'slack',
+            'zoom', 'teams', 'webex', 'meet',
+        ]
+
+        subject_lower = subject.lower()
+        for empresa in empresas_conhecidas:
+            if empresa in subject_lower:
+                # Retorna com capitalização correta
+                return empresa.title()
+
+        return None
+
+    def _extract_fornecedor_from_body(self) -> Optional[str]:
+        """
+        Extrai nome do fornecedor do corpo do e-mail.
+
+        Busca padrões como:
+        - "Razão Social: EMPRESA LTDA"
+        - "Prestador: EMPRESA"
+        - "Emitente: EMPRESA"
+        - "De: empresa@dominio.com.br" (e-mail original encaminhado)
+
+        Returns:
+            Nome do fornecedor ou None
+        """
+        import re
+
+        if not self.email_body_text:
+            return None
+
+        text = self.email_body_text
+
+        # Padrões para extrair fornecedor do corpo
+        patterns = [
+            # Razão Social explícita
+            r'[Rr]az[aã]o\s+[Ss]ocial[:\s]+([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s&\-\.]+?)(?:\s*[-–]\s*|\s*\n|\s*CNPJ)',
+            # Prestador de serviço
+            r'[Pp]restador[:\s]+([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s&\-\.]+?)(?:\s*[-–]\s*|\s*\n|\s*CNPJ)',
+            # Emitente
+            r'[Ee]mitente[:\s]+([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s&\-\.]+?)(?:\s*[-–]\s*|\s*\n|\s*CNPJ)',
+            # Nome da empresa no cabeçalho do e-mail original
+            r'De:\s*([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s&\-\.]+?)\s*<[^>]+@(?!soumaster|master)',
+            # "Empresa: NOME"
+            r'[Ee]mpresa[:\s]+([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s&\-\.]+?)(?:\s*[-–]\s*|\s*\n)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                fornecedor = match.group(1).strip()
+                # Remove pontuação final
+                fornecedor = re.sub(r'[\.,;:]+$', '', fornecedor).strip()
+                # Valida tamanho
+                if 3 <= len(fornecedor) <= 100:
+                    return fornecedor
+
+        return None
+
+    def extract_fornecedor_from_context(self) -> Optional[str]:
+        """
+        Extrai fornecedor de múltiplas fontes com priorização.
+
+        Ordem de prioridade:
+        1. Nome extraído do assunto do e-mail
+        2. Nome extraído do corpo do e-mail
+        3. Nome do remetente (se não for empresa própria)
+        4. None
+
+        Returns:
+            Nome do fornecedor ou None
+        """
+        # Tenta extrair do assunto primeiro
+        fornecedor = self.extract_fornecedor_from_subject()
+        if fornecedor:
+            return fornecedor
+
+        # Tenta extrair do corpo do e-mail
+        fornecedor = self._extract_fornecedor_from_body()
+        if fornecedor:
+            return fornecedor
+
+        # Fallback: usa nome do remetente se não for empresa própria
+        if self.email_sender_name:
+            sender_lower = self.email_sender_name.lower()
+
+            # Lista de nomes a ignorar (funcionários internos)
+            nomes_ignorar = [
+                'natalia', 'natália', 'rafael', 'lucas', 'maria',
+                'analista', 'gerente', 'coordenador', 'diretor',
+                'financeiro', 'fiscal', 'contabil', 'contábil',
+                'soumaster', 'master',
+            ]
+
+            if not any(nome in sender_lower for nome in nomes_ignorar):
+                return self.email_sender_name
 
         return None
 

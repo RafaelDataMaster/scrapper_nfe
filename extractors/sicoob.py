@@ -1,19 +1,12 @@
 import re
-import unicodedata
 from typing import Any, Dict
 
 from core.extractors import BaseExtractor, register_extractor
-
-
-def _strip_accents(value: str) -> str:
-    if not value:
-        return ""
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+from extractors.utils import strip_accents
 
 
 def _compact(text: str) -> str:
-    return re.sub(r"[^A-Z0-9]+", "", _strip_accents((text or "").upper()))
+    return re.sub(r"[^A-Z0-9]+", "", strip_accents((text or "").upper()))
 
 
 @register_extractor

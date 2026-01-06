@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from core.metadata import EmailMetadata
 
 
 @dataclass
@@ -470,6 +475,167 @@ class OtherDocumentData(DocumentData):
             fmt_str(self.observacoes),           # 17. OBSERVAÇÕES
             fmt_str(self.obs_interna),           # 18. OBS INTERNA
         ]
+
+@dataclass
+class EmailAvisoData(DocumentData):
+    """
+    Modelo para e-mails SEM anexo que contêm link de NF-e e/ou código de verificação.
+
+    Usado para registrar e-mails que precisam de ação manual (acessar link,
+    baixar documento) mas que não vieram com PDF/XML anexado.
+
+    A coluna 'observacoes' contém o aviso formatado com link + código.
+
+    Attributes:
+        arquivo_origem (str): Identificador do e-mail (email_id ou subject).
+        link_nfe (Optional[str]): Link para acesso/download da NF-e.
+        codigo_verificacao (Optional[str]): Código de autenticação/verificação.
+        numero_nota (Optional[str]): Número da NF extraído do link ou assunto.
+        fornecedor_nome (Optional[str]): Nome do remetente (fallback).
+        email_subject (Optional[str]): Assunto completo do e-mail.
+        email_body_preview (Optional[str]): Preview do corpo (primeiros 500 chars).
+        dominio_portal (Optional[str]): Domínio do portal de NF-e.
+
+        tipo_doc_paf (str): Tipo para PAF (default: "AV" - Aviso).
+    """
+    link_nfe: Optional[str] = None
+    codigo_verificacao: Optional[str] = None
+    numero_nota: Optional[str] = None
+    fornecedor_nome: Optional[str] = None
+    email_subject_full: Optional[str] = None
+    email_body_preview: Optional[str] = None
+    dominio_portal: Optional[str] = None
+    vencimento: Optional[str] = None
+
+    tipo_doc_paf: str = "AV"  # Aviso
+    dt_classificacao: Optional[str] = None
+    trat_paf: Optional[str] = None
+    lanc_sistema: str = "PENDENTE"
+
+    @property
+    def doc_type(self) -> str:
+        return 'AVISO'
+
+    def to_dict(self) -> dict:
+        return {
+            'tipo_documento': self.doc_type,
+            'arquivo_origem': self.arquivo_origem,
+            'data_processamento': self.data_processamento,
+            'setor': self.setor,
+            'empresa': self.empresa,
+            'link_nfe': self.link_nfe,
+            'codigo_verificacao': self.codigo_verificacao,
+            'numero_nota': self.numero_nota,
+            'fornecedor_nome': self.fornecedor_nome,
+            'email_subject': self.email_subject_full,
+            'email_body_preview': self.email_body_preview,
+            'dominio_portal': self.dominio_portal,
+            'vencimento': self.vencimento,
+            'tipo_doc_paf': self.tipo_doc_paf,
+            'dt_classificacao': self.dt_classificacao,
+            'trat_paf': self.trat_paf,
+            'lanc_sistema': self.lanc_sistema,
+            'observacoes': self.observacoes,
+            'obs_interna': self.obs_interna,
+            'status_conciliacao': self.status_conciliacao,
+            'valor_compra': self.valor_compra,
+        }
+
+    def to_sheets_row(self) -> list:
+        """
+        Converte para linha PAF.
+
+        Coluna OBSERVAÇÕES contém o aviso formatado:
+        "[SEM ANEXO] Link: ... | Código: ... | NF: ..."
+        """
+        def fmt_date(iso_date: Optional[str]) -> str:
+            if not iso_date:
+                return ""
+            try:
+                dt = datetime.strptime(iso_date, '%Y-%m-%d')
+                return dt.strftime('%d/%m/%Y')
+            except (ValueError, TypeError):
+                return ""
+
+        def fmt_str(value: Optional[str]) -> str:
+            return value if value is not None else ""
+
+        # Monta observação com link e código
+        obs_parts = ["[SEM ANEXO]"]
+        if self.link_nfe:
+            link_display = self.link_nfe if len(self.link_nfe) <= 80 else self.link_nfe[:77] + "..."
+            obs_parts.append(f"Link: {link_display}")
+        if self.codigo_verificacao:
+            obs_parts.append(f"Código: {self.codigo_verificacao}")
+        if self.numero_nota:
+            obs_parts.append(f"NF: {self.numero_nota}")
+
+        observacao_final = self.observacoes or " | ".join(obs_parts)
+
+        return [
+            fmt_date(self.data_processamento),  # 1. DATA
+            fmt_str(self.setor),                 # 2. SETOR
+            fmt_str(self.empresa),               # 3. EMPRESA
+            fmt_str(self.fornecedor_nome),       # 4. FORNECEDOR
+            fmt_str(self.numero_nota),           # 5. NF
+            "",                                  # 6. EMISSÃO
+            0.0,                                 # 7. VALOR
+            "",                                  # 8. Nº PEDIDO
+            fmt_date(self.vencimento),           # 9. VENCIMENTO
+            "",                                  # 10. FORMA PAGTO
+            "",                                  # 11. (vazio)
+            fmt_date(self.dt_classificacao),     # 12. DT CLASS
+            "",                                  # 13. Nº FAT
+            fmt_str(self.tipo_doc_paf),          # 14. TP DOC
+            fmt_str(self.trat_paf),              # 15. TRAT PAF
+            fmt_str(self.lanc_sistema),          # 16. LANC SISTEMA
+            fmt_str(observacao_final),           # 17. OBSERVAÇÕES
+            fmt_str(self.obs_interna),           # 18. OBS INTERNA
+        ]
+
+    @classmethod
+    def from_metadata(cls, metadata: 'EmailMetadata', email_id: str) -> 'EmailAvisoData':
+        """
+        Factory method para criar EmailAvisoData a partir de EmailMetadata.
+
+        Args:
+            metadata: Metadados do e-mail
+            email_id: Identificador único do e-mail
+
+        Returns:
+            EmailAvisoData preenchido
+        """
+        import re
+        from datetime import date
+
+        link = metadata.extract_link_nfe_from_context()
+        codigo = metadata.extract_codigo_verificacao_from_link(link) or metadata.extract_codigo_verificacao_from_body()
+        numero_nf = metadata.extract_numero_nf_from_link(link) or metadata.extract_numero_nota_from_context()
+
+        # Extrai domínio do link
+        dominio = None
+        if link:
+            match = re.search(r'https?://([^/]+)', link)
+            if match:
+                dominio = match.group(1).lower()
+
+        # Extrai fornecedor do assunto ou remetente (filtrando empresas próprias)
+        fornecedor = metadata.extract_fornecedor_from_context()
+
+        return cls(
+            arquivo_origem=email_id,
+            data_processamento=date.today().isoformat(),
+            link_nfe=link,
+            codigo_verificacao=codigo,
+            numero_nota=numero_nf,
+            fornecedor_nome=fornecedor,
+            email_subject_full=metadata.email_subject,
+            email_body_preview=(metadata.email_body_text or "")[:500],
+            dominio_portal=dominio,
+            source_email_subject=metadata.email_subject,
+            source_email_sender=metadata.email_sender_name or metadata.email_sender_address,
+        )
+
 
 @dataclass
 class BoletoData(DocumentData):

@@ -12,6 +12,9 @@ Estrutura de saída:
         ├── anexo_02_danfe.pdf
         └── anexo_03_boleto.pdf
 
+Também suporta ingestão de e-mails SEM anexos, gerando registros de "aviso"
+com link de NF-e e código de verificação para a coluna de observações.
+
 Princípios SOLID aplicados:
 - SRP: Classe focada apenas em ingestão e organização de arquivos
 - OCP: Extensível via herança sem modificar código existente
@@ -27,6 +30,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from core.interfaces import EmailIngestorStrategy
 from core.metadata import EmailMetadata
+from core.models import EmailAvisoData
 
 
 class IngestionService:
@@ -363,6 +367,77 @@ class IngestionService:
             filename = name[:200-len(ext)] + ext
 
         return filename or "unnamed_file"
+
+    def ingest_emails_without_attachments(
+        self,
+        subject_filter: str = "Nota Fiscal",
+        limit: int = 100,
+    ) -> List[EmailAvisoData]:
+        """
+        Ingere e-mails SEM anexos PDF/XML e cria registros de aviso.
+
+        Para cada e-mail sem anexo que contenha link de NF-e ou código
+        de verificação, cria um EmailAvisoData com os dados extraídos.
+
+        Args:
+            subject_filter: Filtro de assunto para busca
+            limit: Máximo de e-mails a processar
+
+        Returns:
+            Lista de EmailAvisoData com links/códigos extraídos
+        """
+        # Garante conexão
+        self.ingestor.connect()
+
+        # Verifica se o ingestor suporta busca sem anexos
+        if not hasattr(self.ingestor, 'fetch_emails_without_attachments'):
+            raise NotImplementedError(
+                "Ingestor não suporta fetch_emails_without_attachments"
+            )
+
+        # Busca e-mails sem anexo
+        raw_emails = self.ingestor.fetch_emails_without_attachments(
+            subject_filter=subject_filter,
+            limit=limit
+        )
+
+        if not raw_emails:
+            return []
+
+        avisos: List[EmailAvisoData] = []
+
+        for email_data in raw_emails:
+            # Cria metadata temporário para extração
+            metadata = EmailMetadata.create_for_batch(
+                batch_id=email_data.get('email_id', 'unknown'),
+                subject=email_data.get('subject'),
+                sender_name=email_data.get('sender_name'),
+                sender_address=email_data.get('sender_address'),
+                body_text=email_data.get('body_text'),
+                received_date=email_data.get('received_date'),
+                attachments=[],
+            )
+
+            # Extrai link e código
+            link = metadata.extract_link_nfe_from_context()
+            codigo = (
+                metadata.extract_codigo_verificacao_from_link(link)
+                or metadata.extract_codigo_verificacao_from_body()
+            )
+
+            # Só cria aviso se tiver link OU código
+            if not link and not codigo:
+                continue
+
+            # Cria registro de aviso
+            aviso = EmailAvisoData.from_metadata(
+                metadata=metadata,
+                email_id=email_data.get('email_id', 'unknown')
+            )
+
+            avisos.append(aviso)
+
+        return avisos
 
     def cleanup_old_batches(self, max_age_hours: int = 48) -> int:
         """

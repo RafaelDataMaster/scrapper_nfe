@@ -1,6 +1,6 @@
 # Batch Processing - Documentação Técnica
 
-Esta seção documenta os módulos de processamento em lote introduzidos na v2.x.
+Esta seção documenta os módulos de processamento em lote introduzidos na v0.2.x.
 
 ## Visão Geral
 
@@ -14,12 +14,12 @@ graph TB
         BR -->|"Correlaciona"| CS["CorrelationService"]
         CS -->|"Resultado"| CR["CorrelationResult"]
     end
-    
+
     subgraph "Entrada"
         Folder["📁 Pasta do Lote"] --> Meta
         Folder --> BP
     end
-    
+
     subgraph "Saída"
         CR --> Export["CSV/Sheets"]
     end
@@ -81,9 +81,9 @@ fornecedor = metadata.get_fallback_fornecedor()   # "Fornecedor LTDA"
 ```
 
 ::: core.metadata.EmailMetadata
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
@@ -132,13 +132,10 @@ processor = BatchProcessor(text_strategy=strategy)
 ```
 
 ::: core.batch_processor.BatchProcessor
-    options:
-      show_root_heading: true
-      show_source: false
-      members:
-        - process_batch
-        - process_multiple_batches
-        - process_legacy_files
+options:
+show_root_heading: true
+show_source: false
+members: - process_batch - process_multiple_batches - process_legacy_files
 
 ---
 
@@ -154,15 +151,15 @@ Estrutura de resultado do processamento em lote.
 
 #### Atributos
 
-| Atributo    | Tipo                      | Descrição                        |
-| :---------- | :------------------------ | :------------------------------- |
-| `batch_id`  | `str`                     | ID do lote processado            |
-| `danfes`    | `List[DanfeData]`         | DANFEs extraídas                 |
-| `boletos`   | `List[BoletoData]`        | Boletos extraídos                |
-| `nfses`     | `List[InvoiceData]`       | NFSes extraídas                  |
-| `outros`    | `List[OtherDocumentData]` | Outros documentos                |
-| `errors`    | `List[str]`               | Erros durante processamento      |
-| `metadata`  | `Optional[EmailMetadata]` | Metadados do e-mail (se houver)  |
+| Atributo   | Tipo                      | Descrição                       |
+| :--------- | :------------------------ | :------------------------------ |
+| `batch_id` | `str`                     | ID do lote processado           |
+| `danfes`   | `List[DanfeData]`         | DANFEs extraídas                |
+| `boletos`  | `List[BoletoData]`        | Boletos extraídos               |
+| `nfses`    | `List[InvoiceData]`       | NFSes extraídas                 |
+| `outros`   | `List[OtherDocumentData]` | Outros documentos               |
+| `errors`   | `List[str]`               | Erros durante processamento     |
+| `metadata` | `Optional[EmailMetadata]` | Metadados do e-mail (se houver) |
 
 #### Propriedades
 
@@ -199,9 +196,9 @@ summary = result.to_summary()
 ```
 
 ::: core.batch_result.BatchResult
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
@@ -285,16 +282,15 @@ for doc in correlation.enriched_documents:
 | `valor_total_lote`    | `float`              | Soma validada do lote         |
 
 ::: core.correlation_service.CorrelationService
-    options:
-      show_root_heading: true
-      show_source: false
-      members:
-        - correlate
+options:
+show_root_heading: true
+show_source: false
+members: - correlate
 
 ::: core.correlation_service.CorrelationResult
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
@@ -309,26 +305,26 @@ sequenceDiagram
     participant BR as BatchResult
     participant CS as CorrelationService
     participant CR as CorrelationResult
-    
+
     Client->>Meta: load(batch_folder)
     Meta-->>Client: EmailMetadata
-    
+
     Client->>BP: process_batch(folder)
     BP->>BP: list_pdf_files()
-    
+
     loop Para cada PDF
         BP->>Ext: extract(pdf)
         Ext-->>BP: DocumentData
     end
-    
+
     BP-->>Client: BatchResult
-    
+
     Client->>CS: correlate(result, metadata)
     CS->>CS: apply_inheritance_rules()
     CS->>CS: apply_fallback_rules()
     CS->>CS: validate_totals()
     CS-->>Client: CorrelationResult
-    
+
     Client->>CR: enriched_documents
     CR-->>Client: List[DocumentData]
 ```
@@ -387,20 +383,20 @@ all_results = []
 for batch_folder in temp_dir.iterdir():
     if not batch_folder.is_dir():
         continue
-    
+
     # Processar
     result = processor.process_batch(batch_folder)
-    
+
     # Carregar metadata (se existir)
     try:
         metadata = EmailMetadata.load(batch_folder)
     except FileNotFoundError:
         metadata = None
-    
+
     # Correlacionar
     correlation = correlator.correlate(result, metadata)
     all_results.append(correlation)
-    
+
     print(f"{batch_folder.name}: {correlation.status}")
 
 # Estatísticas
@@ -419,7 +415,7 @@ from pathlib import Path
 
 processor = BatchProcessor()
 
-# Processar pasta de PDFs soltos (modo v1.x)
+# Processar pasta de PDFs soltos (modo v0.1.x)
 result = processor.process_legacy_files(Path("failed_cases_pdf"))
 
 print(f"Processados: {result.document_count}")
@@ -434,4 +430,4 @@ for doc in result.all_documents:
 - [Core](core.md) - Módulos base (processor, models)
 - [Services](services.md) - Serviço de ingestão
 - [Guia de Ingestão](../guide/ingestion.md) - Configuração e uso
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v1.x → v2.x
+- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x

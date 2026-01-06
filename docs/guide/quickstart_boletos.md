@@ -80,9 +80,9 @@ Abra os arquivos diretamente no Excel:
 - `data/output/relatorio_nfse.csv`
 - `data/output/relatorio_boletos.csv`
 
-## Correlação Automática (v2.x)
+## Correlação Automática (v0.2.x)
 
-A partir da v2.x, boletos e notas do mesmo e-mail são correlacionados automaticamente:
+A partir da v0.2.x, boletos e notas do mesmo e-mail são correlacionados automaticamente:
 
 ```python
 from core.batch_processor import process_email_batch
@@ -106,7 +106,7 @@ for doc in correlation.enriched_documents:
     print(f"{doc.arquivo_origem}: {doc.status_conciliacao}")
 ```
 
-## Vinculação Manual (v1.x - Legado)
+## Vinculação Manual (v0.1.x - Legado)
 
 ### Método 1: Por Referência Explícita
 

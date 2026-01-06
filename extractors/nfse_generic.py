@@ -1,10 +1,13 @@
 import re
-from datetime import datetime
-from socket import has_ipv6
 from typing import Any, Dict, Optional
 
 from config.empresas import EMPRESAS_CADASTRO
 from core.extractors import BaseExtractor, find_linha_digitavel, register_extractor
+from extractors.utils import (
+    normalize_text_for_extraction,
+    parse_br_money,
+    parse_date_br,
+)
 
 
 @register_extractor
@@ -113,13 +116,7 @@ class NfseGenericExtractor(BaseExtractor):
         return data
 
     def _normalize_text(self, text: str) -> str:
-        if not text:
-            return ""
-        text = text.replace("\u00ad", "-")
-        text = text.replace("\u2013", "-").replace("\u2014", "-")
-        text = text.replace("\u00a0", " ")
-        text = re.sub(r"[ \t]+", " ", text)
-        return text
+        return normalize_text_for_extraction(text)
 
     def _extract_cnpj(self, text: str):
         text = self._normalize_text(text or "")
@@ -146,23 +143,15 @@ class NfseGenericExtractor(BaseExtractor):
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                valor_str = match.group(1)
-                try:
-                    valor = float(valor_str.replace(".", "").replace(",", "."))
-                    if valor > 0:
-                        return valor
-                except ValueError:
-                    continue
+                valor = parse_br_money(match.group(1))
+                if valor > 0:
+                    return valor
         return 0.0
 
     def _extract_data_emissao(self, text: str):
         match = re.search(r"\d{2}/\d{2}/\d{4}", text)
         if match:
-            try:
-                dt = datetime.strptime(match.group(0), "%d/%m/%Y")
-                return dt.strftime("%Y-%m-%d")
-            except ValueError:
-                pass
+            return parse_date_br(match.group(0))
         return None
 
     def _extract_numero_nota(self, text: str):
@@ -359,24 +348,18 @@ class NfseGenericExtractor(BaseExtractor):
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                try:
-                    dt = datetime.strptime(match.group(1), "%d/%m/%Y")
-                    return dt.strftime("%Y-%m-%d")
-                except ValueError:
-                    continue
+                parsed = parse_date_br(match.group(1))
+                if parsed:
+                    return parsed
         return None
 
     def _extract_valor_generico(self, patterns, text: str) -> float:
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                valor_str = match.group(1)
-                try:
-                    valor = float(valor_str.replace(".", "").replace(",", "."))
-                    if valor >= 0:
-                        return valor
-                except ValueError:
-                    continue
+                valor = parse_br_money(match.group(1))
+                if valor >= 0:
+                    return valor
         return 0.0
 
     def _extract_ir(self, text: str) -> float:

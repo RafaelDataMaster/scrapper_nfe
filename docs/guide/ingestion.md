@@ -6,8 +6,8 @@ Este guia descreve como configurar e executar o pipeline de ingestão automátic
 
 O módulo de ingestão conecta-se a uma conta de e-mail via protocolo IMAP, busca por mensagens contendo documentos fiscais (filtrando por assunto), organiza os anexos em **lotes por e-mail** e os encaminha para o processador de extração com correlação automática.
 
-!!! info "Novidade v2.x"
-A partir da versão 2.x, cada e-mail gera uma **pasta de lote** contendo todos os anexos + um arquivo `metadata.json` com o contexto do e-mail (assunto, remetente, corpo). Isso permite correlacionar DANFE com Boleto automaticamente.
+!!! info "Novidade v0.2.x"
+A partir da versão 0.2.x, cada e-mail gera uma **pasta de lote** contendo todos os anexos + um arquivo `metadata.json` com o contexto do e-mail (assunto, remetente, corpo). Isso permite correlacionar DANFE com Boleto automaticamente.
 
 ## Arquitetura de Ingestão
 
@@ -52,7 +52,7 @@ Se você utiliza Gmail ou Outlook com autenticação de dois fatores (2FA), a su
 
 ## Executando a Ingestão
 
-### Modo Padrão (v2.x - Batch Processing)
+### Modo Padrão (v0.2.x - Batch Processing)
 
 ```bash
 python run_ingestion.py
@@ -271,5 +271,5 @@ find temp_email -type d -mtime +7 -exec rm -rf {} +
 
 - [Guia de Uso](usage.md) - Processar PDFs locais
 - [Quick Start Boletos](quickstart_boletos.md) - Extrair boletos rapidamente
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar do v1.x para v2.x
+- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
 - [API Reference](../api/overview.md) - Documentação técnica

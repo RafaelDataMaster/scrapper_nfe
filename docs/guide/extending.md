@@ -6,7 +6,7 @@ Este guia cobre:
 
 1. Como adicionar novos extratores de NFS-e
 2. Como trabalhar com boletos
-3. Como integrar com o batch processing (v2.x)
+3. Como integrar com o batch processing (v0.2.x)
 
 ## Visão Geral
 
@@ -89,9 +89,9 @@ O sistema verifica os extratores na ordem em que são importados. O `NfseGeneric
 
 ---
 
-## Integração com Batch Processing (v2.x)
+## Integração com Batch Processing (v0.2.x)
 
-A partir da v2.x, os extratores são chamados pelo `BatchProcessor` que fornece contexto adicional do e-mail. Isso permite correlação automática entre DANFE e Boleto.
+A partir da v0.2.x, os extratores são chamados pelo `BatchProcessor` que fornece contexto adicional do e-mail. Isso permite correlação automática entre DANFE e Boleto.
 
 ### Acessando Contexto do Lote
 
@@ -160,9 +160,9 @@ O sistema agora identifica e processa **boletos bancários** automaticamente, se
 
 ### Vinculando Boletos a NFSe
 
-#### Modo Automático (v2.x - Batch Processing)
+#### Modo Automático (v0.2.x - Batch Processing)
 
-A partir da v2.x, a correlação é automática quando DANFE e Boleto estão no mesmo lote:
+A partir da v0.2.x, a correlação é automática quando DANFE e Boleto estão no mesmo lote:
 
 ```python
 from core.batch_processor import process_email_batch
@@ -180,7 +180,7 @@ print(f"Vencimento herdado: {correlation.vencimento_herdado}")
 print(f"Número NF herdado: {correlation.numero_nota_herdado}")
 ```
 
-#### Modo Manual (v1.x - Legado)
+#### Modo Manual (v0.1.x - Legado)
 
 Você pode cruzar os dados dos boletos com as notas fiscais usando:
 
@@ -259,5 +259,5 @@ python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 ## Próximos Passos
 
 - [Guia de Debug](../development/debugging_guide.md) - Técnicas avançadas de debug de PDFs
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Detalhes da migração v1.x → v2.x
+- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Detalhes da migração v0.1.x → v0.2.x
 - [API Reference](../api/overview.md) - Documentação técnica completa

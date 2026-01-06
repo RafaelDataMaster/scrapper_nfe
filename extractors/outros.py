@@ -1,31 +1,12 @@
 import re
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from core.extractors import BaseExtractor, register_extractor
-
-
-def _parse_br_money(value: str) -> float:
-    if not value:
-        return 0.0
-    try:
-        return float(value.replace(".", "").replace(",", "."))
-    except ValueError:
-        return 0.0
-
-
-_BR_MONEY_RE = re.compile(r"\b\d{1,3}(?:\.\d{3})*,\d{2}\b")
-
-
-def _parse_date_br(value: str) -> Optional[str]:
-    if not value:
-        return None
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
-        try:
-            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-    return None
+from extractors.utils import (
+    BR_MONEY_RE,
+    parse_br_money,
+    parse_date_br,
+)
 
 
 @register_extractor
@@ -93,7 +74,7 @@ class OutrosExtractor(BaseExtractor):
             m_total_mes = re.search(r"(?i)\bTOTAL\s+A\s+PAGAR\s+NO\s+M[ÊE]S\b", text)
             if m_total_mes:
                 window = text[m_total_mes.start() : m_total_mes.start() + 400]
-                values = [_parse_br_money(v) for v in _BR_MONEY_RE.findall(window)]
+                values = [parse_br_money(v) for v in BR_MONEY_RE.findall(window)]
                 values = [v for v in values if v > 0]
                 if values:
                     data["valor_total"] = max(values)
@@ -110,7 +91,7 @@ class OutrosExtractor(BaseExtractor):
             for pat in value_patterns:
                 m = re.search(pat, text)
                 if m:
-                    val = _parse_br_money(m.group(1))
+                    val = parse_br_money(m.group(1))
                     if val > 0:
                         data["valor_total"] = val
                         break
@@ -118,16 +99,16 @@ class OutrosExtractor(BaseExtractor):
         # Datas: emissão/vencimento (melhor esforço)
         m_venc = re.search(r"(?i)\bVENCIMENTO\b\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text)
         if m_venc:
-            data["vencimento"] = _parse_date_br(m_venc.group(1))
+            data["vencimento"] = parse_date_br(m_venc.group(1))
         else:
             # Layout analítico: "Data de Vencimento do Contrato: 31/07/2025"
             m_venc2 = re.search(r"(?i)Data\s+de\s+Vencimento\s+do\s+Contrato\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text)
             if m_venc2:
-                data["vencimento"] = _parse_date_br(m_venc2.group(1))
+                data["vencimento"] = parse_date_br(m_venc2.group(1))
 
         # Algumas faturas têm uma data isolada perto do topo; pegamos a primeira como 'data_emissao'
         m_date = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", text)
         if m_date:
-            data["data_emissao"] = _parse_date_br(m_date.group(1))
+            data["data_emissao"] = parse_date_br(m_date.group(1))
 
         return data

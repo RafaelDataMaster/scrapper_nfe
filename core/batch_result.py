@@ -22,6 +22,7 @@ from core.models import (
     BoletoData,
     DanfeData,
     DocumentData,
+    EmailAvisoData,
     InvoiceData,
     OtherDocumentData,
 )
@@ -90,6 +91,16 @@ class BatchResult:
     def outros(self) -> List[OtherDocumentData]:
         """Retorna apenas documentos 'Outros' do lote."""
         return [d for d in self.documents if isinstance(d, OtherDocumentData)]
+
+    @property
+    def avisos(self) -> List[EmailAvisoData]:
+        """Retorna apenas Avisos (e-mails sem anexo) do lote."""
+        return [d for d in self.documents if isinstance(d, EmailAvisoData)]
+
+    @property
+    def has_aviso(self) -> bool:
+        """Verifica se o lote contém Aviso (e-mail sem anexo)."""
+        return len(self.avisos) > 0
 
     @property
     def total_documents(self) -> int:
@@ -327,6 +338,7 @@ class BatchResult:
             'boletos': len(self.boletos),
             'nfses': len(self.nfses),
             'outros': len(self.outros),
+            'avisos': len(self.avisos),
             'valor_compra': self.get_valor_compra(),
             'valor_boleto': self.get_valor_total_boletos(),
         }

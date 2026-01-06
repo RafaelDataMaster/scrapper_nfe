@@ -1,6 +1,6 @@
 # API Reference - Visão Geral
 
-## Arquitetura de Módulos (v2.x)
+## Arquitetura de Módulos (v0.2.x)
 
 O projeto está organizado em camadas modulares seguindo princípios de Clean Architecture e SOLID:
 
@@ -98,7 +98,7 @@ scrapper/
 
 ---
 
-## Fluxo de Processamento (v2.x)
+## Fluxo de Processamento (v0.2.x)
 
 ```mermaid
 graph LR
@@ -333,7 +333,7 @@ Ferramentas de linha de comando para diagnóstico e manutenção:
 
 ## Exemplos de Uso
 
-### Processamento Simples (v1.x - Legado)
+### Processamento Simples (v0.1.x - Legado)
 
 ```python
 from core.processor import BaseInvoiceProcessor
@@ -352,7 +352,7 @@ elif isinstance(result, BoletoData):
     print(f"Boleto: R$ {result.valor_documento} - Venc: {result.vencimento}")
 ```
 
-### Processamento em Lote (v2.x - Recomendado)
+### Processamento em Lote (v0.2.x - Recomendado)
 
 ```python
 from services.ingestion_service import IngestionService

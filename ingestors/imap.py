@@ -87,15 +87,19 @@ class ImapIngestor(EmailIngestorStrategy):
 
     def _extract_email_body(self, msg: email.message.Message) -> str:
         """
-        Extrai o corpo do e-mail em texto plano.
+        Extrai o corpo do e-mail em texto plano E HTML combinados.
+
+        Combina texto plano e HTML para garantir que links e códigos
+        presentes apenas no HTML também sejam capturados.
 
         Args:
             msg: Objeto Message do email
 
         Returns:
-            Texto do corpo do e-mail
+            Texto combinado do corpo do e-mail (plain + HTML)
         """
         body_text = ""
+        body_html = ""
 
         if msg.is_multipart():
             for part in msg.walk():
@@ -106,26 +110,42 @@ class ImapIngestor(EmailIngestorStrategy):
                 if "attachment" in content_disposition:
                     continue
 
-                if content_type == "text/plain":
-                    try:
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            charset = part.get_content_charset() or 'utf-8'
-                            body_text += payload.decode(charset, errors='replace')
-                    except Exception:
-                        pass
-        else:
-            content_type = msg.get_content_type()
-            if content_type == "text/plain":
                 try:
-                    payload = msg.get_payload(decode=True)
-                    if payload:
-                        charset = msg.get_content_charset() or 'utf-8'
-                        body_text = payload.decode(charset, errors='replace')
+                    payload = part.get_payload(decode=True)
+                    if not payload:
+                        continue
+
+                    charset = part.get_content_charset() or 'utf-8'
+                    decoded = payload.decode(charset, errors='replace')
+
+                    if content_type == "text/plain":
+                        body_text += decoded
+                    elif content_type == "text/html":
+                        body_html += decoded
                 except Exception:
                     pass
+        else:
+            content_type = msg.get_content_type()
+            try:
+                payload = msg.get_payload(decode=True)
+                if payload:
+                    charset = msg.get_content_charset() or 'utf-8'
+                    decoded = payload.decode(charset, errors='replace')
 
-        return body_text
+                    if content_type == "text/plain":
+                        body_text = decoded
+                    elif content_type == "text/html":
+                        body_html = decoded
+            except Exception:
+                pass
+
+        # Combina texto plano e HTML (HTML pode conter links não presentes no texto)
+        # Separa com marcador para facilitar debug
+        combined = body_text
+        if body_html:
+            combined += "\n\n--- HTML CONTENT ---\n\n" + body_html
+
+        return combined
 
     def _extract_sender_info(self, msg: email.message.Message) -> Dict[str, str]:
         """
@@ -286,3 +306,99 @@ class ImapIngestor(EmailIngestorStrategy):
             })
 
         return list(emails_map.values())
+
+    def fetch_emails_without_attachments(
+        self,
+        subject_filter: str = "Nota Fiscal",
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca e-mails SEM anexos PDF/XML válidos.
+
+        Útil para capturar e-mails que contêm apenas links de download
+        ou códigos de verificação para acessar notas fiscais em portais.
+
+        Args:
+            subject_filter (str): Texto para filtrar o assunto dos e-mails.
+            limit (int): Máximo de e-mails a retornar.
+
+        Returns:
+            List[Dict[str, Any]]: Lista de dicionários (um por e-mail) contendo:
+                - email_id (str): Identificador único do e-mail.
+                - subject (str): Assunto do e-mail.
+                - sender_name (str): Nome do remetente.
+                - sender_address (str): E-mail do remetente.
+                - body_text (str): Corpo do e-mail (texto).
+                - received_date (str): Data de recebimento.
+                - has_attachments (bool): False (sem anexos válidos).
+        """
+        if not self.connection:
+            self.connect()
+
+        # Busca no servidor
+        status, messages = self.connection.search(None, f'(SUBJECT "{subject_filter}")')
+
+        results = []
+        count = 0
+
+        if not messages or messages[0] == b'':
+            return results
+
+        for num in messages[0].split():
+            if count >= limit:
+                break
+
+            try:
+                _, msg_data = self.connection.fetch(num, "(RFC822)")
+                if not msg_data or not msg_data[0]:
+                    continue
+
+                msg = email.message_from_bytes(msg_data[0][1])
+
+                # Verifica se tem anexo válido - se tiver, pula
+                has_valid_attachment = False
+                for part in msg.walk():
+                    if part.get_content_maintype() == 'multipart':
+                        continue
+                    if part.get('Content-Disposition') is None:
+                        continue
+
+                    filename = part.get_filename()
+                    if self._is_valid_attachment(filename):
+                        has_valid_attachment = True
+                        break
+
+                # Só processa e-mails SEM anexos válidos
+                if has_valid_attachment:
+                    continue
+
+                # Gera email_id único
+                message_id = msg.get("Message-ID", "")
+                if message_id:
+                    email_id = message_id.strip("<>").replace("@", "_").replace(".", "_")
+                else:
+                    email_id = f"email_{num.decode('utf-8')}"
+
+                # Extrai metadados
+                subject = self._decode_text(msg["Subject"])
+                sender_info = self._extract_sender_info(msg)
+                body_text = self._extract_email_body(msg)
+                received_date = msg.get("Date", "")
+
+                results.append({
+                    'email_id': email_id,
+                    'subject': subject,
+                    'sender_name': sender_info['name'],
+                    'sender_address': sender_info['address'],
+                    'body_text': body_text,
+                    'received_date': received_date,
+                    'has_attachments': False,
+                })
+
+                count += 1
+
+            except Exception as e:
+                print(f"⚠️ Erro ao ler e-mail ID {num}: {e}")
+                continue
+
+        return results

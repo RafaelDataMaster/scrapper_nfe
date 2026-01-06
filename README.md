@@ -1,4 +1,4 @@
-# Sistema de Extração de Documentos Fiscais (v2.x)
+# Sistema de Extração de Documentos Fiscais (v0.2.x)
 
 Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Boletos) a partir de PDFs, com suporte a **processamento em lote** e **correlação automática** entre documentos.
 
@@ -13,7 +13,7 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 - VALOR
 - VENCIMENTO
 
-## Novidades da v2.x
+## Novidades da v0.2.x
 
 - ✅ **Batch Processing**: Processa e-mails como lotes (pasta com `metadata.json`)
 - ✅ **Correlação DANFE/Boleto**: Vincula automaticamente boletos às suas notas
@@ -51,7 +51,7 @@ Procurar pdfs com nome de empresas específicas ao identificar casos falhos nos 
 Get-ChildItem -Path .\failed_cases_pdf\ -Recurse -Filter "*MOTO*" -Name
 ```
 
-### ✅ Camada Prata Implementada (v2.x)
+### ✅ Camada Prata Implementada (v0.2.x)
 
 A estratégia de correlação foi implementada nos seguintes módulos:
 
@@ -67,6 +67,24 @@ A estratégia de correlação foi implementada nos seguintes módulos:
 - ✅ Regra 3: Validação Cruzada (status_conciliacao: OK/DIVERGENTE/ORFAO)
 
 ## Done
+
+### 06/01/2026
+
+- [x] **Refatoração DRY dos extratores**: Criado módulo `extractors/utils.py` com funções compartilhadas
+    - Funções de parsing: `parse_br_money()`, `parse_date_br()`, `extract_best_money_from_segment()`
+    - Funções de CNPJ/CPF: `extract_cnpj()`, `extract_cnpj_flexible()`, `format_cnpj()`
+    - Funções de normalização: `strip_accents()`, `normalize_entity_name()`, `normalize_text_for_extraction()`
+    - Regex compilados compartilhados: `BR_MONEY_RE`, `CNPJ_RE`, `CPF_RE`, `BR_DATE_RE`
+    - Removidas ~100 linhas de código duplicado em 6 arquivos (`danfe.py`, `outros.py`, `nfse_generic.py`, `boleto.py`, `net_center.py`, `sicoob.py`)
+    - **278 testes passando** após refatoração
+- [x] **Ingestão de e-mails sem anexo**: Script `ingest_emails_no_attachment.py` processa e-mails que contêm apenas links de NF-e (prefeituras, Omie, etc.)
+    - Extrai link da NF-e, código de verificação, número da nota e fornecedor
+    - Gera avisos no formato `EmailAvisoData` para auditoria
+    - Exporta para CSV em `data/output/avisos_emails_sem_anexo_latest.csv`
+- [x] **Flag `--keep-history`**: Versionamento de CSVs agora é opcional
+    - Por padrão: só salva `_latest.csv` (sobrescreve)
+    - Com `--keep-history`: salva versão com timestamp + latest
+    - Útil durante testes com novos e-mails/casos
 
 ### 05/01/2026
 
@@ -87,12 +105,12 @@ A estratégia de correlação foi implementada nos seguintes módulos:
     - Adicionado método `_extract_nfse_sigiss()` no `xml_extractor.py`
     - Suporte ao formato XML SigISS (Marília-SP e outras prefeituras)
     - **1 lote sem extração → OK**
-- [x] **Implementar a refatoração descrito em refatora.md incluindo alteraçãos no models e process** ✅ (v2.x - Batch Processing)
-- [x] **Batch Processing v2.x**: Módulos `BatchProcessor`, `CorrelationService`, `EmailMetadata`, `BatchResult`, `IngestionService`
+- [x] **Implementar a refatoração descrito em refatora.md incluindo alteraçãos no models e process** ✅ (v0.2.x - Batch Processing)
+- [x] **Batch Processing v0.2.x**: Módulos `BatchProcessor`, `CorrelationService`, `EmailMetadata`, `BatchResult`, `IngestionService`
 - [x] **Correlação DANFE/Boleto**: Herança automática de campos entre documentos do mesmo lote
 - [x] **Novo script `inspect_pdf.py`**: Inspeção rápida com busca automática em `failed_cases_pdf/` e `temp_email/`
 - [x] **164 testes unitários**: Cobertura completa incluindo novos módulos de batch
-- [x] **Documentação atualizada**: Guias de debug, testing, extending e migration atualizados para v2.x
+- [x] **Documentação atualizada**: Guias de debug, testing, extending e migration atualizados para v0.2.x
 - [x] **Limpeza de scripts**: Removidos scripts obsoletos (`debug_pdf.py`, `diagnose_failures.py`, `analyze_boletos.py`, etc.)
 
 ### 30/12/2025

@@ -8,7 +8,7 @@ O pacote `core` é responsável por:
 
 - **Orquestração**: Coordenação do pipeline completo de extração
 - **Modelos de Dados**: Estruturas padronizadas (InvoiceData, BoletoData, DanfeData)
-- **Batch Processing**: 🆕 Processamento em lote com correlação (v2.x)
+- **Batch Processing**: 🆕 Processamento em lote com correlação (v0.2.x)
 - **Interfaces**: Contratos para extensibilidade (Strategy Pattern)
 - **Diagnósticos**: Sistema de análise de qualidade
 - **Exceções**: Tratamento de erros customizado
@@ -43,7 +43,7 @@ Estruturas de dados imutáveis usando `@dataclass`.
 
 #### DocumentData (Classe Base) 🆕
 
-Classe abstrata base para todos os tipos de documento. Introduzida na v2.x para suportar batch processing.
+Classe abstrata base para todos os tipos de documento. Introduzida na v0.2.x para suportar batch processing.
 
 **Campos Comuns (herdados por todos):**
 
@@ -126,7 +126,7 @@ members_order: source
 
 ### Módulos de Batch Processing 🆕
 
-Introduzidos na v2.x para suportar processamento em lote com correlação.
+Introduzidos na v0.2.x para suportar processamento em lote com correlação.
 
 #### EmailMetadata (`core/metadata.py`)
 
@@ -307,7 +307,7 @@ sequenceDiagram
 
 ## Exemplos de Uso
 
-### Processamento Individual (v1.x - Legado)
+### Processamento Individual (v0.1.x - Legado)
 
 ```python
 from core.processor import BaseInvoiceProcessor
@@ -326,7 +326,7 @@ elif isinstance(result, BoletoData):
     print(f"Boleto: R$ {result.valor_documento} - Venc: {result.vencimento}")
 ```
 
-### Processamento em Lote (v2.x - Recomendado)
+### Processamento em Lote (v0.2.x - Recomendado)
 
 ```python
 from core.batch_processor import process_email_batch
@@ -378,4 +378,4 @@ print(f"Valor Total Lote: R$ {boleto.valor_total_lote:.2f}")
 - [Extractors](extractors.md) - Implementações de extratores
 - [Strategies](strategies.md) - Estratégias de extração de texto
 - [Diagnostics](diagnostics.md) - Sistema de análise de qualidade
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v1.x → v2.x
+- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x

@@ -4,13 +4,15 @@ Este documento descreve as mudanças introduzidas na refatoração do sistema de
 
 ## Resumo das Mudanças
 
-### Antes (v1.x)
+### Antes (v0.1.x)
+
 - Processamento arquivo por arquivo
 - Sem contexto do e-mail (assunto, remetente)
 - Sem correlação entre documentos
 - Arquivos soltos na pasta temporária
 
-### Depois (v2.x)
+### Depois (v0.2.x)
+
 - Processamento por lote (pasta de e-mail)
 - Contexto completo do e-mail via `metadata.json`
 - Correlação entre DANFE e Boleto
@@ -36,14 +38,14 @@ temp_email/
 
 ```json
 {
-  "batch_id": "email_20251231_abc123",
-  "email_subject": "[NF] Nota Fiscal #12345 - Fornecedor LTDA",
-  "email_sender_name": "Fornecedor LTDA",
-  "email_sender_address": "nf@fornecedor.com.br",
-  "email_body_text": "Segue em anexo a NF 12345. CNPJ: 12.345.678/0001-90",
-  "received_date": "2025-01-15T10:30:00",
-  "attachments": ["01_danfe.pdf", "02_boleto.pdf"],
-  "created_at": "2025-01-15T10:35:22"
+    "batch_id": "email_20251231_abc123",
+    "email_subject": "[NF] Nota Fiscal #12345 - Fornecedor LTDA",
+    "email_sender_name": "Fornecedor LTDA",
+    "email_sender_address": "nf@fornecedor.com.br",
+    "email_body_text": "Segue em anexo a NF 12345. CNPJ: 12.345.678/0001-90",
+    "received_date": "2025-01-15T10:30:00",
+    "attachments": ["01_danfe.pdf", "02_boleto.pdf"],
+    "created_at": "2025-01-15T10:35:22"
 }
 ```
 
@@ -168,44 +170,44 @@ status_conciliacao: Optional[str] = None    # OK, DIVERGENTE, ORFAO
 
 ### Regra 1: Herança de Dados
 
-| Se o lote tem | Campo faltando | Herda de |
-|---------------|----------------|----------|
-| DANFE + Boleto | Boleto sem numero_nota | DANFE |
-| DANFE + Boleto | DANFE sem vencimento | Boleto |
-| NFSe + Boleto | Boleto sem numero_nota | NFSe |
-| NFSe + Boleto | NFSe sem vencimento | Boleto |
+| Se o lote tem  | Campo faltando         | Herda de |
+| -------------- | ---------------------- | -------- |
+| DANFE + Boleto | Boleto sem numero_nota | DANFE    |
+| DANFE + Boleto | DANFE sem vencimento   | Boleto   |
+| NFSe + Boleto  | Boleto sem numero_nota | NFSe     |
+| NFSe + Boleto  | NFSe sem vencimento    | Boleto   |
 
 ### Regra 2: Fallback de Identificação
 
-| Campo faltando | Fallback |
-|----------------|----------|
-| fornecedor_nome | email_sender_name do metadata |
-| cnpj | CNPJ extraído do email_body_text |
-| numero_pedido | Pedido extraído do assunto/corpo |
+| Campo faltando  | Fallback                         |
+| --------------- | -------------------------------- |
+| fornecedor_nome | email_sender_name do metadata    |
+| cnpj            | CNPJ extraído do email_body_text |
+| numero_pedido   | Pedido extraído do assunto/corpo |
 
 ### Regra 3: Validação Cruzada
 
-| Situação | Status |
-|----------|--------|
-| Valor DANFE = Valor Boletos | OK |
+| Situação                    | Status     |
+| --------------------------- | ---------- |
+| Valor DANFE = Valor Boletos | OK         |
 | Valor DANFE ≠ Valor Boletos | DIVERGENTE |
-| Só Boleto (sem nota) | ORFAO |
+| Só Boleto (sem nota)        | ORFAO      |
 
 ---
 
 ## Migração do Script de Validação
 
-### Antes (v1.x)
+### Antes (v0.1.x)
 
 ```bash
 python scripts/validate_extraction_rules.py
 python scripts/validate_extraction_rules.py --validar-prazo --exigir-nf
 ```
 
-### Depois (v2.x)
+### Depois (v0.2.x)
 
 ```bash
-# Modo legado (compatível com v1.x)
+# Modo legado (compatível com v0.1.x)
 python scripts/validate_extraction_rules.py
 
 # Modo lote (nova estrutura)
@@ -222,13 +224,13 @@ python scripts/validate_extraction_rules.py --input-dir minha_pasta
 
 ## Migração do run_ingestion.py
 
-### Antes (v1.x)
+### Antes (v0.1.x)
 
 ```bash
 python run_ingestion.py
 ```
 
-### Depois (v2.x)
+### Depois (v0.2.x)
 
 ```bash
 # Ingestão padrão (usa nova estrutura de lotes)
@@ -300,14 +302,14 @@ O módulo `core/nf_candidate.py` foi mantido apenas para scripts de debug.
 
 ## Compatibilidade
 
-| Feature | v1.x | v2.x |
-|---------|------|------|
-| Processar arquivo individual | ✅ | ✅ |
-| Processar pasta de arquivos | ✅ | ✅ |
-| Processar lote com metadata | ❌ | ✅ |
-| Correlação DANFE/Boleto | ❌ | ✅ |
-| Contexto do e-mail | ❌ | ✅ |
-| Limpeza automática | Manual | Automática |
+| Feature                      | v0.1.x | v0.2.x     |
+| ---------------------------- | ------ | ---------- |
+| Processar arquivo individual | ✅     | ✅         |
+| Processar pasta de arquivos  | ✅     | ✅         |
+| Processar lote com metadata  | ❌     | ✅         |
+| Correlação DANFE/Boleto      | ❌     | ✅         |
+| Contexto do e-mail           | ❌     | ✅         |
+| Limpeza automática           | Manual | Automática |
 
 ---
 

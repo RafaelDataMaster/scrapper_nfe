@@ -65,7 +65,7 @@ Verifica a integração com e-mail sem precisar de credenciais reais.
 
 ### 3. Testes de Batch Processing (`test_batch_processing.py`)
 
-Testes para os módulos da v2.x:
+Testes para os módulos da v0.2.x:
 
 - **TestEmailMetadata**: Criação, serialização e carregamento de metadados de e-mail.
 - **TestBatchResult**: Agregação de resultados, cálculo de totais, serialização.
@@ -264,4 +264,4 @@ start htmlcov/index.html  # Windows
 
 - [Guia de Debug](../development/debugging_guide.md) - Técnicas avançadas de debug
 - [Guia de Uso](usage.md) - Processar PDFs locais
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar para v2.x
+- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar para v0.2.x

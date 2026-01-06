@@ -1,10 +1,14 @@
 import re
-import unicodedata
 from datetime import datetime
 from typing import Any, Dict, Optional
 
 from config.bancos import NOMES_BANCOS
 from core.extractors import BaseExtractor, find_linha_digitavel, register_extractor
+from extractors.utils import (
+    normalize_entity_name,
+    parse_date_br,
+    strip_accents,
+)
 
 
 @register_extractor
@@ -32,17 +36,11 @@ class BoletoExtractor(BaseExtractor):
         - Ausência de "NFS-e" ou "Nota Fiscal de Serviço"
         - NÃO é DANFSe (Documento Auxiliar da NFS-e)
         """
-        def _strip_accents(value: str) -> str:
-            if not value:
-                return ""
-            normalized = unicodedata.normalize('NFKD', value)
-            return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-
         # Normaliza para ficar tolerante a acentos/extrações estranhas do PDF.
         # Além disso, alguns PDFs quebram palavras no meio (ex: "Bene\nficiário").
         # Para a classificação, usamos também uma versão compactada (só A-Z0-9).
         text_upper = (text or "").upper()
-        text_norm_upper = _strip_accents(text_upper)
+        text_norm_upper = strip_accents(text_upper)
         text_compact = re.sub(r"[^A-Z0-9]+", "", text_norm_upper)
 
         # ========== VERIFICAÇÃO DE EXCLUSÃO: DANFSe ==========
@@ -108,7 +106,7 @@ class BoletoExtractor(BaseExtractor):
         ]
 
         def _kw_compact(kw: str) -> str:
-            return re.sub(r"[^A-Z0-9]+", "", _strip_accents((kw or "").upper()))
+            return re.sub(r"[^A-Z0-9]+", "", strip_accents((kw or "").upper()))
 
         boleto_score = sum(1 for kw in boleto_keywords if _kw_compact(kw) and _kw_compact(kw) in text_compact)
         nfse_score = sum(1 for kw in nfse_keywords if _kw_compact(kw) and _kw_compact(kw) in text_compact)
@@ -176,15 +174,7 @@ class BoletoExtractor(BaseExtractor):
         return None
 
     def _normalize_entity_name(self, raw: str) -> str:
-        name = (raw or '').strip()
-        name = re.sub(r'\s+', ' ', name)
-        # remove CNPJ/CPF e números soltos (ex: nro do documento na mesma linha)
-        name = re.sub(r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b', ' ', name)
-        name = re.sub(r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b', ' ', name)
-        name = re.sub(r'\b\d+[\./]\d+\b', ' ', name)  # ex: 2025.122
-        name = re.sub(r'\b\d{4,}\b', ' ', name)
-        name = re.sub(r'\s+', ' ', name).strip(' -:;')
-        return name.strip()
+        return normalize_entity_name(raw)
 
     def _looks_like_header_or_label(self, s: str) -> bool:
         if not s:
@@ -357,29 +347,23 @@ class BoletoExtractor(BaseExtractor):
                 # tenta mesma linha
                 m_same = re.search(r'(\d{2}/\d{2}/\d{4})', ln)
                 if m_same:
-                    try:
-                        dt = datetime.strptime(m_same.group(1), '%d/%m/%Y')
-                        return dt.strftime('%Y-%m-%d')
-                    except ValueError:
-                        pass
+                    parsed = parse_date_br(m_same.group(1))
+                    if parsed:
+                        return parsed
                 # tenta próximas linhas
                 for j in range(i + 1, min(i + 4, len(lines))):
                     m = re.search(r'\b(\d{2}/\d{2}/\d{4})\b', lines[j])
                     if m:
-                        try:
-                            dt = datetime.strptime(m.group(1), '%d/%m/%Y')
-                            return dt.strftime('%Y-%m-%d')
-                        except ValueError:
-                            continue
+                        parsed = parse_date_br(m.group(1))
+                        if parsed:
+                            return parsed
 
         # 2) "Data de Emissão" (pode estar longe do valor, usa DOTALL)
         m = re.search(r'(?is)Data\s+de\s+Emiss[aã]o[\s\S]{0,120}?(\d{2}/\d{2}/\d{4})', text)
         if m:
-            try:
-                dt = datetime.strptime(m.group(1), '%d/%m/%Y')
-                return dt.strftime('%Y-%m-%d')
-            except ValueError:
-                pass
+            parsed = parse_date_br(m.group(1))
+            if parsed:
+                return parsed
 
         # 3) Regra operacional (boletos): se não houver label explícito,
         # usa a MENOR data presente no documento (ex: data de geração do título).
@@ -1012,7 +996,7 @@ class BoletoExtractor(BaseExtractor):
             match = re.search(pattern, text)
             if match:
                 numero = match.group(1).strip()
-                digito = match.group(2) if match.lastindex >= 2 else None
+                digito = match.group(2) if match.lastindex and match.lastindex >= 2 else None
 
                 # Remove pontos e espaços
                 numero = numero.replace('.', '').replace(' ', '')

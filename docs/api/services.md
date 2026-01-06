@@ -1,6 +1,6 @@
 # Services - Documentação Técnica
 
-Esta seção documenta os serviços de alto nível introduzidos na v2.x.
+Esta seção documenta os serviços de alto nível introduzidos na v0.2.x.
 
 ## Visão Geral
 
@@ -11,17 +11,17 @@ graph TB
     subgraph "Services Layer"
         IS["IngestionService"]
     end
-    
+
     subgraph "Core Layer"
         BP["BatchProcessor"]
         CS["CorrelationService"]
         Meta["EmailMetadata"]
     end
-    
+
     subgraph "Ingestors Layer"
         IMAP["ImapIngestor"]
     end
-    
+
     IS --> IMAP
     IS --> BP
     IS --> CS
@@ -54,20 +54,20 @@ sequenceDiagram
     participant FS as FileSystem
     participant BP as BatchProcessor
     participant CS as CorrelationService
-    
+
     Client->>IS: ingest_emails(subject_filter)
     IS->>Ingestor: connect()
     IS->>Ingestor: fetch_emails(subject)
     Ingestor-->>IS: List[EmailMessage]
-    
+
     loop Para cada e-mail
         IS->>FS: create_batch_folder()
         IS->>FS: save_metadata.json
         IS->>FS: save_attachments
     end
-    
+
     IS-->>Client: List[batch_folders]
-    
+
     Client->>IS: process_batch(folder)
     IS->>BP: process_batch(folder)
     BP-->>IS: BatchResult
@@ -118,9 +118,9 @@ for folder in batch_folders:
 
 **Parâmetros:**
 
-| Parâmetro        | Tipo  | Descrição                        |
-| :--------------- | :---- | :------------------------------- |
-| `subject_filter` | `str` | Filtro para buscar no assunto    |
+| Parâmetro        | Tipo  | Descrição                     |
+| :--------------- | :---- | :---------------------------- |
+| `subject_filter` | `str` | Filtro para buscar no assunto |
 
 **Retorno:** `List[Path]` - Lista de caminhos das pastas de lote criadas
 
@@ -151,10 +151,10 @@ print(f"Documentos: {len(result.enriched_documents)}")
 
 **Parâmetros:**
 
-| Parâmetro           | Tipo   | Descrição                       |
-| :------------------ | :----- | :------------------------------ |
-| `batch_folder`      | `Path` | Caminho da pasta de lote        |
-| `apply_correlation` | `bool` | Se deve aplicar correlação      |
+| Parâmetro           | Tipo   | Descrição                  |
+| :------------------ | :----- | :------------------------- |
+| `batch_folder`      | `Path` | Caminho da pasta de lote   |
+| `apply_correlation` | `bool` | Se deve aplicar correlação |
 
 **Retorno:** `CorrelationResult` - Resultado da correlação
 
@@ -202,9 +202,9 @@ print(f"Removidos {removed} lotes antigos")
 
 **Parâmetros:**
 
-| Parâmetro       | Tipo  | Descrição                                      |
-| :-------------- | :---- | :--------------------------------------------- |
-| `max_age_hours` | `int` | Idade máxima em horas (default: 48)            |
+| Parâmetro       | Tipo  | Descrição                           |
+| :-------------- | :---- | :---------------------------------- |
+| `max_age_hours` | `int` | Idade máxima em horas (default: 48) |
 
 **Retorno:** `int` - Número de lotes removidos
 
@@ -261,7 +261,7 @@ for folder in batch_folders:
     print(f"\nProcessando {folder.name}...")
     result = service.process_batch(folder)
     all_results.append(result)
-    
+
     print(f"  Status: {result.status}")
     print(f"  Documentos: {len(result.enriched_documents)}")
     if result.divergencia:
@@ -332,14 +332,14 @@ for folder in folders:
 
 ### Configuração via Variáveis de Ambiente
 
-| Variável                  | Descrição                       | Default     |
-| :------------------------ | :------------------------------ | :---------- |
-| `EMAIL_HOST`              | Servidor IMAP                   | -           |
-| `EMAIL_USER`              | Usuário de e-mail               | -           |
-| `EMAIL_PASS`              | Senha (App Password)            | -           |
-| `EMAIL_FOLDER`            | Pasta a monitorar               | `INBOX`     |
-| `INGESTION_TEMP_DIR`      | Diretório de lotes              | `temp_email`|
-| `INGESTION_MAX_AGE_HOURS` | Idade máxima de lotes           | `48`        |
+| Variável                  | Descrição             | Default      |
+| :------------------------ | :-------------------- | :----------- |
+| `EMAIL_HOST`              | Servidor IMAP         | -            |
+| `EMAIL_USER`              | Usuário de e-mail     | -            |
+| `EMAIL_PASS`              | Senha (App Password)  | -            |
+| `EMAIL_FOLDER`            | Pasta a monitorar     | `INBOX`      |
+| `INGESTION_TEMP_DIR`      | Diretório de lotes    | `temp_email` |
+| `INGESTION_MAX_AGE_HOURS` | Idade máxima de lotes | `48`         |
 
 ---
 

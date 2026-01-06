@@ -40,7 +40,7 @@ Comece a processar documentos em menos de 5 minutos.
 
 ---
 
-## 🏗️ Arquitetura do Processo (v2.x - Batch Processing)
+## 🏗️ Arquitetura do Processo (v0.2.x - Batch Processing)
 
 O fluxo de dados foi redesenhado para processar **lotes de documentos por e-mail**, permitindo correlação entre DANFE e Boleto:
 
@@ -129,7 +129,7 @@ O núcleo do projeto transforma documentos desestruturados em dados estruturados
 
 ## 🔗 3. Correlação (Prata)
 
-O `CorrelationService` é o diferencial da v2.x:
+O `CorrelationService` é o diferencial da v0.2.x:
 
 | Regra         | Descrição                                                                         |
 | :------------ | :-------------------------------------------------------------------------------- |
@@ -203,15 +203,15 @@ scrapper/
 │   └── test_docker_setup.py          # Testa setup Docker/Tesseract
 │
 ├── tests/                      # Testes Unitários e de Integração
-├── run_ingestion.py            # CLI para ingestão de e-mail (atualizado v2.x)
+├── run_ingestion.py            # CLI para ingestão de e-mail (atualizado v0.2.x)
 └── docker-compose.yml          # Inclui sidecar de limpeza
 ```
 
 ---
 
-## 🆕 Novidades da v2.x (Batch Processing)
+## 🆕 Novidades da v0.2.x (Batch Processing)
 
-| Feature                         | v1.x   | v2.x       |
+| Feature                         | v0.1.x | v0.2.x     |
 | ------------------------------- | ------ | ---------- |
 | Processar arquivo individual    | ✅     | ✅         |
 | Processar pasta de arquivos     | ✅     | ✅         |
@@ -221,7 +221,7 @@ scrapper/
 | **Limpeza automática**          | Manual | Automática |
 | **Status de conciliação**       | ❌     | ✅         |
 
-Para migrar do v1.x para v2.x, consulte o [Guia de Migração](MIGRATION_BATCH_PROCESSING.md).
+Para migrar do v0.1.x para v0.2.x, consulte o [Guia de Migração](MIGRATION_BATCH_PROCESSING.md).
 
 ---
 
@@ -262,7 +262,7 @@ Para migrar do v1.x para v2.x, consulte o [Guia de Migração](MIGRATION_BATCH_P
 ## 🔗 Links Rápidos
 
 - [📧 Guia de Ingestão](guide/ingestion.md) - Configurar e-mail e processar lotes
-- [🔄 Migração Batch](MIGRATION_BATCH_PROCESSING.md) - Migrar do v1.x para v2.x
+- [🔄 Migração Batch](MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
 - [🧪 Guia de Testes](guide/testing.md) - Validar regras de extração
 - [📊 API Reference](api/overview.md) - Documentação técnica completa
 - [🏗️ Arquitetura PDF](research/architecture_pdf_extraction.md) - Detalhes de extração

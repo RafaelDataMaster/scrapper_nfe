@@ -1,15 +1,13 @@
 import re
-import unicodedata
 from typing import Any, Dict, Optional
 
 from core.extractors import BaseExtractor, register_extractor
-
-
-def _strip_accents(value: str) -> str:
-    if not value:
-        return ""
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+from extractors.utils import (
+    format_cnpj,
+    parse_br_money,
+    parse_date_br,
+    strip_accents,
+)
 
 
 def _extract_cnpj_like(text: str) -> Optional[str]:
@@ -29,34 +27,6 @@ def _extract_cnpj_like(text: str) -> Optional[str]:
     return None
 
 
-def _format_cnpj_digits(cnpj_digits: str) -> str:
-    digits = re.sub(r"\D+", "", cnpj_digits or "")
-    if len(digits) != 14:
-        return cnpj_digits
-    return f"{digits[0:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
-
-
-def _parse_br_money_to_float(value: str) -> Optional[float]:
-    if not value:
-        return None
-    s = value.strip()
-    s = s.replace(".", "").replace(",", ".")
-    try:
-        return float(s)
-    except Exception:
-        return None
-
-
-def _parse_date_ddmmyyyy_to_iso(value: str) -> Optional[str]:
-    if not value:
-        return None
-    m = re.search(r"\b(\d{2})/(\d{2})/(\d{4})\b", value)
-    if not m:
-        return None
-    dd, mm, yyyy = m.group(1), m.group(2), m.group(3)
-    return f"{yyyy}-{mm}-{dd}"
-
-
 @register_extractor
 class NetCenterExtractor(BaseExtractor):
     """Extrator cirúrgico para faturas/boletos da Net Center Unaí.
@@ -72,7 +42,7 @@ class NetCenterExtractor(BaseExtractor):
     @classmethod
     def can_handle(cls, text: str) -> bool:
         text_up = (text or "").upper()
-        text_norm = _strip_accents(text_up)
+        text_norm = strip_accents(text_up)
         text_compact = re.sub(r"[^A-Z0-9]+", "", text_norm)
 
         digits_only = re.sub(r"\D+", "", text or "")
@@ -99,7 +69,7 @@ class NetCenterExtractor(BaseExtractor):
             "CODIGO DE BARRAS",
             "CÓDIGO DE BARRAS",
         ]
-        markers_score = sum(1 for kw in boleto_markers if re.sub(r"[^A-Z0-9]+", "", _strip_accents(kw.upper())) in text_compact)
+        markers_score = sum(1 for kw in boleto_markers if re.sub(r"[^A-Z0-9]+", "", strip_accents(kw.upper())) in text_compact)
 
         # Também aceita a presença de uma linha digitável (OCR às vezes perde labels).
         has_linha_digitavel = bool(
@@ -136,7 +106,7 @@ class NetCenterExtractor(BaseExtractor):
                 if cnpj_any:
                     # Se vier só em dígitos, tenta formatar
                     if re.fullmatch(r"\d{14}", str(cnpj_any)):
-                        data["cnpj_beneficiario"] = _format_cnpj_digits(str(cnpj_any))
+                            data["cnpj_beneficiario"] = format_cnpj(str(cnpj_any))
                     else:
                         data["cnpj_beneficiario"] = cnpj_any
 
@@ -151,8 +121,8 @@ class NetCenterExtractor(BaseExtractor):
             text or "",
         )
         if m_total:
-            v = _parse_br_money_to_float(m_total.group(1))
-            if v is not None:
+            v = parse_br_money(m_total.group(1))
+            if v > 0:
                 data["valor_documento"] = v
 
         # Correção 3: valor do documento (se existir em formato bem definido)
@@ -161,16 +131,16 @@ class NetCenterExtractor(BaseExtractor):
             text or "",
         )
         if m_val:
-            v = _parse_br_money_to_float(m_val.group(1))
-            if v is not None:
+            v = parse_br_money(m_val.group(1))
+            if v > 0:
                 data["valor_documento"] = v
 
         # Fallback (bem específico/seguro para este layout): pega o maior valor monetário com vírgula.
         # Evita capturar "1" (quantidade) como valor do documento.
         money_vals = []
         for m in re.finditer(r"\b\d{1,3}(?:\.\d{3})*,\d{2}\b", text or ""):
-            fv = _parse_br_money_to_float(m.group(0))
-            if fv is not None:
+            fv = parse_br_money(m.group(0))
+            if fv > 0:
                 money_vals.append(fv)
         if money_vals:
             max_v = max(money_vals)
@@ -189,8 +159,8 @@ class NetCenterExtractor(BaseExtractor):
             text or "",
         )
         if m_dates:
-            emissao_iso = _parse_date_ddmmyyyy_to_iso(m_dates.group(1))
-            venc_iso = _parse_date_ddmmyyyy_to_iso(m_dates.group(2))
+            emissao_iso = parse_date_br(m_dates.group(1))
+            venc_iso = parse_date_br(m_dates.group(2))
             if emissao_iso:
                 data["data_emissao"] = emissao_iso
             if venc_iso:
@@ -202,7 +172,7 @@ class NetCenterExtractor(BaseExtractor):
             text or "",
         )
         if m_venc:
-            venc_iso = _parse_date_ddmmyyyy_to_iso(m_venc.group(1))
+            venc_iso = parse_date_br(m_venc.group(1))
             if venc_iso:
                 data["vencimento"] = venc_iso
 

@@ -140,21 +140,21 @@ Refatoração do pipeline de ingestão para processar documentos em **lotes por 
 - ✅ `BatchProcessor` - processamento de lotes
 - ✅ `CorrelationService` - regras de correlação
 - ✅ `EmailMetadata` - extração de contexto
-- ✅ Modo legado - compatibilidade com v1.x
+- ✅ Modo legado - compatibilidade com v0.1.x
 
 ### Métricas
 
-| Métrica                 | Antes (v1.x) | Depois (v2.x)          |
-| :---------------------- | :----------- | :--------------------- |
-| Correlação DANFE/Boleto | ❌ Manual    | ✅ Automática          |
-| Contexto do e-mail      | ❌ Perdido   | ✅ Preservado          |
-| Status de conciliação   | ❌ N/A       | ✅ OK/DIVERGENTE/ORFAO |
-| Limpeza de temp         | ❌ Manual    | ✅ Automática (48h)    |
-| Testabilidade           | Média        | Alta (DI)              |
+| Métrica                 | Antes (v0.1.x) | Depois (v0.2.x)        |
+| :---------------------- | :------------- | :--------------------- |
+| Correlação DANFE/Boleto | ❌ Manual      | ✅ Automática          |
+| Contexto do e-mail      | ❌ Perdido     | ✅ Preservado          |
+| Status de conciliação   | ❌ N/A         | ✅ OK/DIVERGENTE/ORFAO |
+| Limpeza de temp         | ❌ Manual      | ✅ Automática (48h)    |
+| Testabilidade           | Média          | Alta (DI)              |
 
 ### Documentação Criada
 
-- [`docs/MIGRATION_BATCH_PROCESSING.md`](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v1.x → v2.x
+- [`docs/MIGRATION_BATCH_PROCESSING.md`](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
 - [`docs/api/batch.md`](../api/batch.md) - Documentação dos módulos de batch
 - [`docs/api/services.md`](../api/services.md) - Documentação do IngestionService
 - [`scripts/example_batch_processing.py`](../../scripts/example_batch_processing.py) - Exemplos de uso
