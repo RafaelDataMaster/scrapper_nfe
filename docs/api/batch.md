@@ -78,6 +78,12 @@ metadata.save(Path("temp_email/email_123"))
 cnpj = metadata.extract_cnpj_from_body()          # "12.345.678/0001-90"
 pedido = metadata.extract_numero_pedido_from_context()  # "12345"
 fornecedor = metadata.get_fallback_fornecedor()   # "Fornecedor LTDA"
+
+# Novos métodos de extração de contexto
+link_nfe = metadata.extract_link_nfe_from_context() # "https://nfe.prefeitura.sp.gov.br/..."
+codigo = metadata.extract_codigo_verificacao_from_link(link_nfe) # "BTE1S3EG"
+fornecedor_email = metadata.extract_fornecedor_from_context() # "Nome do Fornecedor"
+vencimento_email = metadata.extract_vencimento_from_context() # "15/01/2025"
 ```
 
 ::: core.metadata.EmailMetadata
@@ -94,6 +100,7 @@ Processador de lotes que substitui o loop de arquivos individual.
 **Responsabilidades:**
 
 - Processar uma pasta de lote como unidade
+- Priorizar arquivos XML quando completos, usando PDFs como fallback.
 - Detectar tipo de cada documento (DANFE, Boleto, NFSe, Outros)
 - Rotear para extrator apropriado
 - Agregar resultados em `BatchResult`
@@ -181,18 +188,17 @@ valor_lote = result.get_valor_total_lote()        # Soma de todos
 valor_danfes = result.get_valor_total_danfes()    # Soma só das DANFEs
 valor_boletos = result.get_valor_total_boletos()  # Soma só dos Boletos
 
-# Gerar resumo
-summary = result.to_summary()
-# {
-#     "batch_id": "email_123",
-#     "total_documents": 3,
-#     "danfes": 1,
-#     "boletos": 2,
-#     "nfses": 0,
-#     "outros": 0,
-#     "valor_total": 1500.00,
-#     "errors": []
-# }
+# Gerar resumo (LEGADO)
+# Este método gera um resumo único para o lote inteiro.
+# Foi substituído por to_summaries() para lidar com múltiplas NFs.
+summary_legacy = result.to_summary()
+
+# Gerar resumos por par (RECOMENDADO)
+# Usa o DocumentPairingService para separar cada transação (NF+Boleto)
+# em um resumo individual.
+summaries = result.to_summaries()
+for summary in summaries:
+    print(f"Resumo do Par {summary['numero_nota']}: {summary['status_conciliacao']}")
 ```
 
 ::: core.batch_result.BatchResult
@@ -272,14 +278,18 @@ for doc in correlation.enriched_documents:
 
 #### CorrelationResult
 
-| Atributo              | Tipo                 | Descrição                     |
-| :-------------------- | :------------------- | :---------------------------- |
-| `status`              | `str`                | OK, DIVERGENTE ou ORFAO       |
-| `divergencia`         | `Optional[str]`      | Descrição do problema         |
-| `vencimento_herdado`  | `Optional[str]`      | Vencimento copiado do boleto  |
-| `numero_nota_herdado` | `Optional[str]`      | Número NF copiado da DANFE    |
-| `enriched_documents`  | `List[DocumentData]` | Documentos com dados herdados |
-| `valor_total_lote`    | `float`              | Soma validada do lote         |
+| Atributo                | Tipo                 | Descrição                                                                       |
+| :---------------------- | :------------------- | :------------------------------------------------------------------------------ |
+| `status`                | `str`                | OK, DIVERGENTE ou CONFERIR                                                      |
+| `divergencia`           | `Optional[str]`      | Descrição do problema ou alerta (ex: "sem boleto", "vencimento não encontrado") |
+| `vencimento_herdado`    | `Optional[str]`      | Vencimento copiado do boleto para a nota                                        |
+| `numero_nota_herdado`   | `Optional[str]`      | Número da NF copiado da nota para o boleto                                      |
+| `numero_pedido_herdado` | `Optional[str]`      | Número do pedido herdado entre documentos                                       |
+| `numero_nota_fonte`     | `Optional[str]`      | Fonte do número da nota herdado ('documento', 'email')                          |
+| `sem_vencimento`        | `bool`               | Flag que indica se o lote ficou sem vencimento                                  |
+| `vencimento_alerta`     | `Optional[str]`      | Data de alerta quando vencimento não é encontrado                               |
+| `valor_total_lote`      | `float`              | **DEPRECATED**. Use `valor_compra` e `valor_boleto`.                            |
+| `enriched_documents`    | `List[DocumentData]` | **DEPRECATED**. Os documentos no `BatchResult` já são enriquecidos.             |
 
 ::: core.correlation_service.CorrelationService
 options:
@@ -291,6 +301,46 @@ members: - correlate
 options:
 show_root_heading: true
 show_source: false
+
+---
+
+### DocumentPairingService (`core/document_pairing.py`)
+
+Serviço para parear múltiplos documentos NF↔Boleto dentro de um mesmo lote.
+
+**Problema Resolvido:** E-mails com múltiplas notas (ex: 2 NFs + 2 Boletos) eram processados como uma única transação, causando divergência de valores. Este serviço separa cada transação em um "par" distinto.
+
+**Responsabilidades:**
+
+- Identificar e agrupar documentos duplicados (ex: XML e PDF da mesma nota).
+- Parear NFs e Boletos pelo número da nota normalizado (ex: "2025/119" e "202500000000119" são considerados o mesmo).
+- Usar o valor como fallback para pareamento quando não há número de nota (ex: faturas da Locaweb).
+- Gerar um `DocumentPair` para cada transação, que é então usado para criar uma linha separada no relatório final.
+
+#### Uso
+
+```python
+from core.document_pairing import pair_batch_documents
+from core.batch_result import BatchResult
+
+# Supondo que 'batch_result' é um objeto BatchResult com múltiplos documentos
+pairs = pair_batch_documents(batch_result)
+
+# 'pairs' é uma lista, onde cada item representa uma transação separada
+for pair in pairs:
+    print(f"Par: {pair.numero_nota}, Status: {pair.status}, Valor NF: {pair.valor_nf}")
+
+# O método to_summaries() em BatchResult usa este serviço internamente
+summaries = batch_result.to_summaries()
+for summary in summaries:
+    print(summary)
+```
+
+::: core.document_pairing.DocumentPairingService
+options:
+show_root_heading: true
+show_source: false
+members: - pair_documents
 
 ---
 
