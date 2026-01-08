@@ -4,14 +4,26 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ## Colunas Extraídas (PAF)
 
+### Planilha 1
+
 - DATA (processamento)
-- SETOR (via metadata do e-mail)
-- EMPRESA
+- ASSUNTO
+- EMPRESA (nossa)
+- VENCIMENTO
 - FORNECEDOR
 - NF (número da nota)
-- EMISSÃO
 - VALOR
-- VENCIMENTO
+- AVISOS (Divergência ou possíveis falhas na informação)
+
+### Planilha 2
+
+- DATA (processamento)
+- ASSUNTO
+- EMPRESA (nossa)
+- FORNECEDOR
+- NF (número da nota)
+- LINK (link do portal fiscal)
+- CÓDIGO (para liberaçao da nota)
 
 ## Novidades da v0.2.x
 
@@ -80,6 +92,23 @@ A estratégia de correlação foi implementada nos seguintes módulos:
 - ✅ Regra 3: Validação Cruzada (status_conciliacao: OK/DIVERGENTE/ORFAO)
 
 ## Done
+
+### 08/01/2026
+
+- [x] **Fix detecção de empresa (coluna EMPRESA)**: Sistema agora detecta corretamente a empresa em todos os tipos de documento
+    - Criado módulo `core/empresa_matcher_email.py` específico para e-mails sem anexo
+    - Adicionada detecção de empresa em XMLs no `batch_processor._process_xml()`
+    - Fix de encoding para XMLs municipais (utf-8 → latin-1 → cp1252)
+    - Coluna `empresa` adicionada ao `relatorio_lotes.csv` via `DocumentPair`
+    - **22/22 lotes com empresa detectada** (antes: 17/22)
+- [x] **Fix falso positivo MASTER**: Domínio `soumaster.com.br` causava match incorreto
+    - Corrigido `empresa_matcher.py` para exigir boundary match em domínios
+    - Criada lógica de contexto seguro (campo "Para:", "Tomador:") vs ignorar ("frase de segurança")
+    - E-mails sem anexo agora detectam empresa corretamente (100% de taxa)
+- [x] **Módulo `empresa_matcher_email.py`**: Detector otimizado para e-mails encaminhados
+    - Remove domínios internos (soumaster.com.br, gmail.com)
+    - Remove URLs de tracking (click.*, track.*)
+    - Prioriza contexto seguro sobre contexto de senha/segurança
 
 ### 07/01/2026
 

@@ -173,7 +173,7 @@ def export_batch_results(
             'fornecedor', 'vencimento', 'numero_nota', 'valor_compra', 'valor_boleto',
             'total_documents', 'total_errors',
             'danfes', 'boletos', 'nfses', 'outros',
-            'email_subject', 'email_sender'
+            'email_subject', 'email_sender', 'empresa'
         ]
         colunas_existentes = [c for c in colunas_lote if c in df_lotes.columns]
         outras_colunas = [c for c in df_lotes.columns if c not in colunas_lote]

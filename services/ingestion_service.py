@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional, Union
 from core.interfaces import EmailIngestorStrategy
 from core.metadata import EmailMetadata
 from core.models import EmailAvisoData
+from core.empresa_matcher_email import find_empresa_in_email
 
 
 class IngestionService:
@@ -434,6 +435,12 @@ class IngestionService:
                 metadata=metadata,
                 email_id=email_data.get('email_id', 'unknown')
             )
+
+            # Detecta empresa usando o texto COMPLETO do e-mail
+            texto_completo = f"{email_data.get('subject', '')} {email_data.get('body_text', '')}"
+            codigo_empresa, metodo, matches = find_empresa_in_email(texto_completo)
+            if codigo_empresa:
+                aviso.empresa = codigo_empresa
 
             avisos.append(aviso)
 

@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 from core.batch_result import BatchResult
 from core.correlation_service import CorrelationResult, CorrelationService
+from core.empresa_matcher import find_empresa_no_texto
 from core.metadata import EmailMetadata
 from core.models import DanfeData, DocumentData, InvoiceData
 from core.processor import BaseInvoiceProcessor
@@ -562,7 +563,27 @@ class BatchProcessor:
             result = extractor.extract(str(file_path))
 
             if result.success and result.document:
-                return result.document
+                doc = result.document
+                
+                # Detecta empresa no conteúdo do XML
+                # Tenta múltiplos encodings pois alguns XMLs usam Latin-1
+                xml_content = None
+                for encoding in ('utf-8', 'latin-1', 'cp1252'):
+                    try:
+                        xml_content = file_path.read_text(encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if xml_content:
+                    try:
+                        empresa_match = find_empresa_no_texto(xml_content)
+                        if empresa_match and not getattr(doc, 'empresa', None):
+                            doc.empresa = empresa_match.codigo
+                    except Exception:
+                        pass  # Ignora erros de detecção
+                
+                return doc
             else:
                 print(f"Erro ao processar XML {file_path.name}: {result.error}")
                 return None

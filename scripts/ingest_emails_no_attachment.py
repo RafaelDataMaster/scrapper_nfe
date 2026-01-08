@@ -214,6 +214,9 @@ def main():
             logger.warning("⚠️ Nenhum e-mail sem anexo com link/código encontrado.")
             return
 
+        # Nota: A detecção de empresa agora é feita no IngestionService
+        # usando o texto completo do e-mail (não truncado)
+
         logger.info(f"✅ {len(avisos)} e-mails processados com sucesso!")
 
         # Imprime resumo

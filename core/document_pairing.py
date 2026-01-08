@@ -77,6 +77,9 @@ class DocumentPair:
     email_sender: Optional[str] = None
     source_folder: Optional[str] = None
 
+    # Empresa (CSC, RBC, MASTER, etc.)
+    empresa: Optional[str] = None
+
     # Contadores para compatibilidade com relatório
     total_documents: int = 0
     total_errors: int = 0
@@ -112,6 +115,7 @@ class DocumentPair:
             'avisos': self.avisos,
             'email_subject': self.email_subject,
             'email_sender': self.email_sender,
+            'empresa': self.empresa,
             'source_folder': self.source_folder,
         }
 
@@ -616,6 +620,7 @@ class DocumentPairingService:
         cnpj = None
         vencimento = None
         data_emissao = None
+        empresa = None
 
         for doc in docs_nf:
             if not fornecedor:
@@ -626,6 +631,8 @@ class DocumentPairingService:
                 vencimento = getattr(doc, 'vencimento', None)
             if not data_emissao:
                 data_emissao = getattr(doc, 'data_emissao', None)
+            if not empresa:
+                empresa = getattr(doc, 'empresa', None)
 
         # Fallback para dados do boleto
         for doc in docs_boleto:
@@ -637,6 +644,8 @@ class DocumentPairingService:
                 vencimento = getattr(doc, 'vencimento', None)
             if not data_emissao:
                 data_emissao = getattr(doc, 'data_emissao', None)
+            if not empresa:
+                empresa = getattr(doc, 'empresa', None)
 
         # Calcula status e divergência
         diferenca = round(valor_nf - valor_boleto, 2)
@@ -675,6 +684,7 @@ class DocumentPairingService:
             email_subject=batch.email_subject,
             email_sender=batch.email_sender,
             source_folder=batch.source_folder,
+            empresa=empresa,
         )
 
     def _calculate_status(

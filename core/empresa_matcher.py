@@ -200,7 +200,15 @@ def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
 
             score = 0
             for dom_up in domains_up:
-                if codigo_up in dom_up:
+                # Extrai a parte principal do domínio (ex.: "soumaster" de "soumaster.com.br")
+                dom_main = dom_up.split(".")[0] if "." in dom_up else dom_up
+
+                # Exige match exato do código com o início do domínio principal,
+                # ou que o código seja palavra isolada (evita "MASTER" em "SOUMASTER")
+                is_prefix_match = dom_main.startswith(codigo_up)
+                is_word_boundary = bool(re.search(rf"(?<![A-Z0-9]){re.escape(codigo_up)}(?![A-Z0-9])", dom_up))
+
+                if is_prefix_match or is_word_boundary:
                     # pontua por match no domínio; quanto mais "limpo" o match, maior o score
                     score = max(score, 7 + min(3, len(codigo_up)))
 
