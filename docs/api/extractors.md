@@ -192,7 +192,7 @@ Campo desafiador devido à variedade de formatos e layouts.
    - Pula data completa e captura número após (ex: "2/1" não "08")
    - Usa re.DOTALL para atravessar linhas
 2-3. **Com label completo:** `Número do Documento: 12345` (variações de encoding `Nú`, `Nu`, `Nü`)
-4-5. **Label abreviado:** `Nº Documento:`, `N. Documento:`, `Doc. Nº` (aceita `/` e `.`)
+4-5. **Label abreviado:** `Nº Documento:`, `N. Documento:`, `Doc. Nº` (aceita `/` e `.`).
 6-7. **Próximo a keywords:** Busca após "Vencimento" ou "Número"
 2. **Formato ano.número:** `2025.122`, `2024.900` (comum em alguns bancos)
 3. **Fallback inteligente:** Não captura datas (validação negativa)
@@ -378,3 +378,105 @@ python tests/test_extractors.py
 - [Strategies](strategies.md) - Extração de texto de PDFs
 - [Diagnostics](diagnostics.md) - Validação de extrações
 - [Guia de Testes](../guide/testing.md) - Como testar extratores
+
+---
+
+## DanfeExtractor
+
+Extrator para Documento Auxiliar da Nota Fiscal Eletrônica (DANFE, NF-e modelo 55).
+
+### Características
+
+- **Tipo de documento**: DANFE (NF-e de produto)
+- **Campos extraídos**:
+  - Chave de Acesso (44 dígitos)
+  - Número da Nota e Série
+  - Data de Emissão
+  - Valor Total da Nota
+  - CNPJ e Nome do Emitente
+  - Vencimento e Número da Fatura (extraído das duplicatas)
+  - Número do Pedido
+
+### Lógica de Identificação
+
+O `DanfeExtractor` é ativado se o texto contém:
+
+- A palavra "DANFE".
+- A frase "DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRONICA".
+- Uma chave de acesso de 44 dígitos.
+
+::: extractors.danfe.DanfeExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
+## Extratores Customizados
+
+Esta seção cobre extratores "cirúrgicos" criados para lidar com layouts específicos de fornecedores ou municípios que não são bem cobertos pelos extratores genéricos.
+
+### EmcFaturaExtractor
+
+Extrator especializado para faturas de locação da **EMC Tecnologia**.
+
+- **Problema Resolvido**: O extrator genérico capturava o valor do primeiro item em faturas de múltiplas páginas, em vez do valor total que fica na última página.
+- **Lógica de Identificação**: Ativado se o documento contém "FATURA DE LOCAÇÃO" e "EMC TECNOLOGIA".
+- **Diferencial**: Procura especificamente pelo padrão "TOTAL R$ XX.XXX,XX" no final do documento para garantir a captura do valor correto.
+
+::: extractors.emc_fatura.EmcFaturaExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+### NetCenterExtractor
+
+Extrator otimizado para boletos do provedor **Net Center Unaí**.
+
+- **Problema Resolvido**: O extrator genérico capturava o label "CPF/CNPJ" como o nome do fornecedor.
+- **Lógica de Identificação**: Ativado pela presença de "NETCENTER" ou seu CNPJ, junto com marcadores de boleto.
+- **Diferencial**: É um extrator corretivo. Ele primeiro executa o `BoletoExtractor` genérico e depois **corrige** o campo `fornecedor_nome` para um valor fixo e aplica regex mais precisas para o layout específico da Net Center.
+
+::: extractors.net_center.NetCenterExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+### SicoobExtractor
+
+Extrator otimizado para boletos do banco **SICOOB/BANCOOB** (código 756).
+
+- **Problema Resolvido**: Melhorar a identificação do nome do fornecedor (beneficiário), que frequentemente falhava no extrator genérico para este layout.
+- **Lógica de Identificação**: Ativado pela presença das palavras "SICOOB" ou "BANCOOB", ou pelo código do banco "756".
+- **Diferencial**: Assim como o da NetCenter, ele executa o `BoletoExtractor` genérico e depois aplica uma lógica de correção para o `fornecedor_nome`, buscando o texto entre "Beneficiário" e "Agência".
+
+::: extractors.sicoob.SicoobExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+### NfseCustomVilaVelhaExtractor
+
+Extrator específico para NFS-e da prefeitura de **Vila Velha - ES**.
+
+- **Problema Resolvido**: O extrator genérico não conseguia extrair o número da nota e o valor total corretamente devido ao layout único da cidade.
+- **Lógica de Identificação**: Ativado pela presença das palavras "VILA VELHA" e "PREFEITURA".
+- **Diferencial**: Usa regex customizadas para o número da nota e o valor, e então delega para o `NfseGenericExtractor` para preencher os campos restantes (CNPJ, data de emissão, etc.).
+
+::: extractors.nfse_custom_vila_velha.NfseCustomVilaVelhaExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+### NfseCustomMontesClarosExtractor
+
+Extrator específico para NFS-e da prefeitura de **Montes Claros - MG**.
+
+- **Problema Resolvido**: As notas desta cidade frequentemente contêm um número de nota canônico longo (ex: `202500000015059`) que o extrator genérico não capturava.
+- **Lógica de Identificação**: Ativado pela presença de "MONTES CLAROS" ou do domínio "nota.montesclaros.mg.gov.br", garantindo que não se trata de um boleto.
+- **Diferencial**: Sua principal função é usar regex que priorizam a busca por este número de nota longo e canônico, garantindo a identificação correta do documento.
+
+::: extractors.nfse_custom_montes_claros.NfseCustomMontesClarosExtractor
+    options:
+      show_root_heading: true
+      show_source: false

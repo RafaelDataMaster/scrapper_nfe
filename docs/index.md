@@ -157,33 +157,57 @@ Organização seguindo princípios de _Clean Architecture_ e SOLID:
 scrapper/
 │
 ├── config/                     # Settings e carregamento de .env
+│   ├── __init__.py
+│   ├── bancos.py
+│   ├── empresas.py
+│   ├── feriados_sp.py
+│   └── settings.py
+│
 ├── core/                       # Lógica central do negócio
-│   ├── processor.py            # Orquestrador principal
-│   ├── models.py               # Modelos de dados (InvoiceData, BoletoData, DanfeData)
-│   ├── extractors.py           # Classe base e registry de extratores
-│   ├── metadata.py             # 🆕 EmailMetadata (contexto do e-mail)
+│   ├── __init__.py
 │   ├── batch_processor.py      # 🆕 BatchProcessor (processa lotes)
 │   ├── batch_result.py         # 🆕 BatchResult (resultado de lote)
 │   ├── correlation_service.py  # 🆕 CorrelationService (vinculação)
 │   ├── diagnostics.py          # Sistema de análise de qualidade
+│   ├── document_pairing.py     # 🆕 Pareamento de documentos (NF vs Boleto)
+│   ├── empresa_matcher.py      # 🆕 Lógica para identificar empresa
+│   ├── exceptions.py           # Exceções customizadas
+│   ├── exporters.py            # 🆕 Exportadores de dados (CSV, Sheets)
+│   ├── extractors.py           # Classe base e registry de extratores
 │   ├── interfaces.py           # Interfaces e contratos
-│   └── exceptions.py           # Exceções customizadas
+│   ├── metadata.py             # 🆕 EmailMetadata (contexto do e-mail)
+│   ├── models.py               # Modelos de dados (InvoiceData, BoletoData, DanfeData)
+│   └── processor.py            # Orquestrador principal
 │
 ├── services/                   # 🆕 Serviços de alto nível
+│   ├── __init__.py
 │   └── ingestion_service.py    # Serviço de ingestão com lotes
 │
 ├── extractors/                 # Extratores especializados
-│   ├── generic.py              # Extração de NFSe genéricas
-│   ├── boleto.py               # Extração de boletos bancários
-│   └── danfe.py                # Extração de DANFE
+│   ├── __init__.py
+│   ├── boleto.py
+│   ├── danfe.py
+│   ├── emc_fatura.py
+│   ├── net_center.py
+│   ├── nfse_custom_montes_claros.py
+│   ├── nfse_custom_vila_velha.py
+│   ├── nfse_generic.py
+│   ├── outros.py
+│   ├── sicoob.py
+│   ├── utils.py
+│   └── xml_extractor.py
 │
 ├── strategies/                 # Estratégias de extração de texto
-│   ├── native.py               # PDFPlumber (rápido, nativo)
-│   ├── ocr.py                  # Tesseract OCR (documentos escaneados)
-│   └── fallback.py             # Combinação automática (fallback chain)
+│   ├── __init__.py
+│   ├── fallback.py
+│   ├── native.py
+│   ├── ocr.py
+│   └── table.py
 │
 ├── ingestors/                  # Conectores de entrada
-│   └── imap.py                 # Ingestão via e-mail IMAP
+│   ├── __init__.py
+│   ├── imap.py
+│   └── utils.py
 │
 ├── data/                       # Dados (Entrada/Saída)
 │   ├── debug_output/           # Saída dos testes de regras (CSV de debug)
@@ -191,16 +215,32 @@ scrapper/
 │
 ├── temp_email/                 # 🆕 Pastas de lotes (batch folders)
 │   └── email_20251231_abc123/  # Exemplo de lote
-│       ├── metadata.json       # Contexto do e-mail
-│       ├── 01_danfe.pdf        # Anexos numerados
+│       ├── metadata.json
+│       ├── 01_danfe.pdf
 │       └── 02_boleto.pdf
 │
 ├── docs/                       # Documentação MkDocs
+│   ├── api/
+│   ├── development/
+│   ├── docker/
+│   ├── guide/
+│   └── research/
+│
 ├── scripts/                    # Scripts utilitários e de diagnóstico
-│   ├── validate_extraction_rules.py  # Valida regras (legacy + batch mode)
-│   ├── example_batch_processing.py   # 🆕 Exemplos de batch processing
-│   ├── inspect_pdf.py                # 🆕 Inspeção rápida de PDFs (busca automática)
-│   └── test_docker_setup.py          # Testa setup Docker/Tesseract
+│   ├── _init_env.py
+│   ├── analyze_all_batches.py
+│   ├── analyze_boleto.py
+│   ├── analyze_emails_no_attachment.py
+│   ├── analyze_fatura_total.py
+│   ├── analyze_pdf.py
+│   ├── consolidate_batches.py
+│   ├── debug_batch.py          # 🆕 Debug de lotes
+│   ├── demo_pairing.py
+│   ├── example_batch_processing.py
+│   ├── ingest_emails_no_attachment.py
+│   ├── inspect_pdf.py          # 🆕 Inspeção rápida de PDFs
+│   ├── test_docker_setup.py
+│   └── validate_extraction_rules.py
 │
 ├── tests/                      # Testes Unitários e de Integração
 ├── run_ingestion.py            # CLI para ingestão de e-mail (atualizado v0.2.x)

@@ -14,6 +14,7 @@ scrapper/
 │   ├── batch_processor.py      # 🆕 BatchProcessor (processa lotes)
 │   ├── batch_result.py         # 🆕 BatchResult (resultado de lote)
 │   ├── correlation_service.py  # 🆕 CorrelationService (vinculação DANFE/Boleto)
+│   ├── document_pairing.py     # 🆕 Pareamento de documentos (NF vs Boleto)
 │   ├── diagnostics.py          # Sistema de análise de qualidade
 │   ├── interfaces.py           # Interfaces e contratos
 │   └── exceptions.py           # Exceções customizadas
@@ -24,7 +25,8 @@ scrapper/
 ├── extractors/                 # Extratores especializados
 │   ├── nfse_generic.py         # Extração de NFSe genéricas
 │   ├── boleto.py               # Extração de boletos bancários
-│   └── danfe.py                # Extração de DANFE
+│   ├── danfe.py                # Extração de DANFE
+│   └── utils.py                # 🆕 Utilitários compartilhados
 │
 ├── strategies/                 # Estratégias de extração de texto
 │   ├── native.py               # PDFPlumber (rápido, nativo)
@@ -32,7 +34,8 @@ scrapper/
 │   └── fallback.py             # Combinação automática (fallback chain)
 │
 ├── ingestors/                  # Conectores de entrada
-│   └── imap.py                 # Ingestão via e-mail IMAP
+│   ├── imap.py                 # Ingestão via e-mail IMAP
+│   └── utils.py                # 🆕 Utilitários de ingestão
 │
 └── config/                     # Configurações
     └── settings.py             # Variáveis de ambiente e paths

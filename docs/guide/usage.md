@@ -42,46 +42,62 @@ Você pode alterar o comportamento do extrator através de variáveis de ambient
 
 ## Execução
 
-### 1) Processar e-mails (ingestão)
+### 1) Ingestão via E-mail (Modo Padrão)
 
-Executa o pipeline completo (baixa anexos, classifica documento, extrai dados e gera CSVs/debug):
+Este é o modo principal de operação. O script conecta ao e-mail, baixa os anexos, cria lotes e processa-os com correlação.
 
 ```bash
+# Ingestão padrão com correlação
 python run_ingestion.py
 ```
 
-### 2) Inspecionar um PDF
-
-Mostra os campos extraídos diretamente no terminal:
+**Flags úteis:**
 
 ```bash
-python scripts/inspect_pdf.py "caminho/para/arquivo.pdf"
+# Reprocessar lotes que já estão em temp_email/
+python run_ingestion.py --reprocess
+
+# Processar apenas uma pasta de lote específica
+python run_ingestion.py --batch-folder temp_email/email_123
+
+# Desabilitar a correlação automática entre documentos
+python run_ingestion.py --no-correlation
+
+# Limpar lotes antigos após a execução
+python run_ingestion.py --cleanup
 ```
 
-O script busca automaticamente em `failed_cases_pdf/` e `temp_email/`, então você pode passar só o nome:
+### 2) Debug de PDF Individual
+
+Use `inspect_pdf.py` para analisar um único arquivo PDF e ver o que está sendo extraído. É a melhor ferramenta para começar a investigar um problema.
 
 ```bash
+# Busca automática pelo nome do arquivo
 python scripts/inspect_pdf.py exemplo.pdf
-```
 
-Para ver o texto bruto completo (útil para criar regex):
-
-```bash
+# Mostrar o texto bruto completo (para criar regex)
 python scripts/inspect_pdf.py exemplo.pdf --raw
+
+# Inspecionar apenas campos específicos
+python scripts/inspect_pdf.py danfe.pdf --fields fornecedor_nome valor_total
 ```
 
-Para ver apenas campos específicos:
+### 3) Debug de Lote de Processamento
+
+Use `debug_batch.py` para diagnosticar problemas de correlação ou de lógica dentro de um lote específico.
 
 ```bash
-python scripts/inspect_pdf.py exemplo.pdf --fields fornecedor valor vencimento
+# Analisar uma pasta de lote
+python scripts/debug_batch.py temp_email/email_com_problema_123
 ```
 
-### 3) Validar regras / gerar CSVs de debug
+### 4) Validação em Massa
 
-Executa a validação e escreve outputs em `data/debug_output/`:
+O script `validate_extraction_rules.py` processa todos os PDFs de teste e gera CSVs de sucesso e falha, o que é ótimo para verificar regressões após uma mudança.
 
 ```bash
-python scripts/validate_extraction_rules.py
+# Validar em modo lote (recomendado)
+python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 ```
 
 ### Saídas

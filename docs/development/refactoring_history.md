@@ -129,7 +129,7 @@ Refatoração do pipeline de ingestão para processar documentos em **lotes por 
 **Solução:**
 
 - Removido do pipeline principal em `processor.py`
-- Módulo mantido em `core/nf_candidate.py` marcado como `@deprecated` para scripts de debug
+- O módulo `core/nf_candidate.py` foi removido por não ser mais necessário.
 
 **Resultado:** Pipeline mais limpo, correlação agora é responsabilidade do `CorrelationService`.
 

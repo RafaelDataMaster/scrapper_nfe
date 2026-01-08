@@ -150,6 +150,28 @@ batch_folders = service.ingest_emails(subject_filter="Nota Fiscal")
 removed = service.cleanup_old_batches(max_age_hours=48)
 ```
 
+### 6. `core/document_pairing.py` - DocumentPairingService
+
+Serviço para parear múltiplos documentos NF↔Boleto dentro de um mesmo lote.
+
+**Problema Resolvido:** E-mails com múltiplas notas (ex: 2 NFs + 2 Boletos) eram processados como uma única transação, causando divergência de valores.
+
+**Solução:**
+
+- Identifica e agrupa documentos duplicados (ex: XML e PDF da mesma nota).
+- Pareia NFs e Boletos pelo número da nota normalizado ou, como fallback, pelo valor.
+- Gera um "par" para cada transação, que é então usado para criar uma linha separada no relatório final.
+
+```python
+from core.document_pairing import pair_batch_documents
+
+# Retorna uma lista de pares (um para cada NF+Boleto)
+pairs = pair_batch_documents(batch_result)
+
+for pair in pairs:
+    print(f"Par: {pair.numero_nota}, Status: {pair.status}")
+```
+
 ---
 
 ## Campos Novos nos Models
@@ -285,7 +307,7 @@ A lógica de `NF_CANDIDATE` foi removida do pipeline principal porque:
 2. **Correlação:** O `CorrelationService` herda o número entre documentos do mesmo lote
 3. **Extratores:** Os extratores específicos já extraem o número da NF
 
-O módulo `core/nf_candidate.py` foi mantido apenas para scripts de debug.
+O módulo `core/nf_candidate.py` foi removido.
 
 ---
 
