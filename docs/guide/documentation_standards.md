@@ -1,6 +1,6 @@
 # Padrões de Documentação e Código
 
-Para manter a qualidade e a consistência do projeto `scrapper_nfe`, adotamos os seguintes padrões. Todos os Pull Requests devem seguir estas diretrizes.
+Para manter a qualidade e a consistência do projeto, adotamos os seguintes padrões. Todos os Pull Requests devem seguir estas diretrizes.
 
 ## 1. Docstrings (Python)
 

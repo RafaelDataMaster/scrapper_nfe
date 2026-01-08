@@ -15,6 +15,9 @@ scrapper/
 │   ├── batch_result.py         # 🆕 BatchResult (resultado de lote)
 │   ├── correlation_service.py  # 🆕 CorrelationService (vinculação DANFE/Boleto)
 │   ├── document_pairing.py     # 🆕 Pareamento de documentos (NF vs Boleto)
+│   ├── empresa_matcher.py      # 🆕 Detecção de empresa (CNPJ/nome/domínio)
+│   ├── empresa_matcher_email.py # 🆕 Detecção de empresa via e-mail
+│   ├── exporters.py            # 🆕 Exportação para CSV/Excel
 │   ├── diagnostics.py          # Sistema de análise de qualidade
 │   ├── interfaces.py           # Interfaces e contratos
 │   └── exceptions.py           # Exceções customizadas
@@ -26,6 +29,12 @@ scrapper/
 │   ├── nfse_generic.py         # Extração de NFSe genéricas
 │   ├── boleto.py               # Extração de boletos bancários
 │   ├── danfe.py                # Extração de DANFE
+│   ├── xml_extractor.py        # 🆕 Extração de XML (NF-e/NFS-e)
+│   ├── outros.py               # 🆕 Outros documentos (faturas, locações)
+│   ├── emc_fatura.py           # Faturas EMC Tecnologia
+│   ├── net_center.py           # Boletos Net Center Unaí
+│   ├── sicoob.py               # Boletos SICOOB
+│   ├── nfse_custom_*.py        # NFSe customizadas por município
 │   └── utils.py                # 🆕 Utilitários compartilhados
 │
 ├── strategies/                 # Estratégias de extração de texto
@@ -75,11 +84,18 @@ scrapper/
 
 **Implementações especializadas para diferentes tipos de documentos:**
 
-| Módulo                 | Descrição                                   |
-| :--------------------- | :------------------------------------------ |
-| `NfseGenericExtractor` | Fallback baseado em regex para NFSe         |
-| `BoletoExtractor`      | Extrator especializado em boletos bancários |
-| `DanfeExtractor`       | Extrator para DANFE (NF-e)                  |
+| Módulo                          | Descrição                                          |
+| :------------------------------ | :------------------------------------------------- |
+| `NfseGenericExtractor`          | Fallback baseado em regex para NFSe                |
+| `BoletoExtractor`               | Extrator especializado em boletos bancários        |
+| `DanfeExtractor`                | Extrator para DANFE (NF-e)                         |
+| `XmlExtractor`                  | Extração de XML de NF-e e NFS-e (alta precisão)    |
+| `OutrosExtractor`               | Documentos auxiliares (faturas, locações)          |
+| `EmcFaturaExtractor`            | Faturas EMC Tecnologia (layout específico)         |
+| `NetCenterExtractor`            | Boletos Net Center Unaí (correção de nome)         |
+| `SicoobExtractor`               | Boletos SICOOB/BANCOOB (código 756)                |
+| `NfseCustomVilaVelhaExtractor`  | NFS-e Vila Velha - ES (layout específico)          |
+| `NfseCustomMontesClarosExtractor` | NFS-e Montes Claros - MG (número longo)          |
 
 ### Strategies (`strategies/`)
 

@@ -65,6 +65,9 @@ python run_ingestion.py --no-correlation
 
 # Limpar lotes antigos após a execução
 python run_ingestion.py --cleanup
+
+# Filtrar e-mails por assunto (default: "ENC")
+python run_ingestion.py --subject "Nota Fiscal"
 ```
 
 ### 2) Debug de PDF Individual

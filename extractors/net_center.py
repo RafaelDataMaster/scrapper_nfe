@@ -1,3 +1,27 @@
+"""
+Extrator especializado para boletos da Net Center Unaí.
+
+Este módulo foi criado para tratar boletos do provedor de internet
+Net Center Unaí (CNPJ 05.382.200/0001-70), que possuem layout específico
+onde o extrator genérico de boleto captura incorretamente o campo
+"CPF/CNPJ" como nome do fornecedor.
+
+Corrigidos:
+    - fornecedor_nome: Fixado como "NET CENTER UNAI PROVEDOR DE INTERNET LTDA"
+    - cnpj_beneficiario: Garantido mesmo quando OCR falha
+    - valor_documento: Padrão "Valor total a pagar" específico do layout
+
+Critérios de ativação:
+    - CNPJ 05.382.200/0001-70 presente no documento
+    - Nome "Net Center" ou "Unaí" no texto
+    - Indicadores de boleto (linha digitável, beneficiário, etc.)
+
+Example:
+    >>> from extractors.net_center import NetCenterExtractor
+    >>> if NetCenterExtractor.can_handle(texto):
+    ...     dados = NetCenterExtractor().extract(texto)
+    ...     print(dados['fornecedor_nome'])  # NET CENTER UNAI PROVEDOR...
+"""
 import re
 from typing import Any, Dict, Optional
 

@@ -1,3 +1,26 @@
+"""
+Estratégia de extração nativa para PDFs vetoriais.
+
+Este módulo implementa a leitura direta da camada de texto de PDFs,
+utilizando a biblioteca pdfplumber. É a estratégia preferencial por ser
+mais rápida e precisa que o OCR.
+
+Características:
+    - Extração rápida: ~90% dos PDFs são resolvidos aqui
+    - Layout preservado: Mantém estrutura tabular quando necessário
+    - Fallback automático: Retorna string vazia para acionar próxima estratégia
+
+Modos de operação:
+    1. Extração simples (rápida): Texto linear, suficiente para maioria
+    2. Layout preservado (lenta): Mantém posicionamento, útil para tabelas
+
+Example:
+    >>> from strategies.native import NativePdfStrategy
+    >>> strategy = NativePdfStrategy()
+    >>> texto = strategy.extract("documento.pdf")
+    >>> if texto:
+    ...     print("PDF vetorial extraído com sucesso")
+"""
 import pdfplumber
 from core.interfaces import TextExtractionStrategy
 

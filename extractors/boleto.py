@@ -1,3 +1,32 @@
+"""
+Extrator de Boletos Bancários.
+
+Este módulo implementa a identificação e extração de dados de boletos
+bancários em formato PDF, seguindo os padrões da FEBRABAN.
+
+Campos extraídos:
+    - linha_digitavel: Código de barras numérico (47 dígitos)
+    - cnpj_beneficiario: CNPJ de quem recebe o pagamento
+    - fornecedor_nome: Razão social do beneficiário
+    - valor_documento: Valor do boleto
+    - vencimento: Data de vencimento
+    - numero_documento: Número do documento/fatura
+    - nosso_numero: Identificação do boleto no banco
+    - banco_nome: Nome do banco emissor
+    - referencia_nfse: Número da NF-e relacionada (quando presente)
+
+Critérios de classificação:
+    - Presença de linha digitável ou código de barras
+    - Palavras-chave: Beneficiário, Vencimento, Valor do Documento
+    - Ausência de indicadores de NFS-e ou DANFE
+
+Example:
+    >>> from extractors.boleto import BoletoExtractor
+    >>> extractor = BoletoExtractor()
+    >>> if extractor.can_handle(texto):
+    ...     dados = extractor.extract(texto)
+    ...     print(f"Valor: R$ {dados['valor_documento']:.2f}")
+"""
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -150,7 +179,18 @@ class BoletoExtractor(BaseExtractor):
         return data
 
     def _extract_cnpj_pagador(self, text: str) -> Optional[str]:
-        """Extrai CNPJ do pagador (quando houver) a partir de seções comuns."""
+        """Extrai CNPJ do pagador (empresa que paga o boleto).
+        
+        Busca em seções comuns:
+        1. Próximo a "Dados do Pagador" (1-8 linhas seguintes)
+        2. Linha com "CPF/CNPJ" ou "CNPJ" junto do nome
+        
+        Args:
+            text: Texto extraído do boleto.
+            
+        Returns:
+            CNPJ formatado (XX.XXX.XXX/XXXX-XX) ou None.
+        """
         if not text:
             return None
 
@@ -174,9 +214,31 @@ class BoletoExtractor(BaseExtractor):
         return None
 
     def _normalize_entity_name(self, raw: str) -> str:
+        """Normaliza nome de entidade (fornecedor/pagador).
+        
+        Remove espaços extras, caracteres especiais e padroniza.
+        Delega para função utilitária em extractors.utils.
+        
+        Args:
+            raw: Nome bruto extraído do documento.
+            
+        Returns:
+            Nome normalizado.
+        """
         return normalize_entity_name(raw)
 
     def _looks_like_header_or_label(self, s: str) -> bool:
+        """Verifica se string parece ser um cabeçalho/label e não um nome.
+        
+        Usado para filtrar falsos positivos na extração de fornecedor_nome,
+        evitando capturar rótulos como "VENCIMENTO" ou "NOSSO NÚMERO".
+        
+        Args:
+            s: String a verificar.
+            
+        Returns:
+            True se parece ser um cabeçalho/label.
+        """
         if not s:
             return True
         s_up = s.upper()
@@ -201,6 +263,17 @@ class BoletoExtractor(BaseExtractor):
         return any(t in s_up for t in bad_tokens)
 
     def _looks_like_currency_or_amount_line(self, s: str) -> bool:
+        """Verifica se a linha parece conter valores monetários.
+        
+        Usado para filtrar linhas que não devem ser capturadas como
+        nome de fornecedor (ex: linhas com R$ ou data+valor).
+        
+        Args:
+            s: Linha a verificar.
+            
+        Returns:
+            True se parece ser uma linha de valor monetário.
+        """
         if not s:
             return False
         s_up = s.upper()
@@ -215,6 +288,17 @@ class BoletoExtractor(BaseExtractor):
         return False
 
     def _looks_like_linha_digitavel_line(self, s: str) -> bool:
+        """Verifica se a linha parece ser uma linha digitável.
+        
+        Usado para filtrar linhas que não devem ser capturadas como
+        nome de fornecedor (linhas majoritáriamente numéricas).
+        
+        Args:
+            s: Linha a verificar.
+            
+        Returns:
+            True se parece ser linha digitável ou código de barras.
+        """
         if not s:
             return False
         # padrão comum de linha digitável: 5+5 5+6 5+6
@@ -227,7 +311,18 @@ class BoletoExtractor(BaseExtractor):
         return False
 
     def _extract_name_before_cnpj_in_line(self, line: str, cnpj: str) -> Optional[str]:
-        """Extrai um nome plausível imediatamente antes de um CNPJ em uma mesma linha."""
+        """Extrai nome de entidade que aparece antes do CNPJ na mesma linha.
+        
+        Padrão comum em boletos: "EMPRESA LTDA - CNPJ 12.345.678/0001-90"
+        Remove labels/cabeçalhos que poluem o prefixo.
+        
+        Args:
+            line: Linha completa do texto.
+            cnpj: CNPJ formatado a localizar na linha.
+            
+        Returns:
+            Nome normalizado ou None se não encontrado.
+        """
         if not line or not cnpj:
             return None
         idx = line.find(cnpj)

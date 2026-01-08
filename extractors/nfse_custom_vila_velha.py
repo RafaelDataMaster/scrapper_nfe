@@ -1,3 +1,28 @@
+"""
+Extrator específico para NFS-e da Prefeitura de Vila Velha - ES.
+
+Este módulo trata notas fiscais de serviço eletrônicas emitidas pela
+prefeitura de Vila Velha, que possuem layout diferenciado onde:
+
+- O número da nota aparece após duas timestamps consecutivas
+- O valor dos serviços pode ser confundido com valor da Lei 12.741/2012
+- Data de competência e emissão podem estar em formatos distintos
+
+Campos extraídos:
+    - numero_nota: Número da NFS-e
+    - valor_total: Valor dos serviços (não confundir com tributos)
+    - vencimento: Data de vencimento ou emissão como fallback
+    - data_emissao: Data de emissão da nota
+
+Critérios de ativação:
+    - Texto contém "VILA VELHA" e "PREFEITURA"
+
+Example:
+    >>> from extractors.nfse_custom_vila_velha import NfseCustomVilaVelhaExtractor
+    >>> extractor = NfseCustomVilaVelhaExtractor()
+    >>> dados = extractor.extract(texto)
+    >>> print(f"Nota {dados['numero_nota']}: R$ {dados['valor_total']:.2f}")
+"""
 import re
 from typing import Any, Dict
 

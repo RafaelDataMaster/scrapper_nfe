@@ -480,3 +480,89 @@ Extrator específico para NFS-e da prefeitura de **Montes Claros - MG**.
     options:
       show_root_heading: true
       show_source: false
+
+### OutrosExtractor
+
+Extrator para documentos recorrentes que **não são** NFSe, Boleto ou DANFE.
+
+- **Problema Resolvido**: Evita que o `NfseGenericExtractor` classifique incorretamente documentos como faturas de locação ou demonstrativos.
+- **Lógica de Identificação**: Ativado pela presença de palavras-chave como "FATURA DE LOCAÇÃO", "DEMONSTRATIVO", "LOCAÇÃO DE EQUIPAMENTOS".
+- **Subtipos Suportados**:
+  - `LOCACAO`: Demonstrativos e contratos de locação de equipamentos
+  - `FATURA`: Faturas de serviços recorrentes (ex: Locaweb, provedores)
+- **Campos Extraídos**: `fornecedor_nome`, `cnpj_fornecedor`, `valor_total`, `vencimento`, `data_emissao`
+
+::: extractors.outros.OutrosExtractor
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
+## XmlExtractor
+
+Extrator especializado para arquivos **XML** de NF-e e NFS-e.
+
+### Características
+
+- **Tipo de arquivo**: XML (não PDF)
+- **Confiabilidade**: Muito superior ao PDF (dados estruturados)
+- **Formatos suportados**:
+  - NF-e (Nota Fiscal Eletrônica de Produto) - Modelo 55
+  - NFS-e (Nota Fiscal de Serviço Eletrônica) - Padrão ABRASF e variantes municipais
+
+### Estrutura XML NF-e
+
+```xml
+<nfeProc>
+    <NFe>
+        <infNFe>
+            <ide>...</ide>      <!-- Identificação (número, série, data) -->
+            <emit>...</emit>    <!-- Emitente (CNPJ, razão social) -->
+            <dest>...</dest>    <!-- Destinatário -->
+            <total>...</total>  <!-- Valores totais -->
+            <cobr>...</cobr>    <!-- Cobrança (duplicatas, vencimento) -->
+        </infNFe>
+    </NFe>
+</nfeProc>
+```
+
+### Estrutura XML NFS-e (ABRASF)
+
+```xml
+<CompNfse>
+    <Nfse>
+        <InfNfse>
+            <Numero>...</Numero>
+            <PrestadorServico>...</PrestadorServico>
+            <TomadorServico>...</TomadorServico>
+            <Servico>...</Servico>
+        </InfNfse>
+    </Nfse>
+</CompNfse>
+```
+
+### Quando Usar
+
+✅ **Ideal para:**
+
+- Arquivos XML anexados junto com PDFs
+- Extração de dados fiscais com 100% de precisão
+- Validação cruzada com dados extraídos de PDF
+
+### XmlExtractionResult
+
+Resultado da extração retornado pelo `XmlExtractor`:
+
+| Campo      | Tipo                    | Descrição                              |
+| :--------- | :---------------------- | :------------------------------------- |
+| `success`  | `bool`                  | Se a extração foi bem-sucedida         |
+| `document` | `Optional[DocumentData]`| Documento extraído (InvoiceData/DanfeData) |
+| `doc_type` | `str`                   | Tipo: `NFE` ou `NFSE`                  |
+| `error`    | `Optional[str]`         | Mensagem de erro, se houver            |
+| `raw_data` | `Optional[Dict]`        | Dados brutos do XML parseado           |
+
+::: extractors.xml_extractor.XmlExtractor
+    options:
+      show_root_heading: true
+      show_source: false

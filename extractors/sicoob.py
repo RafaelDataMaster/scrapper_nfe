@@ -1,3 +1,25 @@
+"""
+Extrator otimizado para boletos SICOOB/BANCOOB (banco 756).
+
+Este módulo trata boletos emitidos pelo sistema cooperativo SICOOB,
+aplicando correções pontuais na identificação do beneficiário/fornecedor
+que o extrator genérico de boleto não consegue tratar corretamente.
+
+Problemas corrigidos:
+    - fornecedor_nome: Captura incorreta de labels como "CPF/CNPJ"
+    - banco_nome: Forçado como "SICOOB" quando OCR falha
+    - Caso específico: Beneficiário "Camargo e Silva"
+
+Critérios de ativação:
+    - Texto contém "SICOOB", "BANCOOB" ou código 756
+    - Indicadores de boleto presentes (linha digitável, etc.)
+
+Example:
+    >>> from extractors.sicoob import SicoobExtractor
+    >>> if SicoobExtractor.can_handle(texto):
+    ...     dados = SicoobExtractor().extract(texto)
+    ...     print(f"Banco: {dados['banco_nome']}")  # SICOOB
+"""
 import re
 from typing import Any, Dict
 

@@ -1,3 +1,30 @@
+"""
+Estratégia de extração via OCR (Reconhecimento Óptico de Caracteres).
+
+Este módulo implementa a última camada de fallback para PDFs que não
+possuem camada de texto (documentos escaneados, imagens).
+
+Dependências:
+    - Tesseract OCR: Engine de reconhecimento de texto
+    - Poppler: Biblioteca para conversão PDF→imagem
+    - pdf2image: Wrapper Python para Poppler
+
+Configuração (via config/settings.py):
+    - TESSERACT_CMD: Caminho do executável Tesseract
+    - POPPLER_PATH: Caminho da pasta bin do Poppler
+    - OCR_LANG: Idioma do OCR (padrão: "por" para português)
+    - OCR_CONFIG: Parâmetros adicionais do Tesseract
+
+Limitações:
+    - Processo lento (rasterização + OCR)
+    - Qualidade depende da resolução do documento original
+    - Pode falhar em documentos muito degradados
+
+Example:
+    >>> from strategies.ocr import TesseractOcrStrategy
+    >>> strategy = TesseractOcrStrategy()
+    >>> texto = strategy.extract("documento_escaneado.pdf")
+"""
 import logging
 import pytesseract
 from pdf2image import convert_from_path

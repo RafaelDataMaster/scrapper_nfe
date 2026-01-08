@@ -1,3 +1,34 @@
+"""
+Estratégia de extração para PDFs com estrutura tabular.
+
+Este módulo detecta e extrai tabelas de PDFs, convertendo para formato
+texto estruturado "chave: valor" que facilita a extração por regex.
+
+Motivação:
+    Boletos e notas fiscais frequentemente têm layouts onde rótulos
+    (cabeçalhos) estão em uma linha e valores em linhas separadas.
+    A extração nativa não preserva essa relação, dificultando o parse.
+
+Formato de saída:
+    ```
+    === DADOS ESTRUTURADOS ===
+    Beneficiário: EMPRESA LTDA
+    CNPJ: 12.345.678/0001-90
+    Valor: 1.234,56
+    ```
+
+Quando usar:
+    - PDFs com tabelas visíveis (bordas)
+    - Documentos onde a extração nativa retorna valores desalinhados
+    - Boletos com campos em formato tabular
+
+Example:
+    >>> from strategies.table import TablePdfStrategy
+    >>> strategy = TablePdfStrategy()
+    >>> texto = strategy.extract("boleto.pdf")
+    >>> if "=== DADOS ESTRUTURADOS ===" in texto:
+    ...     print("Tabelas detectadas e convertidas")
+"""
 import pdfplumber
 from core.interfaces import TextExtractionStrategy
 

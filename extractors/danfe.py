@@ -1,3 +1,32 @@
+"""
+Extrator de DANFE (Documento Auxiliar da Nota Fiscal Eletrônica).
+
+Este módulo implementa a extração de dados de DANFEs em formato PDF,
+seguindo o layout padrão estabelecido pela SEFAZ.
+
+Campos extraídos:
+    - chave_acesso: Chave de 44 dígitos da NF-e
+    - numero_nota: Número da nota fiscal
+    - serie: Série da nota fiscal
+    - data_emissao: Data de emissão
+    - valor_total: Valor total da nota (produtos + serviços)
+    - cnpj_emitente: CNPJ do emitente
+    - fornecedor_nome: Razão social do emitente
+    - cnpj_destinatario: CNPJ do destinatário
+    - duplicatas: Lista de parcelas (número, vencimento, valor)
+
+Características do layout DANFE:
+    - Chave de acesso em formato de código de barras 2D ou numérico
+    - Dados do emitente no cabeçalho
+    - Dados do destinatário em seção específica
+    - Duplicatas/faturas quando há parcelamento
+
+Example:
+    >>> from extractors.danfe import DanfeExtractor
+    >>> extractor = DanfeExtractor()
+    >>> dados = extractor.extract(texto_pdf)
+    >>> print(f"NF-e: {dados['numero_nota']} - R$ {dados['valor_total']:.2f}")
+"""
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,6 +41,20 @@ from extractors.utils import (
 
 
 def _extract_danfe_valor_total(text: str) -> float:
+    """Extrai o valor total da nota fiscal do DANFE.
+    
+    Busca por rótulos como "VALOR TOTAL DA NOTA" e extrai o valor
+    monetário mais significativo no segmento.
+    
+    Em DANFEs com layout tabular, os valores podem aparecer em sequência
+    (0,00 0,00 ... 4.800,00), então usa heurística do maior valor.
+    
+    Args:
+        text: Texto extraído do DANFE.
+        
+    Returns:
+        Valor total em float ou 0.0 se não encontrado.
+    """
     if not text:
         return 0.0
 
@@ -53,7 +96,18 @@ def _extract_danfe_valor_total(text: str) -> float:
 
 
 def _extract_chave_acesso(text: str) -> Optional[str]:
-    """Extrai a chave de acesso de 44 dígitos do DANFE."""
+    """Extrai a chave de acesso de 44 dígitos do DANFE.
+    
+    A chave pode aparecer em vários formatos:
+    - 44 dígitos consecutivos: 31250114169885000595550010000308381189120506
+    - Espaçado em grupos de 4: 3125 0114 1698 8500 ...
+    
+    Args:
+        text: Texto extraído do DANFE.
+        
+    Returns:
+        Chave de acesso (44 dígitos) ou None se não encontrada.
+    """
     if not text:
         return None
 
@@ -77,7 +131,19 @@ def _extract_chave_acesso(text: str) -> Optional[str]:
 
 
 def _extract_data_emissao(text: str) -> Optional[str]:
-    """Extrai a data de emissão do DANFE com padrões mais robustos."""
+    """Extrai a data de emissão do DANFE.
+    
+    Usa múltiplos padrões para cobrir diferentes layouts:
+    - "DATA DA EMISSÃO" seguido de data
+    - "Emissão:" seguido de data
+    - CNPJ seguido de data (layout tabular)
+    
+    Args:
+        text: Texto extraído do DANFE.
+        
+    Returns:
+        Data no formato ISO (YYYY-MM-DD) ou None.
+    """
     if not text:
         return None
 
@@ -136,10 +202,17 @@ def _extract_data_emissao(text: str) -> Optional[str]:
 
 
 def _extract_duplicatas(text: str) -> List[Tuple[str, str, float]]:
-    """
-    Extrai faturas/duplicatas do DANFE.
-    Retorna lista de tuplas: (numero_parcela, vencimento, valor)
-    Ex: [("1/3", "2023-04-23", 2859.34), ("2/3", "2023-05-23", 2679.33)]
+    """Extrai faturas/duplicatas do DANFE.
+    
+    Duplicatas são parcelas de pagamento com número, vencimento e valor.
+    Padrão típico: "1/3 23/04/23 2.859,34"
+    
+    Args:
+        text: Texto extraído do DANFE.
+        
+    Returns:
+        Lista de tuplas (numero_parcela, vencimento_iso, valor).
+        Ex: [("1/3", "2023-04-23", 2859.34), ("2/3", "2023-05-23", 2679.33)]
     """
     duplicatas = []
     if not text:
@@ -167,7 +240,17 @@ def _extract_duplicatas(text: str) -> List[Tuple[str, str, float]]:
 
 
 def _extract_primeiro_vencimento(text: str) -> Optional[str]:
-    """Extrai o primeiro vencimento das duplicatas/faturas."""
+    """Extrai o vencimento da primeira parcela das duplicatas.
+    
+    Ordena as duplicatas por número da parcela e retorna o vencimento
+    da primeira (ex: "1/3" vem antes de "2/3").
+    
+    Args:
+        text: Texto extraído do DANFE.
+        
+    Returns:
+        Data de vencimento no formato ISO ou None.
+    """
     duplicatas = _extract_duplicatas(text)
     if duplicatas:
         # Ordena por número da parcela para garantir pegar a primeira

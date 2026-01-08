@@ -1,3 +1,32 @@
+"""
+Extrator para documentos recorrentes que não são NFSe/Boleto/DANFE.
+
+Este módulo trata documentos auxiliares como:
+    - Demonstrativos de locação
+    - Faturas de serviços (ex: Locaweb, provedores)
+    - Contratos de locação de equipamentos
+
+Motivação:
+    Evitar que o NfseGenericExtractor classifique incorretamente estes
+    documentos como notas fiscais, extraindo ao menos fornecedor, valor
+    e datas quando possível.
+
+Campos extraídos:
+    - tipo_documento: Sempre "OUTRO"
+    - subtipo: "LOCACAO" ou "FATURA"
+    - fornecedor_nome: Nome do fornecedor
+    - cnpj_fornecedor: CNPJ quando presente
+    - valor_total: Valor total a pagar
+    - vencimento: Data de vencimento
+    - data_emissao: Data de emissão
+
+Example:
+    >>> from extractors.outros import OutrosExtractor
+    >>> extractor = OutrosExtractor()
+    >>> if extractor.can_handle(texto):
+    ...     dados = extractor.extract(texto)
+    ...     print(f"Tipo: {dados['subtipo']} - R$ {dados['valor_total']:.2f}")
+"""
 import re
 from typing import Any, Dict, Optional
 
