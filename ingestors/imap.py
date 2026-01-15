@@ -176,6 +176,59 @@ class ImapIngestor(EmailIngestorStrategy):
 
         return {"name": sender_name, "address": sender_address}
 
+    def _extract_date_with_fallback(self, msg: email.message.Message) -> str:
+        """
+        Extrai a data do e-mail com fallback para outros cabeçalhos.
+
+        Alguns e-mails (ex: CEMIG) podem não ter o cabeçalho "Date" padrão.
+        Esta função tenta múltiplas fontes:
+        1. Cabeçalho "Date" (padrão RFC 2822)
+        2. Cabeçalho "Received" (parsing da última entrada)
+        3. Data/hora atual como último recurso
+
+        Args:
+            msg: Objeto Message do email
+
+        Returns:
+            String com a data do e-mail em formato RFC 2822 ou ISO
+        """
+        # 1. Tenta cabeçalho Date (padrão)
+        date_str = msg.get("Date", "")
+        if date_str and date_str.strip():
+            return date_str.strip()
+
+        # 2. Tenta extrair do cabeçalho Received (contém timestamps do servidor)
+        received_headers = msg.get_all("Received", [])
+        if received_headers:
+            # O último Received é geralmente o mais recente/relevante
+            for received in received_headers:
+                # Formato típico: "from xxx ... ; Wed, 24 Dec 2025 10:30:00 -0300"
+                if ";" in received:
+                    try:
+                        # Pega a parte após o último ;
+                        date_part = received.rsplit(";", 1)[-1].strip()
+                        if date_part:
+                            # Valida que parece uma data (contém números e letras de mês)
+                            from email.utils import parsedate_to_datetime
+                            try:
+                                parsedate_to_datetime(date_part)
+                                logger.debug(f"Data extraída do Received header: {date_part}")
+                                return date_part
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+
+        # 3. Último recurso: usa a data/hora atual
+        from datetime import datetime
+        current_date = datetime.now().strftime("%a, %d %b %Y %H:%M:%S %z")
+        if not current_date.endswith("+0000") and not current_date.endswith("-0"):
+            # Adiciona timezone se não estiver presente
+            current_date = datetime.now().strftime("%a, %d %b %Y %H:%M:%S -0300")
+        
+        logger.warning(f"Data do e-mail não encontrada, usando data atual: {current_date}")
+        return current_date
+
     def fetch_attachments(self, subject_filter: str = "") -> List[Dict[str, Any]]:
         """
         Busca e-mails pelo assunto e extrai anexos PDF e XML.
@@ -233,7 +286,7 @@ class ImapIngestor(EmailIngestorStrategy):
                 subject = self._decode_text(msg["Subject"])
                 sender_info = self._extract_sender_info(msg)
                 body_text = self._extract_email_body(msg)
-                received_date = msg.get("Date", "")
+                received_date = self._extract_date_with_fallback(msg)
 
                 # Navegar pela árvore MIME para achar anexos
                 for part in msg.walk():
@@ -394,7 +447,7 @@ class ImapIngestor(EmailIngestorStrategy):
                 subject = self._decode_text(msg["Subject"])
                 sender_info = self._extract_sender_info(msg)
                 body_text = self._extract_email_body(msg)
-                received_date = msg.get("Date", "")
+                received_date = self._extract_date_with_fallback(msg)
 
                 results.append({
                     'email_id': email_id,

@@ -139,3 +139,11 @@ root_logger.addHandler(console_handler)
 
 # Logger específico do scrapper (para uso direto quando importado)
 logger = logging.getLogger('scrapper')
+
+# --- Configurações de Timeout ---
+# Timeout total para processamento de um lote (pasta)
+BATCH_TIMEOUT_SECONDS = int(os.getenv('BATCH_TIMEOUT_SECONDS', '300')) # 5 min
+
+# Timeout individual por arquivo (importante para OCRs lentos)
+# Se um arquivo travar, ele é pulado e o lote continua
+FILE_TIMEOUT_SECONDS = int(os.getenv('FILE_TIMEOUT_SECONDS', '90')) # 1.5 min

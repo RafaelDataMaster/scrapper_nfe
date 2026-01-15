@@ -1,3 +1,4 @@
+import concurrent.futures  # Adicionado para timeout granular
 import os
 import re
 from abc import ABC, abstractmethod
@@ -55,11 +56,18 @@ class BaseInvoiceProcessor(ABC):
 
     def _get_extractor(self, text: str):
         """Factory Method: Escolhe o extrator certo para o texto."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Router] Ordem dos extratores: {[cls.__name__ for cls in EXTRACTOR_REGISTRY]}")
         for extractor_cls in EXTRACTOR_REGISTRY:
-            if extractor_cls.can_handle(text):
-                # útil para debug/auditoria (não altera a lógica)
+            logger.info(f"[Router] Testando extrator: {extractor_cls.__name__}")
+            result = extractor_cls.can_handle(text)
+            logger.info(f"[Router] Resultado do can_handle de {extractor_cls.__name__}: {result}")
+            if result:
                 self.last_extractor = extractor_cls.__name__
+                logger.info(f"[Router] Selecionado: {extractor_cls.__name__}")
                 return extractor_cls()
+        logger.warning("[Router] Nenhum extrator compatível encontrado para este documento.")
         raise ValueError("Nenhum extrator compatível encontrado para este documento.")
 
     def process(self, file_path: str) -> DocumentData:
@@ -72,8 +80,20 @@ class BaseInvoiceProcessor(ABC):
         Returns:
             DocumentData: Objeto contendo os dados extraídos (InvoiceData, BoletoData, etc.).
         """
-        # 1. Leitura
-        raw_text = self.reader.extract(file_path)
+        # 1. Leitura com timeout granular (OCR pode travar)
+        def extract_text_with_reader(reader, file_path):
+            return reader.extract(file_path)
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(extract_text_with_reader, self.reader, file_path)
+                raw_text = future.result(timeout=300)  # Timeout de 5 minutos para OCR/leitura
+        except concurrent.futures.TimeoutError:
+            print(f"Timeout atingido na extração de texto (OCR) para {file_path}")
+            return InvoiceData(
+                arquivo_origem=os.path.basename(file_path),
+                texto_bruto="Timeout na extração de texto (OCR)"
+            )
 
         if not raw_text or "Falha" in raw_text:
             # Retorna objeto vazio de NFSe por padrão
@@ -82,10 +102,15 @@ class BaseInvoiceProcessor(ABC):
                 texto_bruto="Falha na leitura"
             )
 
-        # 2. Seleção do Extrator
+        # 2. Seleção do Extrator e extração com timeout granular
+        def extract_with_extractor(extractor, text):
+            return extractor.extract(text)
+
         try:
             extractor = self._get_extractor(raw_text)
-            extracted_data = extractor.extract(raw_text)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(extract_with_extractor, extractor, raw_text)
+                extracted_data = future.result(timeout=300)  # Timeout de 5 minutos para extração
 
             # Dados comuns PAF (aplicados a todos os documentos)
             now_iso = datetime.now().strftime('%Y-%m-%d')
@@ -106,7 +131,7 @@ class BaseInvoiceProcessor(ABC):
             # Se existir um CNPJ do nosso cadastro no documento, ele define a coluna EMPRESA.
             # Qualquer outro CNPJ no documento tende a ser fornecedor/terceiro.
             empresa_match = find_empresa_no_texto(raw_text or "")
-            
+
             if empresa_match:
                 # Padroniza para um identificador curto (ex: CSC, MASTER, OP11, RBC)
                 common_data['empresa'] = empresa_match.codigo
@@ -229,6 +254,12 @@ class BaseInvoiceProcessor(ABC):
                     base_calculo_icms=extracted_data.get('base_calculo_icms'),
                 )
 
+        except concurrent.futures.TimeoutError:
+            print(f"Timeout atingido na extração dos dados para {file_path}")
+            return InvoiceData(
+                arquivo_origem=os.path.basename(file_path),
+                texto_bruto=' '.join(raw_text.split())[:500] + " [Timeout na extração dos dados]"
+            )
         except ValueError as e:
             print(f"Erro ao processar {file_path}: {e}")
             return InvoiceData(

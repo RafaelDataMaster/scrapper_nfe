@@ -131,8 +131,14 @@ class BoletoRepromaqExtractor(BaseExtractor):
         Returns:
             True se é um boleto REPROMAQ/Bradesco.
         """
+        import logging
+        logger = logging.getLogger(__name__)
         if not text:
+            logger.info("[BoletoRepromaqExtractor] can_handle chamado com texto vazio.")
             return False
+
+        trecho = (text or "")[:200].replace('\n', ' ')
+        logger.info(f"[BoletoRepromaqExtractor] can_handle chamado. Trecho: '{trecho}'")
 
         text_compact = _compact(text)
 
@@ -140,9 +146,14 @@ class BoletoRepromaqExtractor(BaseExtractor):
         has_repromaq = "REPROMAQ" in text_compact or "REPROMAO" in text_compact
         has_bradesco = "BRADESCO" in text_compact
 
-        return has_repromaq and has_bradesco
+        result = has_repromaq and has_bradesco
+        logger.info(f"[BoletoRepromaqExtractor] Resultado do can_handle: {result} (has_repromaq={has_repromaq}, has_bradesco={has_bradesco})")
+        return result
 
     def extract(self, text: str) -> Dict[str, Any]:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[BoletoRepromaqExtractor] extract chamado para documento. Trecho: '{(text or '')[:200]}'")
         """
         Extrai dados estruturados do boleto REPROMAQ/Bradesco.
 
@@ -408,7 +419,7 @@ class BoletoRepromaqExtractor(BaseExtractor):
                 parsed = parse_date_br(m.group(1))
                 if parsed:
                     all_dates.append(parsed)
-        
+
         if all_dates:
             return min(all_dates)  # Menor data = emissão
 

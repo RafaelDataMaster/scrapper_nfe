@@ -610,8 +610,8 @@ class BatchProcessor:
 
         return xml_files, pdf_files
 
-    # Timeout padrão para processamento de batch (5 minutos)
-    BATCH_TIMEOUT_SECONDS: int = 300
+    # Timeout padrão para processamento de batch (usado se não houver configurações)
+    DEFAULT_BATCH_TIMEOUT = 300
 
     def process_multiple_batches(
         self,
@@ -638,7 +638,8 @@ class BatchProcessor:
         from datetime import datetime
 
         logger = logging.getLogger(__name__)
-        timeout = timeout_seconds or self.BATCH_TIMEOUT_SECONDS
+        from config import settings
+        timeout = timeout_seconds or settings.BATCH_TIMEOUT_SECONDS
 
         root_folder = Path(root_folder)
         results = []
@@ -797,14 +798,42 @@ class BatchProcessor:
 
     def _process_single_file(self, file_path: Path) -> Optional[DocumentData]:
         """
-        Processa um único arquivo.
+        Processa um único arquivo com timeout granular.
 
-        Args:
-            file_path: Caminho do arquivo
-
-        Returns:
-            DocumentData ou None se falhar
+        Usa ThreadPoolExecutor para garantir que arquivos lentos (ex: OCR travado)
+        não bloqueiem o lote inteiro por mais tempo que o permitido.
         """
+        from config import settings
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FuturesTimeoutError
+        import time
+
+        try:
+            # Função wrapper para executar no thread
+            def _extract():
+                return self.processor.process(str(file_path))
+
+            start_time = time.time()
+            
+            # Executa processamento com timeout
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_extract)
+                try:
+                    doc = future.result(timeout=settings.FILE_TIMEOUT_SECONDS)
+                    return doc
+                except FuturesTimeoutError:
+                    elapsed = time.time() - start_time
+                    logger.error(f"⏱️ TIMEOUT ARQUIVO: {file_path.name} excedeu {settings.FILE_TIMEOUT_SECONDS}s")
+                    # Retorna None para indicar que falhou, mas não quebra o lote
+                    return None
+                except Exception as e:
+                    # Relança exceções normais para serem capturadas pelo caller
+                    raise e
+
+        except Exception as e:
+            # Re-raise para ser capturado e adicionado aos erros do lote
+            raise e
+
         # Processa PDF
         if file_path.suffix.lower() == '.pdf':
             return self.processor.process(str(file_path))
