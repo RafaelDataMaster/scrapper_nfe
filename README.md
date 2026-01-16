@@ -37,12 +37,14 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ## To Do - Notas mentais
 
+
+- [ ] Conferir os emails que retornaram valor zero. Analise já feita no gemini.
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**.
 - [ ] Lembrar de atualizar os dados do imap pro email da empresa.
 - [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento.
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
-- [ ] Implementar exportador para Google Sheets (esqueleto já existe).
+
 
 # Estudar por agora
 
@@ -92,6 +94,16 @@ A estratégia de correlação foi implementada nos seguintes módulos:
 - ✅ Regra 3: Validação Cruzada (status_conciliacao: OK/DIVERGENTE/ORFAO)
 
 ## Done
+
+### 16/01/2026
+
+- [x] **Correção na falha do uso do extrator especifico pra repromaq, agora funcionando evitando falha catastrófica de backtraking no regex**
+
+### 15/01/2026
+
+- [x] **Correção de data de recebimento do email da cemig**
+- [x] **Correção em quesito de granularidade da politica de timeout do pdfplumber**.
+- [x] **Adicionado nos logs para melhor acompanhamento dos extratores**
 
 ### 14/01/2026
 

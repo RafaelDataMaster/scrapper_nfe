@@ -2,8 +2,8 @@
 # é definida pela ordem em que os módulos são importados.
 # REGRA: Extractors ESPECÍFICOS devem vir ANTES dos GENÉRICOS
 
-from .boleto import BoletoExtractor
 from .boleto_repromaq import BoletoRepromaqExtractor  # Específico: antes do genérico
+from .boleto import BoletoExtractor
 from .danfe import DanfeExtractor
 
 # Extrator de corpo de e-mail (não usa EXTRACTOR_REGISTRY, é chamado diretamente)

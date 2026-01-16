@@ -882,8 +882,8 @@ class DocumentPairingService:
 
         Status possíveis:
         - CONCILIADO: NF e boleto encontrados, valores conferem
-        - DIVERGENTE: Valores diferentes
-        - CONFERIR: Sem boleto para comparação
+        - DIVERGENTE: AMBOS têm valor > 0 mas valores conflitam
+        - CONFERIR: Só tem NF (sem boleto) OU só tem boleto (sem NF com valor)
         - PAREADO_FORCADO: Pareamento forçado por lote (nota sem valor)
         - DIVERGENTE_VALOR: Pareamento forçado com valores divergentes
 
@@ -891,29 +891,35 @@ class DocumentPairingService:
             Tupla (status, divergencia)
         """
         has_boleto = len(docs_boleto) > 0 and valor_boleto > 0
+        has_nf = valor_nf > 0
 
-        if has_boleto:
+        if has_boleto and has_nf:
+            # Ambos têm valor - compara para ver se conferem
             if abs(diferenca) <= self.TOLERANCIA_VALOR:
                 return "CONCILIADO", None
             elif pareamento_forcado:
-                if valor_nf == 0:
-                    return "PAREADO_FORCADO", (
-                        f"Nota sem valor pareada com boleto por lote | "
-                        f"Valor boleto: R$ {valor_boleto:.2f}"
-                    )
-                else:
-                    return "DIVERGENTE_VALOR", (
-                        f"Pareamento forçado | Valor NF: R$ {valor_nf:.2f} | "
-                        f"Valor boleto: R$ {valor_boleto:.2f} | "
-                        f"Diferença: R$ {diferenca:.2f}"
-                    )
+                return "DIVERGENTE_VALOR", (
+                    f"Pareamento forçado | Valor NF: R$ {valor_nf:.2f} | "
+                    f"Valor boleto: R$ {valor_boleto:.2f} | "
+                    f"Diferença: R$ {diferenca:.2f}"
+                )
             else:
                 return "DIVERGENTE", (
                     f"Valor compra: R$ {valor_nf:.2f} | "
                     f"Valor boleto: R$ {valor_boleto:.2f} | "
                     f"Diferença: R$ {diferenca:.2f}"
                 )
+        elif has_boleto and not has_nf:
+            # Só tem boleto (sem NF ou NF com valor 0) - precisa conferir
+            if pareamento_forcado:
+                return "PAREADO_FORCADO", (
+                    f"Nota sem valor pareada com boleto por lote | "
+                    f"Valor boleto: R$ {valor_boleto:.2f}"
+                )
+            else:
+                return "CONFERIR", f"Conferir boleto (R$ {valor_boleto:.2f}) - NF sem valor encontrada"
         else:
+            # Só tem NF (sem boleto) - precisa conferir
             return "CONFERIR", f"Conferir valor (R$ {valor_nf:.2f}) - sem boleto para comparação"
 
     def _normalize_fornecedor(self, fornecedor: str) -> str:

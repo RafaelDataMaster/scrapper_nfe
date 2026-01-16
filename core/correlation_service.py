@@ -340,8 +340,10 @@ class CorrelationService:
         Valida valores cruzados entre documentos.
 
         Regra de conciliação:
-        - Se tem boleto: valor_compra - valor_boleto = 0 → OK, senão DIVERGENTE
-        - Se não tem boleto: CONFERIR (conferir valor - sem boleto para comparação)
+        - Se tem AMBOS (compra > 0 e boleto > 0) e valores conferem → CONCILIADO
+        - Se tem AMBOS (compra > 0 e boleto > 0) e valores diferem → DIVERGENTE
+        - Se só tem boleto (compra = 0) → CONFERIR
+        - Se só tem compra (sem boleto) → CONFERIR
         - Adiciona aviso de encaminhamento duplicado se detectado
         """
         duplicatas = duplicatas or {}
@@ -359,9 +361,12 @@ class CorrelationService:
         elif duplicatas.get('fornecedor_valor'):
             aviso_duplicata = f" [ENCAMINHAMENTO DUPLICADO - mesmos valores detectados]"
 
+        has_boleto = batch.has_boleto and valor_boleto > 0
+        has_compra = valor_compra > 0
+
         # Determina status de conciliação
-        if batch.has_boleto:
-            # Tem boleto - compara valores
+        if has_boleto and has_compra:
+            # Tem AMBOS com valor - compara valores
             if abs(result.diferenca) <= self.TOLERANCIA_VALOR:
                 result.status = "CONCILIADO"
                 if aviso_duplicata:
@@ -373,8 +378,12 @@ class CorrelationService:
                     f"Valor boleto: R$ {valor_boleto:.2f} | "
                     f"Diferença: R$ {result.diferenca:.2f}"
                 ) + aviso_duplicata
+        elif has_boleto and not has_compra:
+            # Só tem boleto (sem NF com valor) - precisa conferir
+            result.status = "CONFERIR"
+            result.divergencia = f"Conferir boleto (R$ {valor_boleto:.2f}) - NF sem valor encontrada" + aviso_duplicata
         else:
-            # Sem boleto - precisa conferir manualmente
+            # Só tem compra (sem boleto) ou nenhum dos dois - precisa conferir
             result.status = "CONFERIR"
             result.divergencia = f"Conferir valor (R$ {valor_compra:.2f}) - sem boleto para comparação" + aviso_duplicata
 
