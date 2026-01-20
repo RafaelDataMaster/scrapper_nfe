@@ -27,6 +27,7 @@ Example:
     ...     dados = extractor.extract(texto)
     ...     print(f"Tipo: {dados['subtipo']} - R$ {dados['valor_total']:.2f}")
 """
+import logging
 import re
 from typing import Any, Dict, Optional
 
@@ -59,23 +60,29 @@ class OutrosExtractor(BaseExtractor):
 
         # Locação / demonstrativos
         if "DEMONSTRATIVO" in t and ("LOCA" in t or "LOCAÇÃO" in t or "LOCACAO" in t):
+            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou demonstrativo de locação")
             return True
 
         if "VALOR DA LOCA" in t:
+            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou 'VALOR DA LOCA'")
             return True
 
         # Faturas/contas
         if "FATURA" in t:
+            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou fatura")
             return True
 
         # Heurística específica do caso citado
         if "LOCAWEB" in t:
+            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou LOCAWEB")
             return True
 
         return False
 
     def extract(self, text: str) -> Dict[str, Any]:
+        logger = logging.getLogger(__name__)
         data: Dict[str, Any] = {"tipo_documento": "OUTRO"}
+        logger.debug(f"OutrosExtractor: iniciando extração de documento")
 
         t = text.upper()
         if "LOCA" in t and "DEMONSTRATIVO" in t:
@@ -107,6 +114,7 @@ class OutrosExtractor(BaseExtractor):
                 values = [v for v in values if v > 0]
                 if values:
                     data["valor_total"] = max(values)
+                    logger.debug(f"OutrosExtractor: valor_total extraído (layout analítico): R$ {data['valor_total']:.2f}")
 
         # 2) Padrões genéricos (inclui casos com R$)
         if not data.get("valor_total"):
@@ -123,21 +131,31 @@ class OutrosExtractor(BaseExtractor):
                     val = parse_br_money(m.group(1))
                     if val > 0:
                         data["valor_total"] = val
+                        logger.debug(f"OutrosExtractor: valor_total extraído (padrão genérico): R$ {data['valor_total']:.2f}")
                         break
 
         # Datas: emissão/vencimento (melhor esforço)
         m_venc = re.search(r"(?i)\bVENCIMENTO\b\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text)
         if m_venc:
             data["vencimento"] = parse_date_br(m_venc.group(1))
+            logger.debug(f"OutrosExtractor: vencimento extraído: {data['vencimento']}")
         else:
             # Layout analítico: "Data de Vencimento do Contrato: 31/07/2025"
             m_venc2 = re.search(r"(?i)Data\s+de\s+Vencimento\s+do\s+Contrato\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text)
             if m_venc2:
                 data["vencimento"] = parse_date_br(m_venc2.group(1))
+                logger.debug(f"OutrosExtractor: vencimento extraído (contrato): {data['vencimento']}")
 
         # Algumas faturas têm uma data isolada perto do topo; pegamos a primeira como 'data_emissao'
         m_date = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", text)
         if m_date:
             data["data_emissao"] = parse_date_br(m_date.group(1))
+            logger.debug(f"OutrosExtractor: data_emissao extraída: {data['data_emissao']}")
+
+        # Log final do resultado
+        if data.get("valor_total"):
+            logger.info(f"OutrosExtractor: documento processado - subtipo: {data.get('subtipo', 'N/A')}, valor_total: R$ {data['valor_total']:.2f}, fornecedor: {data.get('fornecedor_nome', 'N/A')}")
+        else:
+            logger.warning(f"OutrosExtractor: documento processado mas valor_total não encontrado")
 
         return data

@@ -39,9 +39,16 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from core.models import DanfeData, DocumentData, InvoiceData
+from core.models import (
+    BoletoData,
+    DanfeData,
+    DocumentData,
+    EmailAvisoData,
+    InvoiceData,
+    OtherDocumentData,
+)
 
 # Namespaces comuns em XMLs de NF-e e NFS-e
 NAMESPACES = {
@@ -57,7 +64,7 @@ NAMESPACES = {
 class XmlExtractionResult:
     """Resultado da extração de XML."""
     success: bool
-    document: Optional[DocumentData] = None
+    document: Optional[Union[DanfeData, InvoiceData, OtherDocumentData, EmailAvisoData, BoletoData]] = None
     doc_type: str = ""  # 'NFE' ou 'NFSE'
     error: Optional[str] = None
     raw_data: Optional[Dict[str, Any]] = None

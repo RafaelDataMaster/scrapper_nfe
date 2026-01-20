@@ -8,6 +8,7 @@ Testa:
 - Tratamento de erros
 - Parsing de datas e valores
 """
+# pyright: ignore
 
 import tempfile
 import unittest
@@ -199,6 +200,7 @@ class TestXmlExtractorNFe(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(result.doc_type, 'NFE')
             self.assertIsInstance(result.document, DanfeData)
+            assert isinstance(result.document, DanfeData)
 
             doc = result.document
             self.assertEqual(doc.numero_nota, '123')
@@ -223,6 +225,7 @@ class TestXmlExtractorNFe(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, DanfeData)
             self.assertEqual(
                 result.document.chave_acesso,
                 '35250112345678000195550010000001231234567890'
@@ -242,6 +245,7 @@ class TestXmlExtractorNFe(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, DanfeData)
             self.assertEqual(result.document.cnpj_emitente, '12.345.678/0001-95')
         finally:
             Path(temp_path).unlink()
@@ -299,6 +303,7 @@ class TestXmlExtractorNFSe(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(result.doc_type, 'NFSE')
             self.assertIsInstance(result.document, InvoiceData)
+            assert isinstance(result.document, InvoiceData)
 
             doc = result.document
             self.assertEqual(doc.numero_nota, '456')
@@ -413,6 +418,7 @@ class TestXmlExtractorNFSeSPED(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(result.doc_type, 'NFSE')
             self.assertIsNotNone(result.document)
+            assert isinstance(result.document, InvoiceData)
 
             doc = result.document
             self.assertEqual(doc.numero_nota, '912')
@@ -437,6 +443,7 @@ class TestXmlExtractorNFSeSPED(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, InvoiceData)
             doc = result.document
             self.assertEqual(doc.vencimento, '2025-12-25')
         finally:
@@ -456,6 +463,7 @@ class TestXmlExtractorNFSeSPED(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, InvoiceData)
             self.assertEqual(result.document.cnpj_prestador, '12.345.678/0001-95')
         finally:
             import os
@@ -529,6 +537,7 @@ class TestXmlExtractorNFSeSigISS(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(result.doc_type, 'NFSE_SIGISS')
             self.assertIsInstance(result.document, InvoiceData)
+            assert isinstance(result.document, InvoiceData)
 
             doc = result.document
             self.assertEqual(doc.numero_nota, '10251')
@@ -566,6 +575,7 @@ class TestXmlExtractorNFSeSigISS(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, InvoiceData)
             doc = result.document
             self.assertEqual(doc.valor_total, 1000.0)
             self.assertEqual(doc.valor_iss, 50.0)
@@ -587,6 +597,7 @@ class TestXmlExtractorNFSeSigISS(unittest.TestCase):
             result = self.extractor.extract(temp_path)
 
             self.assertTrue(result.success)
+            assert isinstance(result.document, InvoiceData)
             self.assertEqual(result.document.cnpj_prestador, '12.345.678/0001-95')
         finally:
             Path(temp_path).unlink()

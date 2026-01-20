@@ -10,7 +10,7 @@ mínimo de 04 dias úteis de antecedência ao vencimento.
 
 from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import List, Tuple
+
 from dateutil.easter import easter
 from workalendar.america import Brazil
 
@@ -18,31 +18,31 @@ from workalendar.america import Brazil
 class SPBusinessCalendar(Brazil):
     """
     Calendário de negócios de São Paulo.
-    
+
     Estende o calendário brasileiro padrão adicionando feriados municipais
     de São Paulo e utilizando cache LRU para otimização de performance em
     processamentos em lote.
-    
+
     Cache maxsize=12 cobre uma década completa + folga para auditorias.
     """
-    
+
     @lru_cache(maxsize=12)
     def get_variable_days(self, year: int):
         """
         Retorna feriados móveis de São Paulo (baseados na Páscoa).
-        
+
         Args:
             year: Ano para cálculo dos feriados
-            
+
         Returns:
             Lista de tuplas (datetime.date, nome_feriado)
         """
         # Obtém feriados móveis nacionais
         days = list(super().get_variable_days(year))
-        
+
         # Calcula Páscoa para o ano
         easter_date = easter(year)
-        
+
         # Carnaval (segunda e terça) - usado na operação SP/PAF (testes assumem)
         carnaval_segunda = easter_date - timedelta(days=48)
         carnaval_terca = easter_date - timedelta(days=47)
@@ -55,28 +55,28 @@ class SPBusinessCalendar(Brazil):
 
         # Retorna como tupla para evitar mutações acidentais no cache
         return tuple(days)
-    
+
     @lru_cache(maxsize=12)
     def get_fixed_holidays(self, year: int):
         """
         Retorna feriados fixos incluindo os municipais de São Paulo.
-        
+
         Args:
             year: Ano de referência
-        
+
         Returns:
             Lista de tuplas (datetime.date, nome_feriado)
         """
         # Obtém feriados fixos nacionais
         holidays = list(super().get_fixed_holidays(year))
-        
+
         # Adiciona feriados municipais de São Paulo
         from datetime import date
         holidays.extend([
             (date(year, 1, 25), "Aniversário de São Paulo"),
             (date(year, 11, 20), "Dia da Consciência Negra (SP)"),
         ])
-        
+
         return tuple(holidays)
 
     def is_working_day(self, day) -> bool:
@@ -96,30 +96,30 @@ class SPBusinessCalendar(Brazil):
 
         # Dias úteis: não feriado
         return not self.is_holiday(day)
-    
+
     def get_working_days_delta(self, start_date: datetime, end_date: datetime) -> int:
         """
         Calcula número de dias úteis entre duas datas.
-        
+
         Considera feriados nacionais, estaduais e municipais de São Paulo,
         além de finais de semana.
-        
+
         Args:
             start_date: Data inicial
             end_date: Data final
-            
+
         Returns:
             Número de dias úteis entre as datas (exclusivo da data inicial)
         """
         if start_date >= end_date:
             return 0
-        
+
         working_days = 0
         current_date = start_date + timedelta(days=1)  # Começa no dia seguinte
-        
+
         while current_date <= end_date:
             if self.is_working_day(current_date):
                 working_days += 1
             current_date += timedelta(days=1)
-        
+
         return working_days

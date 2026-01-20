@@ -71,7 +71,6 @@ class CorrelationService:
         # Documentos informativos
         re.compile(r'\bcomprovante\s+de\s+solicitação\b', re.IGNORECASE),
         re.compile(r'\bnotificação\s+automática\b', re.IGNORECASE),
-<<<<<<< HEAD
         
         # ============ NOVOS PADRÕES ADICIONADOS ============
         
@@ -108,8 +107,6 @@ class CorrelationService:
         
         # Cobranças indevidas (reclamações, não pagamentos)
         re.compile(r'\bcobran[çc]a\s+indevida\b', re.IGNORECASE),
-=======
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
     ]
 
     def correlate(
@@ -425,7 +422,6 @@ class CorrelationService:
             'planilha': 'Relatório/planilha de conferência',
             'comprovante': 'Comprovante administrativo',
             'notificação': 'Notificação automática',
-<<<<<<< HEAD
             # Novos padrões adicionados
             'guia': 'Guia jurídica/fiscal',
             'contrato_': 'Documento de contrato',
@@ -443,8 +439,6 @@ class CorrelationService:
             'alvim': 'Documento de condomínio',
             'cobrança indevida': 'Reclamação de cobrança',
             'cobranca indevida': 'Reclamação de cobrança',
-=======
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
         }
 
         for pattern in self.ADMIN_SUBJECT_PATTERNS:
@@ -474,10 +468,7 @@ class CorrelationService:
         - Se só tem compra (sem boleto) → CONFERIR
         - Adiciona aviso de encaminhamento duplicado se detectado
         - Adiciona aviso se assunto indica documento administrativo (não cobrança)
-<<<<<<< HEAD
         - Adiciona aviso se valor veio de extrator OUTROS (menos confiável)
-=======
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
         """
         duplicatas = duplicatas or {}
         valor_compra, valor_fonte = batch.get_valor_compra_fonte()
@@ -529,7 +520,6 @@ class CorrelationService:
             else:
                 result.divergencia = aviso_admin.strip()
 
-<<<<<<< HEAD
         # Verifica se o valor veio de extrator OUTROS (menos confiável)
         if valor_fonte == 'OUTROS':
             aviso_outros = " [VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO - conferir manualmente]"
@@ -537,9 +527,6 @@ class CorrelationService:
                 result.divergencia += aviso_outros
             else:
                 result.divergencia = aviso_outros.strip()
-
-=======
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
     def _apply_vencimento_alerta(
         self,
         batch: BatchResult,

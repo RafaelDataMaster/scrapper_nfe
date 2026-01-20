@@ -187,6 +187,8 @@ class DocumentPairingService:
         Returns:
             Lista de DocumentPair, um para cada par identificado
         """
+        import logging
+        logger = logging.getLogger(__name__)
         from core.models import BoletoData, DanfeData, InvoiceData, OtherDocumentData
 
         # Separa documentos por tipo
@@ -205,10 +207,14 @@ class DocumentPairingService:
                 notas_raw.append((numero, valor, doc))
             elif isinstance(doc, OtherDocumentData):
                 # Outros documentos: verifica se é auxiliar
-                if not self._is_documento_auxiliar(doc):
+                is_aux = self._is_documento_auxiliar(doc)
+                if not is_aux:
                     valor = doc.valor_total or 0.0
                     numero = self._extract_numero_nota(doc)
                     notas_raw.append((numero, valor, doc))
+                    logger.debug(f"OutrosDocumento incluído: arquivo={doc.arquivo_origem}, valor={valor}, numero={numero}")
+                else:
+                    logger.debug(f"OutrosDocumento ignorado (auxiliar): arquivo={doc.arquivo_origem}, valor={doc.valor_total if hasattr(doc, 'valor_total') else 'N/A'}")
             elif isinstance(doc, BoletoData):
                 numero = self._extract_numero_boleto(doc)
                 valor = doc.valor_documento or 0.0
@@ -406,27 +412,40 @@ class DocumentPairingService:
 
         Documentos auxiliares não devem ser tratados como notas fiscais.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         arquivo = (getattr(doc, 'arquivo_origem', '') or '').lower()
         texto = (getattr(doc, 'texto_bruto', '') or '').lower()[:500]
         fornecedor = (getattr(doc, 'fornecedor_nome', '') or '').lower()
 
-        # Verifica no nome do arquivo
+        # 1. Verifica se é atestado/declaração (mesmo se tiver valor)
+        if fornecedor.startswith('atestamos') or fornecedor.startswith('declaramos'):
+            logger.debug(f"Documento é auxiliar: fornecedor '{fornecedor}' começa com atestamos/declaramos")
+            return True
+
+        if 'atestamos' in texto[:200] or 'declaramos' in texto[:200]:
+            logger.debug(f"Documento é auxiliar: texto contém atestamos/declaramos")
+            return True
+
+        # 2. Documentos com valor total positivo não são considerados auxiliares
+        # (a menos que sejam atestados - já tratado acima)
+        if hasattr(doc, 'valor_total') and doc.valor_total and doc.valor_total > 0:
+            logger.debug(f"Documento NÃO é auxiliar: valor_total positivo (R$ {doc.valor_total})")
+            return False
+
+        # 3. Verifica no nome do arquivo por palavras-chave auxiliares
         for keyword in self.AUXILIAR_KEYWORDS:
             if keyword in arquivo:
+                logger.debug(f"Documento é auxiliar: keyword '{keyword}' encontrado em arquivo '{arquivo}'")
                 return True
 
-        # Verifica se fornecedor começa com "ATESTAMOS" ou similar
-        if fornecedor.startswith('atestamos') or fornecedor.startswith('declaramos'):
-            return True
-
-        # Verifica no texto bruto
-        if 'atestamos' in texto[:200] or 'declaramos' in texto[:200]:
-            return True
-
-        # Verifica se é um demonstrativo (arquivo que contém "demonstrativo" no nome)
+        # 4. Verifica se é um demonstrativo (arquivo que contém "demonstrativo" no nome)
         if 'demonstrativo' in arquivo:
+            logger.debug(f"Documento é auxiliar: arquivo contém 'demonstrativo'")
             return True
 
+        logger.debug(f"Documento NÃO é auxiliar: nenhum critério atendido")
         return False
 
     def _agrupar_por_valor_e_numero(
@@ -833,6 +852,32 @@ class DocumentPairingService:
         # Calcula status e divergência
         diferenca = round(valor_nf - valor_boleto, 2)
         status, divergencia = self._calculate_status(valor_nf, valor_boleto, diferenca, docs_boleto)
+
+        # Adiciona avisos do correlation_result (documento administrativo e valor genérico)
+        if batch.correlation_result and batch.correlation_result.divergencia:
+            import re
+
+            # Aviso de documento administrativo
+            if "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in batch.correlation_result.divergencia:
+                admin_match = re.search(r'\[POSSÍVEL DOCUMENTO ADMINISTRATIVO[^\]]*\]', batch.correlation_result.divergencia)
+                if admin_match:
+                    admin_aviso = admin_match.group(0)
+                    if divergencia:
+                        if admin_aviso not in divergencia:
+                            divergencia += f" {admin_aviso}"
+                    else:
+                        divergencia = admin_aviso
+
+            # Aviso de valor extraído de documento genérico
+            if "VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO" in batch.correlation_result.divergencia:
+                outros_match = re.search(r'\[VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO[^\]]*\]', batch.correlation_result.divergencia)
+                if outros_match:
+                    outros_aviso = outros_match.group(0)
+                    if divergencia:
+                        if outros_aviso not in divergencia:
+                            divergencia += f" {outros_aviso}"
+                    else:
+                        divergencia = outros_aviso
 
         # Adiciona alerta de vencimento se não encontrado (mas deixa vencimento vazio)
         if not vencimento:

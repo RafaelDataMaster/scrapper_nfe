@@ -37,14 +37,12 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ## To Do - Notas mentais
 
-
-- [ ] Conferir os emails que retornaram valor zero. Analise já feita no gemini.
+- [ ] Conferir os emails que retornaram valor zero. Analise no md analise-falhas.md.
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**.
 - [ ] Lembrar de atualizar os dados do imap pro email da empresa.
 - [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento.
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
-
 
 # Estudar por agora
 
@@ -94,6 +92,17 @@ A estratégia de correlação foi implementada nos seguintes módulos:
 - ✅ Regra 3: Validação Cruzada (status_conciliacao: OK/DIVERGENTE/ORFAO)
 
 ## Done
+
+### 20/01/2026
+
+- [x] **Correção do problema de valores zerados para documentos "Outros" no CSV final**: Ajuste na lógica de documentos auxiliares para garantir que documentos com **valor_total > 0** não sejam ignorados no pareamento.
+- [x] **Integração completa de avisos de documento administrativo**: Correção na propagação de avisos do CorrelationResult para o DocumentPair, garantindo que avisos **[POSSÍVEL DOCUMENTO ADMINISTRATIVO - ...]** apareçam no CSV.
+- [x] **Reordenação de extratores**: OutrosExtractor agora tem prioridade sobre NfseGenericExtractor, evitando classificação incorreta de documentos de locação/fatura como NFSe.
+- [x] **Adição de logs detalhados**: Melhor monitoramento da extração de documentos "Outros" e da lógica de pareamento.
+
+### 19/01/2026
+
+- [x] **Adição de identificador de email administrativo, para os casos que tem anexo mas não contem valores / dados úteis.** É decidido manter eles e adicionar o aviso pois a lógica de exclusão poderia perder emails importantes.
 
 ### 16/01/2026
 

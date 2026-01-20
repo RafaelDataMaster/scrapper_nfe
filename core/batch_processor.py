@@ -27,9 +27,8 @@ Princípios SOLID aplicados:
 - LSP: BatchResult pode ser substituído por subclasses sem quebrar código
 """
 import logging
-import os
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 
 from core.batch_result import BatchResult
 from core.correlation_service import CorrelationResult, CorrelationService
@@ -777,12 +776,6 @@ class BatchProcessor:
         if not files:
             return result
 
-        # Cria metadata legado para rastreabilidade
-        legacy_metadata = EmailMetadata.create_legacy(
-            batch_id=batch_id,
-            file_paths=[str(f) for f in files]
-        )
-
         # Processa cada arquivo
         for file_path in files:
             try:
@@ -803,10 +796,11 @@ class BatchProcessor:
         Usa ThreadPoolExecutor para garantir que arquivos lentos (ex: OCR travado)
         não bloqueiem o lote inteiro por mais tempo que o permitido.
         """
-        from config import settings
+        import time
         from concurrent.futures import ThreadPoolExecutor
         from concurrent.futures import TimeoutError as FuturesTimeoutError
-        import time
+
+        from config import settings
 
         try:
             # Função wrapper para executar no thread
@@ -814,7 +808,7 @@ class BatchProcessor:
                 return self.processor.process(str(file_path))
 
             start_time = time.time()
-            
+
             # Executa processamento com timeout
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_extract)
@@ -823,7 +817,7 @@ class BatchProcessor:
                     return doc
                 except FuturesTimeoutError:
                     elapsed = time.time() - start_time
-                    logger.error(f"⏱️ TIMEOUT ARQUIVO: {file_path.name} excedeu {settings.FILE_TIMEOUT_SECONDS}s")
+                    logger.error(f"⏱️ TIMEOUT ARQUIVO: {file_path.name} excedeu {settings.FILE_TIMEOUT_SECONDS}s (elapsed: {elapsed:.1f}s)")
                     # Retorna None para indicar que falhou, mas não quebra o lote
                     return None
                 except Exception as e:

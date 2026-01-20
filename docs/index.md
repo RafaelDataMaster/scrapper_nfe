@@ -30,7 +30,7 @@ Comece a processar documentos em menos de 5 minutos.
 - :material-link-variant: **Correlação DANFE + Boleto**
 
     Vincule automaticamente boletos às suas notas fiscais correspondentes.
-    [Migração Batch](MIGRATION_BATCH_PROCESSING.md)
+    [Migração Batch](development/MIGRATION_BATCH_PROCESSING.md)
 
 - :material-api: **Referência da API**
 

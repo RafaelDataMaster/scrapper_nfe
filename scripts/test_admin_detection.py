@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
-<<<<<<< HEAD
 """
 Teste de detecção de documentos administrativos.
 
 Este script testa se os padrões em ADMIN_SUBJECT_PATTERNS
 estão capturando corretamente os assuntos de e-mails administrativos.
 """
-=======
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,20 +13,15 @@ from core.correlation_service import CorrelationService
 
 service = CorrelationService()
 
-<<<<<<< HEAD
 # Assuntos que DEVEM ser detectados como administrativos
 admin_subjects = [
     # Originais
-=======
-test_subjects = [
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
     'Sua ordem Equinix n.o 1-255425159203 agendada com sucesso',
     'Distrato - Speed Copy',
     'Rescisao contratual - OSCAR HENRIQUE',
     'Solicitacao de encerramento de contrato XYZ',
     'Relatorio de faturamento JAN 26 (MG/SP/EXATA)',
     'RES: SOLICITACAO DISTRATO DE VEICULO',
-<<<<<<< HEAD
     # Novos casos identificados
     'GUIA | Processo - Miralva Macedo Dias x CSC',
     'GUIA | Execução Fiscal - Vale Telecom',
@@ -102,20 +94,3 @@ if admin_fail > 0:
 if normal_fail > 0:
     print(f'  ⚠️ {normal_fail} falsos positivos!')
 print('=' * 80)
-=======
-    'CEMIG FATURA ONLINE - 214687921',
-    'NFS-e + Boleto No 3494',
-]
-
-print('=' * 70)
-print('TESTE DE DETECCAO DE DOCUMENTOS ADMINISTRATIVOS')
-print('=' * 70)
-
-for subject in test_subjects:
-    result = service._check_admin_subject(subject)
-    if result:
-        status = f'ADMIN: {result}'
-    else:
-        status = 'NORMAL'
-    print(f'[{status:50}] {subject[:50]}...')
->>>>>>> 4f4be391cebde3c7caeeb4101a58c9581c6e907f
