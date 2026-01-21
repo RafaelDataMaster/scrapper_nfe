@@ -27,6 +27,7 @@ Example:
     ...     dados = extractor.extract(texto)
     ...     print(f"Tipo: {dados['subtipo']} - R$ {dados['valor_total']:.2f}")
 """
+
 import logging
 import re
 from typing import Any, Dict, Optional
@@ -58,23 +59,110 @@ class OutrosExtractor(BaseExtractor):
 
         t = text.upper()
 
+        # Exclusão de documentos fiscais (NFSE, DANFE, etc.)
+        # 1. Indicadores fortes de NFSE
+        nfse_indicators = [
+            "NFS-E",
+            "NFSE",
+            "NOTA FISCAL DE SERVIÇO ELETRÔNICA",
+            "NOTA FISCAL DE SERVICO ELETRONICA",
+            "NOTA FISCAL ELETRÔNICA DE SERVIÇO",
+            "NOTA FISCAL ELETRONICA DE SERVICO",
+            "DOCUMENTO AUXILIAR DA NOTA FISCAL DE SERVIÇO",
+            "DOCUMENTO AUXILIAR DA NFS-E",
+            "CÓDIGO DE VERIFICAÇÃO",
+            "CODIGO DE VERIFICACAO",
+            "PREFEITURA MUNICIPAL",
+        ]
+
+        # 2. Indicadores fortes de DANFE/NF-e
+        danfe_indicators = [
+            "DANFE",
+            "DOCUMENTO AUXILIAR",
+            "CHAVE DE ACESSO",
+            "NF-E",
+            "NFE",
+            "DANFSE",
+            "DOCUMENTO AUXILIAR DA NFE",
+        ]
+
+        # Verificar indicadores fortes
+        if any(ind in t for ind in nfse_indicators):
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle excluído - documento fiscal (NFSE)"
+            )
+            return False
+
+        if any(ind in t for ind in danfe_indicators):
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle excluído - documento fiscal (DANFE/NF-e)"
+            )
+            return False
+
+        # Verificar chave de acesso de 44 dígitos
+        digits = re.sub(r"\D", "", text or "")
+        if re.search(r"\b\d{44}\b", digits):
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle excluído - chave de acesso de 44 dígitos"
+            )
+            return False
+
+        # Verificar padrões de impostos que indicam documento fiscal
+        tax_patterns = r"ISS|INSS|PIS|COFINS|ICMS|CSLL|IRRF|IRPJ"
+        tax_matches = re.findall(tax_patterns, t)
+        if len(tax_matches) >= 2:
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle excluído - múltiplos impostos ({len(tax_matches)})"
+            )
+            return False
+
         # Locação / demonstrativos
         if "DEMONSTRATIVO" in t and ("LOCA" in t or "LOCAÇÃO" in t or "LOCACAO" in t):
-            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou demonstrativo de locação")
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle detectou demonstrativo de locação"
+            )
             return True
 
         if "VALOR DA LOCA" in t:
-            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou 'VALOR DA LOCA'")
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle detectou 'VALOR DA LOCA'"
+            )
             return True
 
-        # Faturas/contas
+        # Faturas/contas - excluir faturas fiscais (NFSE)
         if "FATURA" in t:
-            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou fatura")
+            # Se for "NOTA FATURA" ou contém indicadores de NFSE, excluir
+            if "NOTA FATURA" in t or "NOTA-FATURA" in t:
+                logging.getLogger(__name__).debug(
+                    f"OutrosExtractor: can_handle excluído - 'NOTA FATURA' (NFSE)"
+                )
+                return False
+            # Verificar se há outros indicadores de documento fiscal
+            fiscal_indicators = [
+                "NOTA FISCAL",
+                "NFS",
+                "NFSE",
+                "SERVIÇO",
+                "SERVICO",
+                "ELETRÔNICA",
+                "ELETRONICA",
+            ]
+            fiscal_count = sum(1 for ind in fiscal_indicators if ind in t)
+            if fiscal_count >= 2:
+                logging.getLogger(__name__).debug(
+                    f"OutrosExtractor: can_handle excluído - fatura com {fiscal_count} indicadores fiscais"
+                )
+                return False
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle detectou fatura administrativa"
+            )
             return True
 
         # Heurística específica do caso citado
         if "LOCAWEB" in t:
-            logging.getLogger(__name__).debug(f"OutrosExtractor: can_handle detectou LOCAWEB")
+            logging.getLogger(__name__).debug(
+                f"OutrosExtractor: can_handle detectou LOCAWEB"
+            )
             return True
 
         return False
@@ -114,7 +202,9 @@ class OutrosExtractor(BaseExtractor):
                 values = [v for v in values if v > 0]
                 if values:
                     data["valor_total"] = max(values)
-                    logger.debug(f"OutrosExtractor: valor_total extraído (layout analítico): R$ {data['valor_total']:.2f}")
+                    logger.debug(
+                        f"OutrosExtractor: valor_total extraído (layout analítico): R$ {data['valor_total']:.2f}"
+                    )
 
         # 2) Padrões genéricos (inclui casos com R$)
         if not data.get("valor_total"):
@@ -131,7 +221,9 @@ class OutrosExtractor(BaseExtractor):
                     val = parse_br_money(m.group(1))
                     if val > 0:
                         data["valor_total"] = val
-                        logger.debug(f"OutrosExtractor: valor_total extraído (padrão genérico): R$ {data['valor_total']:.2f}")
+                        logger.debug(
+                            f"OutrosExtractor: valor_total extraído (padrão genérico): R$ {data['valor_total']:.2f}"
+                        )
                         break
 
         # Datas: emissão/vencimento (melhor esforço)
@@ -141,21 +233,32 @@ class OutrosExtractor(BaseExtractor):
             logger.debug(f"OutrosExtractor: vencimento extraído: {data['vencimento']}")
         else:
             # Layout analítico: "Data de Vencimento do Contrato: 31/07/2025"
-            m_venc2 = re.search(r"(?i)Data\s+de\s+Vencimento\s+do\s+Contrato\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text)
+            m_venc2 = re.search(
+                r"(?i)Data\s+de\s+Vencimento\s+do\s+Contrato\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})",
+                text,
+            )
             if m_venc2:
                 data["vencimento"] = parse_date_br(m_venc2.group(1))
-                logger.debug(f"OutrosExtractor: vencimento extraído (contrato): {data['vencimento']}")
+                logger.debug(
+                    f"OutrosExtractor: vencimento extraído (contrato): {data['vencimento']}"
+                )
 
         # Algumas faturas têm uma data isolada perto do topo; pegamos a primeira como 'data_emissao'
         m_date = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", text)
         if m_date:
             data["data_emissao"] = parse_date_br(m_date.group(1))
-            logger.debug(f"OutrosExtractor: data_emissao extraída: {data['data_emissao']}")
+            logger.debug(
+                f"OutrosExtractor: data_emissao extraída: {data['data_emissao']}"
+            )
 
         # Log final do resultado
         if data.get("valor_total"):
-            logger.info(f"OutrosExtractor: documento processado - subtipo: {data.get('subtipo', 'N/A')}, valor_total: R$ {data['valor_total']:.2f}, fornecedor: {data.get('fornecedor_nome', 'N/A')}")
+            logger.info(
+                f"OutrosExtractor: documento processado - subtipo: {data.get('subtipo', 'N/A')}, valor_total: R$ {data['valor_total']:.2f}, fornecedor: {data.get('fornecedor_nome', 'N/A')}"
+            )
         else:
-            logger.warning(f"OutrosExtractor: documento processado mas valor_total não encontrado")
+            logger.warning(
+                f"OutrosExtractor: documento processado mas valor_total não encontrado"
+            )
 
         return data

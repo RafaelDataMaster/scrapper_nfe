@@ -1,327 +1,386 @@
 # Guia de Ingestão de E-mails
 
-Este guia descreve como configurar e executar o pipeline de ingestão automática de documentos fiscais via e-mail.
+Este guia explica como configurar e usar o sistema de ingestão automática de e-mails para baixar Notas Fiscais, DANFEs e Boletos diretamente do seu servidor de e-mail.
 
-## Visão Geral
+## 📋 Visão Geral
 
-O módulo de ingestão conecta-se a uma conta de e-mail via protocolo IMAP, busca por mensagens contendo documentos fiscais (filtrando por assunto), organiza os anexos em **lotes por e-mail** e os encaminha para o processador de extração com correlação automática.
+O sistema de ingestão conecta-se ao seu servidor de e-mail (IMAP) via `IngestionService`, baixa anexos PDF/XML de e-mails que contêm documentos fiscais e os organiza em "lotes" (pastas individuais por e-mail) com metadata completa.
 
-!!! info "Novidade v0.2.x"
-A partir da versão 0.2.x, cada e-mail gera uma **pasta de lote** contendo todos os anexos + um arquivo `metadata.json` com o contexto do e-mail (assunto, remetente, corpo). Isso permite correlacionar DANFE com Boleto automaticamente.
+**Funcionalidades:**
 
-## Arquitetura de Ingestão
+- Conexão IMAP com provedores modernos (Gmail, Office 365, Outlook)
+- Download automático de anexos PDF/XML
+- Organização por lotes (uma pasta por e-mail)
+- Metadata contextual (assunto, remetente, data, corpo)
+- Filtros inteligentes por assunto e tipo de anexo
+- Limpeza automática de lotes antigos
 
-```mermaid
-graph LR
-    subgraph "1. Ingestão (Bronze)"
-        Email["📧 Servidor IMAP"] -->|SSL| Ingestor["IngestionService"]
-        Ingestor -->|"Cria Lote"| Folder["📁 email_20251231_abc123/"]
+## 🚀 Configuração Rápida
 
-        Folder --> Meta["metadata.json"]
-        Folder --> PDF1["01_danfe.pdf"]
-        Folder --> PDF2["02_boleto.pdf"]
-    end
+### 1. Configurar credenciais de e-mail
 
-    subgraph "2. Processamento"
-        Folder -->|"Lê Lote"| Batch["BatchProcessor"]
-        Batch --> Corr["CorrelationService"]
-    end
-
-    subgraph "3. Saída"
-        Corr --> CSV["📊 CSV/Sheets"]
-    end
-```
-
-## Configuração de Segurança (.env)
-
-Por razões de segurança, as credenciais de e-mail **nunca** devem ser colocadas diretamente no código. Utilizamos um arquivo `.env` para gerenciar essas variáveis.
-
-1. Crie um arquivo chamado `.env` na raiz do projeto (você pode copiar o modelo `.env.example`).
-2. Preencha as seguintes variáveis:
-
-```ini
-# Configurações do Servidor IMAP
-EMAIL_HOST=imap.gmail.com          # Ex: imap.gmail.com, outlook.office365.com
-EMAIL_USER=seu.email@exemplo.com
-EMAIL_PASS=sua_senha_de_app        # Use Senha de Aplicativo (App Password) se tiver 2FA ativado
-EMAIL_FOLDER=INBOX                 # Pasta a ser monitorada
-```
-
-!!! warning "Atenção"
-Se você utiliza Gmail ou Outlook com autenticação de dois fatores (2FA), a sua senha de login normal **não funcionará**. Você deve gerar uma "Senha de Aplicativo" nas configurações de segurança da sua conta.
-
-## Executando a Ingestão
-
-### Modo Padrão (v0.2.x - Batch Processing)
+Crie um arquivo `.env` na raiz do projeto baseado no `.env.example`:
 
 ```bash
-python run_ingestion.py
+# Copiar template
+cp .env.example .env
+
+# Editar com suas credenciais
+# Use "App Password" para contas com 2FA ativado
 ```
 
-Este comando:
+Exemplo de `.env`:
 
-1. **Conecta** ao servidor de e-mail usando SSL
-2. **Busca** e-mails com o assunto configurado (default: "Nota Fiscal")
-3. **Cria lotes** para cada e-mail em `temp_email/email_<timestamp>_<id>/`
-4. **Salva metadata** com contexto do e-mail (`metadata.json`)
-5. **Processa** cada lote usando o `BatchProcessor`
-6. **Correlaciona** documentos (DANFE + Boleto) usando `CorrelationService`
-7. **Gera** relatórios em `data/output/relatorio_ingestao.csv`
+```env
+# Configurações IMAP
+EMAIL_HOST=imap.gmail.com
+EMAIL_USER=seu.email@gmail.com
+EMAIL_PASS=sua_senha_de_aplicativo  # NÃO use sua senha normal!
+EMAIL_FOLDER=INBOX
+EMAIL_SSL=True
+EMAIL_PORT=993
 
-### Flags Disponíveis (CLI)
+# Configurações do sistema
+INGESTION_TEMP_DIR=temp_email
+INGESTION_MAX_AGE_HOURS=48
+```
 
-| Flag                 | Descrição                                            | Exemplo                                                       |
-| :------------------- | :--------------------------------------------------- | :------------------------------------------------------------ |
-| `--reprocess`        | Reprocessa lotes existentes sem baixar novos e-mails | `python run_ingestion.py --reprocess`                         |
-| `--batch-folder`     | Processa uma pasta de lote específica                | `python run_ingestion.py --batch-folder temp_email/email_123` |
-| `--subject`          | Filtro de assunto customizado                        | `python run_ingestion.py --subject "NF-e"`                    |
-| `--no-correlation`   | Desabilita correlação entre documentos               | `python run_ingestion.py --no-correlation`                    |
-| `--cleanup`          | Remove lotes antigos após processamento              | `python run_ingestion.py --cleanup`                           |
-| `--only-attachments` | Processa apenas e-mails COM anexos                   | `python run_ingestion.py --only-attachments`                  |
-| `--only-links`       | Processa apenas e-mails SEM anexos (links)           | `python run_ingestion.py --only-links`                        |
-| `--links-first`      | Processa e-mails SEM anexo antes dos COM anexo       | `python run_ingestion.py --links-first`                       |
-| `--fresh`            | Ignora checkpoint e reprocessa tudo                  | `python run_ingestion.py --fresh`                             |
-| `--status`           | Mostra status do checkpoint atual                    | `python run_ingestion.py --status`                            |
-| `--export-partial`   | Exporta dados parciais para CSV                      | `python run_ingestion.py --export-partial`                    |
-| `--max-emails`       | Limita quantidade de e-mails processados             | `python run_ingestion.py --max-emails 100`                    |
-
-### Exemplos de Uso
+### 2. Executar ingestão
 
 ```bash
-# Ingestão padrão com correlação
+# Modo automático (processa novos e-mails)
 python run_ingestion.py
 
-# Reprocessar lotes existentes (útil após atualizar regras)
-python run_ingestion.py --reprocess
+# Modo manual (processa lotes específicos)
+python run_ingestion.py --folder temp_email/email_20250101_abc123
 
-# Processar uma pasta específica
-python run_ingestion.py --batch-folder temp_email/email_20251215_abc123
+# Com filtro de assunto
+python run_ingestion.py --subject "Nota Fiscal"
 
-# Filtrar por assunto customizado
-python run_ingestion.py --subject "Fatura de Energia"
-
-# Ingestão sem correlação (modo legado)
-python run_ingestion.py --no-correlation
-
-# Ingestão com limpeza automática de lotes antigos
+# Limpar lotes antigos
 python run_ingestion.py --cleanup
-
-# Processar apenas e-mails SEM anexo (links de NF-e)
-python run_ingestion.py --only-links
-
-# Processar e-mails SEM anexo primeiro, depois COM anexo
-python run_ingestion.py --links-first
-
-# Ignorar checkpoint e reprocessar tudo do zero
-python run_ingestion.py --fresh
-
-# Ver status do processamento atual
-python run_ingestion.py --status
-
-# Exportar dados parciais salvos para CSV
-python run_ingestion.py --export-partial
-
-# Limitar a 50 e-mails por execução
-python run_ingestion.py --max-emails 50
 ```
 
-## Estrutura de um Lote
+## 🔧 Configuração Detalhada
 
-Cada e-mail processado gera uma pasta com a seguinte estrutura:
+### Provedores de E-mail Suportados
+
+| Provedor               | Configuração IMAP       | Porta SSL | Observações                          |
+| ---------------------- | ----------------------- | --------- | ------------------------------------ |
+| **Gmail**              | `imap.gmail.com`        | 993       | Requer "App Password" se 2FA ativado |
+| **Outlook/Office 365** | `outlook.office365.com` | 993       | Funciona com autenticação normal     |
+| **Yahoo**              | `imap.mail.yahoo.com`   | 993       | Pode requerer configuração especial  |
+| **iCloud**             | `imap.mail.me.com`      | 993       | Requer senha de aplicativo           |
+
+### Criar "App Password" no Gmail
+
+Para contas com autenticação de dois fatores (2FA) no Google:
+
+1. Acesse https://myaccount.google.com/security
+2. Em "Signing in to Google", clique em "App passwords"
+3. Selecione "Mail" como app e "Other" como dispositivo
+4. Digite um nome (ex: "Scrapper PAF")
+5. Use a senha gerada de 16 caracteres no `.env`
+
+### Configurações Avançadas
+
+No arquivo `config/settings.py`:
+
+```python
+# Diretório para armazenar lotes
+DIR_TEMP = Path("temp_email")
+
+# Idade máxima dos lotes (horas)
+MAX_BATCH_AGE_HOURS = 48
+
+# Filtros padrão de assunto
+DEFAULT_SUBJECT_FILTERS = [
+    "Nota Fiscal",
+    "DANFE",
+    "Boleto",
+    "Fatura",
+    "NFSe",
+    "NFS-e",
+    "Pagamento"
+]
+
+# Tipos de arquivo aceitos
+VALID_ATTACHMENT_EXTENSIONS = [".pdf", ".xml", ".PDF", ".XML"]
+```
+
+## 📁 Estrutura de Pastas
+
+Quando um e-mail é processado, é criada uma pasta com estrutura:
 
 ```
 temp_email/
-└── email_20251231_abc123/          # ID único por e-mail
-    ├── metadata.json               # Contexto do e-mail
-    ├── 01_danfe.pdf                # Anexos numerados para ordenação
+└── email_20251231_142030_abc123/      # Timestamp + hash único
+    ├── metadata.json                  # Informações do e-mail
+    ├── 01_DANFE_12345.pdf            # Anexos numerados
     ├── 02_boleto.pdf
-    └── ignored/                    # (Opcional) Arquivos ignorados
-        └── image001.png            # Assinaturas de e-mail, etc.
+    ├── 03_nota_fiscal.xml            # XMLs têm prioridade
+    └── ignored/                      # Arquivos ignorados
+        └── logo.png
 ```
 
-### Arquivo metadata.json
+### Arquivo `metadata.json`
 
-O arquivo `metadata.json` contém o contexto do e-mail original:
+Contém contexto completo do e-mail para enriquecimento dos dados:
 
 ```json
 {
-    "batch_id": "email_20251231_abc123",
-    "email_subject": "[NF] Nota Fiscal #12345 - Fornecedor LTDA",
-    "email_sender_name": "Fornecedor LTDA",
-    "email_sender_address": "nf@fornecedor.com.br",
-    "email_body_text": "Segue em anexo a NF 12345. CNPJ: 12.345.678/0001-90",
-    "received_date": "2025-01-15T10:30:00",
-    "attachments": ["01_danfe.pdf", "02_boleto.pdf"],
-    "created_at": "2025-01-15T10:35:22"
+    "email_id": "ABC123",
+    "subject": "NF 12345 - FORNECEDOR XYZ LTDA",
+    "sender": "financeiro@fornecedor.com",
+    "sender_name": "Fornecedor XYZ",
+    "date": "2025-01-15 10:30:00",
+    "body": "Prezados,\n\nSegue em anexo Nota Fiscal 12345...",
+    "attachments_count": 2,
+    "batch_id": "email_20251231_142030_abc123",
+    "processed_at": "2025-01-15 11:00:00"
 }
 ```
 
-Esses metadados são usados pelo `CorrelationService` para:
+## 🔄 Fluxo de Processamento
 
-- Extrair CNPJ do corpo do e-mail (fallback)
-- Usar nome do remetente como `fornecedor_nome` (fallback)
-- Extrair número de pedido do assunto
+### 1. Conexão IMAP
 
-## Correlação Automática
+- Estabelece conexão segura (SSL) com servidor
+- Autentica com credenciais do `.env`
+- Seleciona pasta configurada (default: `INBOX`)
 
-Quando um lote contém múltiplos documentos (ex: DANFE + Boleto), o sistema correlaciona automaticamente:
+### 2. Busca de E-mails
 
-### Regras de Herança
+- Filtra por assunto (padrão: contém "Nota Fiscal")
+- Ordena por data (mais recentes primeiro)
+- Limita a 50 e-mails por execução (configurável)
 
-| Se o lote tem  | Campo faltando           | Herda de |
-| :------------- | :----------------------- | :------- |
-| DANFE + Boleto | Boleto sem `numero_nota` | DANFE    |
-| DANFE + Boleto | DANFE sem `vencimento`   | Boleto   |
-| NFSe + Boleto  | Boleto sem `numero_nota` | NFSe     |
+### 3. Download de Anexos
 
-### Regras de Fallback
+- Identifica anexos PDF/XML válidos
+- Ignora imagens, documentos Office, etc.
+- Numera sequencialmente (01*, 02*, etc.)
+- Preserva XML como prioridade se houver
 
-| Campo faltando    | Fallback                           |
-| :---------------- | :--------------------------------- |
-| `fornecedor_nome` | `email_sender_name` do metadata    |
-| `cnpj`            | CNPJ extraído do `email_body_text` |
-| `numero_pedido`   | Extraído do assunto/corpo          |
+### 4. Criação de Lote
 
-### Status de Conciliação
+- Gera pasta única com timestamp
+- Salva `metadata.json`
+- Organiza anexos numerados
 
-| Situação                    | Status       |
-| :-------------------------- | :----------- |
-| Valor DANFE = Valor Boletos | `OK`         |
-| Valor DANFE ≠ Valor Boletos | `DIVERGENTE` |
-| Só Boleto (sem nota)        | `ORFAO`      |
+### 5. Processamento
 
-## Limpeza Automática (Docker)
+- `BatchProcessor` extrai dados dos documentos
+- `CorrelationService` vincula DANFEs e Boletos
+- Resultados são consolidados no CSV
 
-Se você usa Docker, um serviço sidecar remove automaticamente lotes com mais de 48 horas:
+## 📊 Filtros e Configurações
 
-```yaml
-# docker-compose.yml
-cleaner:
-    image: alpine:latest
-    container_name: scrapper_nfe_cleaner
-    volumes:
-        - temp_email:/app/temp_email
-    command: >
-        sh -c "while true; do
-          find /app/temp_email -type f -mtime +2 -delete &&
-          find /app/temp_email -type d -empty -delete &&
-          sleep 86400;
-        done"
-```
-
-Para limpeza manual:
-
-```bash
-python run_ingestion.py --cleanup
-```
-
-## Personalização
-
-### Filtro de Busca
-
-Você pode ajustar o filtro de busca editando o arquivo `run_ingestion.py` ou usando a flag `--subject`:
+### Filtros por Assunto
 
 ```python
-# run_ingestion.py
-assunto_teste = "Nota Fiscal"  # Altere para o assunto que seus fornecedores usam
+# No arquivo .env ou config/settings.py
+SUBJECT_FILTERS=Nota Fiscal,DANFE,Boleto,Fatura,NFSe
+
+# No comando
+python run_ingestion.py --subject "DANFE"
 ```
 
-### Usando o IngestionService Programaticamente
+### Ignorar Remetentes
+
+```python
+# Em config/settings.py
+IGNORED_SENDERS = [
+    "noreply@",
+    "newsletter@",
+    "marketing@",
+    "no-reply@"
+]
+```
+
+### Limite de E-mails
+
+```bash
+# Processar apenas 10 e-mails
+python run_ingestion.py --limit 10
+
+# Processar todos (sem limite)
+python run_ingestion.py --all
+```
+
+## 🧪 Testando a Configuração
+
+### Script de Validação
+
+```bash
+# Testar conexão IMAP e credenciais
+python scripts/test_docker_setup.py
+
+# Verificar estrutura de pastas
+python run_ingestion.py --dry-run
+```
+
+### Modo Debug
+
+```bash
+# Ver logs detalhados
+python run_ingestion.py --verbose
+
+# Manter e-mails não lidos
+python run_ingestion.py --no-mark-read
+
+# Não baixar anexos (apenas simular)
+python run_ingestion.py --dry-run
+```
+
+## 🚨 Solução de Problemas
+
+### Problema: "Authentication failed"
+
+**Solução:**
+
+1. Verifique se a senha está correta
+2. Para Gmail com 2FA, use "App Password"
+3. Certifique-se de permitir "apps menos seguros" se necessário
+
+### Problema: "Connection timeout"
+
+**Solução:**
+
+1. Verifique firewall/antivírus
+2. Confirme porta SSL (993)
+3. Teste conectividade: `telnet imap.gmail.com 993`
+
+### Problema: "No emails found"
+
+**Solução:**
+
+1. Verifique filtro de assunto
+2. Confirme se há e-mails não lidos
+3. Teste com `--subject ""` (sem filtro)
+
+### Problema: "Anexos não baixados"
+
+**Solução:**
+
+1. Verifique extensões (só .pdf e .xml)
+2. Confirme tamanho do anexo
+3. Verifique permissões de escrita
+
+## 🔄 Integração com Processamento
+
+Após a ingestão, os lotes são processados automaticamente:
 
 ```python
 from services.ingestion_service import IngestionService
-from ingestors.imap import ImapIngestor
-from pathlib import Path
 
-# Configurar ingestor
-ingestor = ImapIngestor()
+# Criar serviço (usa config do .env)
+service = IngestionService()
 
-# Criar serviço de ingestão
-service = IngestionService(ingestor, temp_dir=Path("temp_email"))
+# 1. Baixar e-mails e criar lotes
+folders = service.ingest_emails(subject_filter="Nota Fiscal")
 
-# Ingerir e-mails e criar lotes
-batch_folders = service.ingest_emails(subject_filter="Nota Fiscal")
+# 2. Processar cada lote
+for folder in folders:
+    result = service.process_batch(folder)
 
-# Processar cada lote
-for folder in batch_folders:
-    result = service.process_batch(folder, apply_correlation=True)
-    print(f"Lote {folder.name}: {len(result.all_documents)} documentos")
-
-# Limpar lotes antigos
-removed = service.cleanup_old_batches(max_age_hours=48)
-print(f"Removidos {removed} lotes antigos")
+    print(f"Lote: {folder.name}")
+    print(f"Status: {result.status}")
+    print(f"Documentos: {len(result.documents)}")
 ```
 
-## Validação de Regras
+## 🧹 Limpeza Automática
 
-Para testar as regras de extração em lotes existentes:
+Lotes antigos são removidos automaticamente:
 
 ```bash
-# Modo legado (PDFs soltos em failed_cases_pdf/)
-python scripts/validate_extraction_rules.py
+# Remover lotes com mais de 48 horas (padrão)
+python run_ingestion.py --cleanup
 
-# Modo batch (lotes com metadata.json)
-python scripts/validate_extraction_rules.py --batch-mode
+# Especificar idade máxima
+python run_ingestion.py --cleanup --max-age 24
 
-# Com correlação
-python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
+# Ver o que será removido (dry run)
+python run_ingestion.py --cleanup --dry-run
 ```
 
-## Solução de Problemas Comuns
+## 📈 Monitoramento
 
-### Erro de Conexão IMAP
+### Logs do Sistema
+
+Os logs são salvos em `logs/ingestion.log`:
 
 ```
-imaplib.error: LOGIN failed
+2025-01-15 10:30:00 - INFO - Conectando a imap.gmail.com:993
+2025-01-15 10:30:02 - INFO - Autenticado: seu.email@gmail.com
+2025-01-15 10:30:05 - INFO - Encontrados 5 e-mails com anexos
+2025-01-15 10:30:10 - INFO - Criado lote: email_20250115_103010_abc123
+2025-01-15 10:30:15 - INFO - Processamento concluído: 5 lotes criados
 ```
 
-**Solução:** Verifique se você está usando uma Senha de Aplicativo (App Password) se tiver 2FA ativado.
-
-### Lotes Não Correlacionados
-
-Se boletos não estão sendo vinculados às notas:
-
-1. Verifique se estão no mesmo lote (mesma pasta)
-2. Confira se o `metadata.json` existe
-3. Rode com debug: `python run_ingestion.py --batch-folder <pasta> 2>&1 | tee debug.log`
-
-### Limpeza Manual de Lotes
+### Métricas
 
 ```bash
-# Remover lotes com mais de 7 dias
-find temp_email -type d -mtime +7 -exec rm -rf {} +
+# Ver estatísticas
+python scripts/analyze_all_batches.py
+
+# Ver lotes problemáticos
+python scripts/simple_list.py
+
+# Analisar padrões de e-mail
+python scripts/analyze_emails_no_attachment.py
 ```
 
-## Integração com Google Sheets
+## 🔗 Integração com Outros Sistemas
 
-Após a ingestão, exporte os dados para o Google Sheets:
+### Google Sheets
 
 ```bash
-# Exportar para Google Sheets (usa relatorio_lotes.csv por padrão)
+# Exportar resultados para planilha
 python scripts/export_to_sheets.py
-
-# Testar sem enviar dados (dry-run)
-python scripts/export_to_sheets.py --dry-run
-
-# Usar modo detalhado (relatorio_consolidado.csv)
-python scripts/export_to_sheets.py --use-consolidado
 ```
 
-### CSVs Gerados pela Ingestão
+### Webhooks (Futuro)
 
-| Arquivo                              | Descrição                              | Uso                        |
-| :----------------------------------- | :------------------------------------- | :------------------------- |
-| `relatorio_lotes.csv`                | 1 linha por e-mail/lote                | **Padrão** para Sheets     |
-| `relatorio_consolidado.csv`          | 1 linha por documento extraído         | Modo detalhado             |
-| `avisos_emails_sem_anexo_latest.csv` | E-mails sem anexo (links)              | Aba `sem_anexos` no Sheets |
-| `relatorio_avisos_links.csv`         | Relatório simples de e-mails sem anexo | Leitura rápida             |
+```python
+# Exemplo de webhook para notificações
+webhook_url = "https://api.seusistema.com/notifications"
+payload = {
+    "event": "ingestion_completed",
+    "batch_count": len(folders),
+    "timestamp": datetime.now().isoformat()
+}
+```
 
-Veja o [Guia de Exportação para Google Sheets](google_sheets_export.md) para configuração completa.
+## 🆕 Recursos da v0.2.x+
 
-## Próximos Passos
+### Batch Processing
+
+- Processamento por lote (uma pasta por e-mail)
+- Metadata contextual para enriquecimento
+- Correlação automática DANFE↔Boleto
+
+### Google Sheets Export
+
+- Exportação automática para duas abas
+- Cálculo de situação (À vencer, Vencido, Pago)
+- Alertas de vencimento
+
+### Diagnóstico Avançado
+
+- Scripts de debug especializados
+- Análise de padrões de e-mail
+- Validação de regras de extração
+
+## 📚 Próximos Passos
 
 - [Guia de Uso](usage.md) - Processar PDFs locais
 - [Quick Start Boletos](quickstart_boletos.md) - Extrair boletos rapidamente
 - [Exportação Google Sheets](google_sheets_export.md) - Enviar dados para planilha
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
+- [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
 - [API Reference](../api/overview.md) - Documentação técnica
+
+---
+
+**Última atualização:** 2025-01-21  
+**Versão:** v0.3.x (Google Sheets Export)

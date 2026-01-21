@@ -1,4 +1,4 @@
-# Sistema de Extração de Documentos Fiscais (v0.2.x)
+# Sistema de Extração de Documentos Fiscais (v0.3.x)
 
 Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Boletos) a partir de PDFs, com suporte a **processamento em lote** e **correlação automática** entre documentos.
 
@@ -6,7 +6,8 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ### Planilha 1
 
-- DATA (processamento)
+- PROCESSADO
+- RECEBIDO
 - ASSUNTO
 - EMPRESA (nossa)
 - VENCIMENTO
@@ -17,7 +18,8 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ### Planilha 2
 
-- DATA (processamento)
+- PROCESSADO
+- RECEBIDO
 - ASSUNTO
 - EMPRESA (nossa)
 - FORNECEDOR
@@ -25,19 +27,13 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 - LINK (link do portal fiscal)
 - CÓDIGO (para liberaçao da nota)
 
-## Novidades da v0.2.x
-
-- ✅ **Batch Processing**: Processa e-mails como lotes (pasta com `metadata.json`)
-- ✅ **Correlação DANFE/Boleto**: Vincula automaticamente boletos às suas notas
-- ✅ **Herança de campos**: Boleto herda `numero_nota` da DANFE, DANFE herda `vencimento` do Boleto
-- ✅ **Status de conciliação**: OK, DIVERGENTE ou ORFAO
-
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation](https://img.shields.io/badge/docs-MkDocs-blue.svg)](./docs/)
 
 ## To Do - Notas mentais
 
 - [ ] Conferir os emails que retornaram valor zero. Analise no md analise-falhas.md.
+- [ ] Conferir os testes unitários. Atualizar eles pro projeto atual.
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**.
 - [ ] Lembrar de atualizar os dados do imap pro email da empresa.
 - [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento.
@@ -45,28 +41,6 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
 
 # Estudar por agora
-
-### Funcionalidade de Pareamento NF↔Boleto
-
-O sistema agora identifica pares de documentos (NF + Boleto) dentro do mesmo email e gera uma linha separada no `relatorio_lotes.csv` para cada par:
-
-**Estratégias de pareamento (em ordem de prioridade):**
-
-1. Número da nota no nome do arquivo (ex: `NF 2025.119.pdf` ↔ `BOLETO NF 2025.119.pdf`)
-2. Número da nota no conteúdo (`numero_nota` vs `referencia_nfse`)
-3. Valor exato quando não há número identificável (caso Locaweb)
-
-**Exemplo de resultado:**
-| batch*id | numero_nota | valor_compra | valor_boleto | status |
-|----------|-------------|--------------|--------------|--------|
-| email*...cc334d1b*2025.119 | 2025/119 | 9.290,71 | 9.290,71 | OK |
-| email*...cc334d1b_2025.122 | 2025/122 | 6.250,00 | 6.250,00 | OK |
-
-**Módulos envolvidos:**
-
-- `core/document_pairing.py` - Serviço de pareamento (novo)
-- `core/batch_result.py` - Método `to_summaries()` (novo)
-- `run_ingestion.py` - Exportação expandida
 
 ### Comandos de terminal uteis
 
@@ -76,22 +50,16 @@ Procurar pdfs com nome de empresas específicas ao identificar casos falhos nos 
 Get-ChildItem -Path .\failed_cases_pdf\ -Recurse -Filter "*MOTO*" -Name
 ```
 
-### ✅ Camada Prata Implementada (v0.2.x)
-
-A estratégia de correlação foi implementada nos seguintes módulos:
-
-- `core/metadata.py` - EmailMetadata (contexto do e-mail)
-- `core/batch_processor.py` - BatchProcessor (processa lotes)
-- `core/batch_result.py` - BatchResult (resultado de lote)
-- `core/correlation_service.py` - CorrelationService (correlação)
-
-**Regras implementadas:**
-
-- ✅ Regra 1: Herança de Dados (Boleto ↔ DANFE)
-- ✅ Regra 2: Fallback de Identificação (OCR → Metadados)
-- ✅ Regra 3: Validação Cruzada (status_conciliacao: OK/DIVERGENTE/ORFAO)
-
 ## Done
+
+### 21/01/2026
+
+- [x] **Criação do CarrierTelecomExtractor para documentos específicos**: Extrator dedicado para documentos da Carrier Telecom/TELCABLES BRASIL LTDA que possuem características únicas como "DOCUMENTO AUXILIAR DA NOTA FISCAL FATURA DE SERVIÇOS DE COMUNICAÇÃO ELETRÔNICA" e linha digitável para débito automático.
+- [x] **Solução para problema do caractere 'Ê' no OCR**: Implementação de normalização robusta de texto OCR para tratar caracteres especiais como 'Ê' que eram usados como substitutos de espaços, garantindo que padrões como "TOTALÊAÊPAGAR:ÊR$Ê29.250,00" sejam reconhecidos corretamente.
+- [x] **Aprimoramento do AdminDocumentExtractor para evitar falsos positivos**: Implementação de padrões negativos e sistema de pontuação para detectar documentos fiscais (NFSEs/DANFEs) e evitar classificação incorreta como documentos administrativos.
+- [x] **Análise e correção de casos problemáticos**: Identificação de 21 casos onde documentos fiscais eram classificados como "outros" com valor zero, com correções específicas para TCF TELECOM, BOX BRAZIL e outros provedores.
+- [x] **Validação com testes unitários**: Criação de testes específicos para validar a detecção correta de documentos administrativos genuínos e rejeição de documentos fiscais.
+- [x] **Scripts de análise automatizada**: Desenvolvimento de scripts para análise de PDFs problemáticos e geração de relatórios detalhados sobre casos de classificação incorreta.
 
 ### 20/01/2026
 

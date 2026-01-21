@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Tuple
 def load_json_report(json_path: str) -> Dict[str, Any]:
     """Load JSON report from file."""
     try:
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         print(f"Error: JSON report file not found: {json_path}")
@@ -28,7 +28,9 @@ def load_json_report(json_path: str) -> Dict[str, Any]:
         sys.exit(1)
 
 
-def organize_diagnostics(diagnostics: List[Dict[str, Any]]) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+def organize_diagnostics(
+    diagnostics: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
     """
     Organize diagnostics by file and severity.
 
@@ -69,7 +71,7 @@ def format_location(range_data: Dict[str, Any]) -> str:
 
 def generate_markdown_report(
     data: Dict[str, Any],
-    organized_diagnostics: Dict[str, Dict[str, List[Dict[str, Any]]]]
+    organized_diagnostics: Dict[str, Dict[str, List[Dict[str, Any]]]],
 ) -> str:
     """Generate markdown report from organized diagnostics."""
 
@@ -91,12 +93,10 @@ def generate_markdown_report(
     files_count = len(organized_diagnostics)
 
     error_count = sum(
-        len(diags.get("error", []))
-        for diags in organized_diagnostics.values()
+        len(diags.get("error", [])) for diags in organized_diagnostics.values()
     )
     warning_count = sum(
-        len(diags.get("warning", []))
-        for diags in organized_diagnostics.values()
+        len(diags.get("warning", [])) for diags in organized_diagnostics.values()
     )
 
     # Start building markdown
@@ -119,7 +119,7 @@ def generate_markdown_report(
     sorted_files = sorted(
         organized_diagnostics.items(),
         key=lambda x: (len(x[1].get("error", [])), len(x[1].get("warning", []))),
-        reverse=True
+        reverse=True,
     )
 
     for file_path, diagnostics in sorted_files:
@@ -172,7 +172,9 @@ def generate_markdown_report(
     lines.append("## Diagnostic Rules Summary")
     lines.append("")
 
-    rule_counts: Dict[str, Tuple[int, int]] = defaultdict(lambda: (0, 0))  # (errors, warnings)
+    rule_counts: Dict[str, Tuple[int, int]] = defaultdict(
+        lambda: (0, 0)
+    )  # (errors, warnings)
 
     for diagnostic in data.get("generalDiagnostics", []):
         rule = diagnostic.get("rule", "Unknown")
@@ -189,9 +191,7 @@ def generate_markdown_report(
         lines.append("|------|--------|----------|-------|")
 
         sorted_rules = sorted(
-            rule_counts.items(),
-            key=lambda x: (x[1][0], x[1][1]),
-            reverse=True
+            rule_counts.items(), key=lambda x: (x[1][0], x[1][1]), reverse=True
         )
 
         for rule, (errors, warnings) in sorted_rules:
@@ -211,19 +211,19 @@ def main():
         description="Convert pyright JSON report to markdown format"
     )
     parser.add_argument(
-        "-i", "--input",
-        default="pyright_report.json",
-        help="Input JSON file (default: pyright_report.json)"
+        "-i",
+        "--input",
+        default="data/output/pyright_report.json",
+        help="Input JSON file (default: data/output/pyright_report.json)",
     )
     parser.add_argument(
-        "-o", "--output",
-        default="pyright_report.md",
-        help="Output markdown file (default: pyright_report.md)"
+        "-o",
+        "--output",
+        default="data/output/pyright_report.md",
+        help="Output markdown file (default: data/output/pyright_report.md)",
     )
     parser.add_argument(
-        "--no-stats",
-        action="store_true",
-        help="Skip statistics summary"
+        "--no-stats", action="store_true", help="Skip statistics summary"
     )
 
     args = parser.parse_args()

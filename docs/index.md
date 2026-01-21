@@ -157,6 +157,22 @@ Dados enriquecidos e validados prontos para integração:
 
 ---
 
+## 🔧 Debugging e Diagnóstico
+
+O sistema inclui uma suite completa de scripts para debugging e diagnóstico de problemas de extração:
+
+| Problema                    | Scripts Recomendados                                             | Descrição                                           |
+| --------------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| **Debug de PDF individual** | `inspect_pdf.py`, `debug_pdf_text.py`                            | Inspeção rápida de campos extraídos e texto bruto   |
+| **Lotes problemáticos**     | `simple_list.py`, `list_problematic.py`, `analyze_admin_nfse.py` | Identificação de lotes com "outros > 0 e valor = 0" |
+| **Problemas OCR**           | `diagnose_ocr_issue.py`, `debug_pdf_text.py`                     | Diagnóstico do caractere 'Ê' e qualidade de texto   |
+| **Validação de extratores** | `validate_extraction_rules.py`, `test_extractor_routing.py`      | Teste após modificar extratores                     |
+| **Análise de e-mails**      | `analyze_emails_no_attachment.py`, `diagnose_inbox_patterns.py`  | Identificação de padrões úteis                      |
+
+**Documentação completa**: Consulte o [Guia de Debug](development/debugging_guide.md) para workflows detalhados e a [Referência Rápida](debug/scripts_quick_reference.md) para comandos essenciais.
+
+---
+
 ## 📂 Estrutura do Projeto
 
 Organização seguindo princípios de _Clean Architecture_ e SOLID:
@@ -229,27 +245,38 @@ scrapper/
 │
 ├── docs/                       # Documentação MkDocs
 │   ├── api/
+│   ├── analysis/
+│   ├── debug/
 │   ├── development/
 │   ├── docker/
 │   ├── guide/
 │   └── research/
 │
-├── scripts/                    # Scripts utilitários e de diagnóstico
+├── scripts/                    # Scripts utilitários e de diagnóstico (debug, análise, validação)
 │   ├── _init_env.py
-│   ├── analyze_all_batches.py
-│   ├── analyze_boleto.py
-│   ├── analyze_emails_no_attachment.py
-│   ├── analyze_fatura_total.py
-│   ├── analyze_pdf.py
-│   ├── consolidate_batches.py
-│   ├── debug_batch.py          # 🆕 Debug de lotes
-│   ├── demo_pairing.py
-│   ├── example_batch_processing.py
-│   ├── export_to_sheets.py     # 🆕 Exportação para Google Sheets (v0.3.x)
-│   ├── ingest_emails_no_attachment.py
-│   ├── inspect_pdf.py          # 🆕 Inspeção rápida de PDFs
-│   ├── test_docker_setup.py
-│   └── validate_extraction_rules.py
+│   ├── analyze_admin_nfse.py          # Análise de NFSEs mal classificadas
+│   ├── analyze_all_batches.py         # Análise completa de todos os batches
+│   ├── analyze_emails_no_attachment.py # E-mails sem anexo (links úteis)
+│   ├── check_problematic_pdfs.py      # Análise de PDFs problemáticos
+│   ├── clean_dev.py                   # Limpeza de arquivos temporários
+│   ├── consolidate_batches.py         # Consolidação de resultados
+│   ├── debug_pdf_text.py              # Debug detalhado de texto de PDF
+│   ├── demo_pairing.py                # Demonstração de pareamento
+│   ├── diagnose_import_issues.py      # Diagnóstico de problemas de importação
+│   ├── diagnose_inbox_patterns.py     # Análise de padrões de inbox
+│   ├── diagnose_ocr_issue.py          # Problemas de OCR (caractere 'Ê')
+│   ├── example_batch_processing.py    # Exemplo de processamento
+│   ├── export_to_sheets.py            # Exportação Google Sheets (v0.3.x)
+│   ├── generate_report.py             # Relatório pyright JSON→Markdown
+│   ├── ingest_emails_no_attachment.py # Ingestão de e-mails sem anexo
+│   ├── inspect_pdf.py                 # Inspeção rápida de PDFs 🆕
+│   ├── list_problematic.py            # Lista detalhada de lotes problemáticos
+│   ├── repro_extraction_failure.py    # Reprodução de falhas de extração
+│   ├── simple_list.py                 # Lista simples de lotes problemáticos
+│   ├── test_admin_detection.py        # Teste de detecção administrativa
+│   ├── test_docker_setup.py           # Teste de configuração Docker
+│   ├── test_extractor_routing.py      # Teste de roteamento de extratores
+│   └── validate_extraction_rules.py   # Validação de regras de extração
 │
 ├── tests/                      # Testes Unitários e de Integração
 ├── run_ingestion.py            # CLI para ingestão de e-mail (atualizado v0.2.x)
@@ -273,7 +300,7 @@ scrapper/
 | **Cálculo automático de situação**     | ❌     | ❌         | ✅         |
 | **Alertas de vencimento (dias úteis)** | ❌     | ❌         | ✅         |
 
-Para migrar do v0.1.x para v0.2.x, consulte o [Guia de Migração](MIGRATION_BATCH_PROCESSING.md).
+Para migrar do v0.1.x para v0.2.x, consulte o [Guia de Migração](development/MIGRATION_BATCH_PROCESSING.md).
 
 Para configurar a exportação para Google Sheets, consulte o [Guia de Exportação](guide/google_sheets_export.md).
 
@@ -317,7 +344,7 @@ Para configurar a exportação para Google Sheets, consulte o [Guia de Exportaç
 
 - [📧 Guia de Ingestão](guide/ingestion.md) - Configurar e-mail e processar lotes
 - [📤 Exportação Google Sheets](guide/google_sheets_export.md) - 🆕 Exportar para planilhas
-- [🔄 Migração Batch](MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
+- [🔄 Migração Batch](development/MIGRATION_BATCH_PROCESSING.md) - Migrar do v0.1.x para v0.2.x
 - [🧪 Guia de Testes](guide/testing.md) - Validar regras de extração
 - [📊 API Reference](api/overview.md) - Documentação técnica completa
 - [🏗️ Arquitetura PDF](research/architecture_pdf_extraction.md) - Detalhes de extração

@@ -470,7 +470,7 @@ if correlation.divergencia:
 - [🚀 Guia de Uso](../guide/usage.md)
 - [📧 Ingestão de E-mails](../guide/ingestion.md)
 - [📤 Exportação Google Sheets](../guide/google_sheets_export.md) - 🆕 Guia completo
-- [🔄 Migração Batch](../MIGRATION_BATCH_PROCESSING.md)
+- [🔄 Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md)
 - [🧪 Testes Automatizados](../guide/testing.md)
 - [🏗️ Arquitetura PDF Extraction](../research/architecture_pdf_extraction.md)
 - [📈 Histórico de Refatorações](../development/refactoring_history.md)

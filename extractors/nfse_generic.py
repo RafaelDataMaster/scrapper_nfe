@@ -23,7 +23,6 @@ class NfseGenericExtractor(BaseExtractor):
         """Retorna True apenas para textos que parecem NFSe (e não boleto/DANFE/outros)."""
         text_upper = (text or "").upper()
 
-
         # Indicadores FORTES de NFS-e - se presentes, É NFS-e mesmo com outras palavras
         nfse_strong_indicators = [
             "NFS-E",
@@ -35,8 +34,13 @@ class NfseGenericExtractor(BaseExtractor):
             "PREFEITURA MUNICIPAL",
             "CÓDIGO DE VERIFICAÇÃO",
             "CODIGO DE VERIFICACAO",
+            "DOCUMENTO AUXILIAR DA NOTA FISCAL DE SERVIÇO",
+            "DOCUMENTO AUXILIAR DA NFS-E",
+            "DOCUMENTO AUXILIAR DA NOTA FISCAL",
         ]
-        is_strong_nfse = any(indicator in text_upper for indicator in nfse_strong_indicators)
+        is_strong_nfse = any(
+            indicator in text_upper for indicator in nfse_strong_indicators
+        )
 
         # Se for NFS-e forte, retorna True imediatamente (ignora outras verificações)
         if is_strong_nfse:
@@ -48,7 +52,7 @@ class NfseGenericExtractor(BaseExtractor):
         # DANFE / NF-e (produto) - não é NFSe
         danfe_keywords = [
             "DANFE",
-            "DOCUMENTO AUXILIAR",
+            # "DOCUMENTO AUXILIAR" removido para evitar conflito com NFS-e
             "CHAVE DE ACESSO",
             "NF-E",
             "NFE",
@@ -219,20 +223,30 @@ class NfseGenericExtractor(BaseExtractor):
 
         # Se temos CNPJ, verifica diretamente no cadastro
         if cnpj:
-            cnpj_limpo = re.sub(r'\D', '', cnpj)
+            cnpj_limpo = re.sub(r"\D", "", cnpj)
             if cnpj_limpo in EMPRESAS_CADASTRO:
                 return True
 
         # Verifica se o nome contém alguma razão social do cadastro
         for dados in EMPRESAS_CADASTRO.values():
-            razao = dados.get('razao_social', '').upper()
+            razao = dados.get("razao_social", "").upper()
             if not razao:
                 continue
             # Extrai a parte principal do nome (antes de parênteses)
-            razao_principal = razao.split('(')[0].strip()
+            razao_principal = razao.split("(")[0].strip()
             # Remove sufixos comuns para comparação mais flexível
-            razao_limpa = re.sub(r'\s*(LTDA|S/?A|EIRELI|ME|EPP|S\.A\.?|-\s*ME|-\s*EPP)\s*$', '', razao_principal, flags=re.IGNORECASE).strip()
-            nome_limpo = re.sub(r'\s*(LTDA|S/?A|EIRELI|ME|EPP|S\.A\.?|-\s*ME|-\s*EPP)\s*$', '', nome_upper, flags=re.IGNORECASE).strip()
+            razao_limpa = re.sub(
+                r"\s*(LTDA|S/?A|EIRELI|ME|EPP|S\.A\.?|-\s*ME|-\s*EPP)\s*$",
+                "",
+                razao_principal,
+                flags=re.IGNORECASE,
+            ).strip()
+            nome_limpo = re.sub(
+                r"\s*(LTDA|S/?A|EIRELI|ME|EPP|S\.A\.?|-\s*ME|-\s*EPP)\s*$",
+                "",
+                nome_upper,
+                flags=re.IGNORECASE,
+            ).strip()
 
             # Verifica match exato ou se um contém o outro
             if razao_limpa and nome_limpo:
@@ -254,16 +268,19 @@ class NfseGenericExtractor(BaseExtractor):
         m_empresa_antes_cnpj = re.search(
             r"([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+(?:LTDA|S/?A|EIRELI|ME|EPP))\s*\n?\s*(?:CPF/)?CNPJ",
             text,
-            re.IGNORECASE | re.MULTILINE
+            re.IGNORECASE | re.MULTILINE,
         )
         if m_empresa_antes_cnpj:
             nome = m_empresa_antes_cnpj.group(1).strip()
             # Limpar possível lixo no início (ex: "Código de Verificação\n12345\n")
             # Pega apenas a última linha (que contém o nome da empresa)
-            if '\n' in nome:
-                nome = nome.split('\n')[-1].strip()
+            if "\n" in nome:
+                nome = nome.split("\n")[-1].strip()
             # Extrai CNPJ próximo para verificação
-            cnpj_proximo = re.search(r"(?:CPF/)?CNPJ\s*[:\-]?\s*(\d{2}\D?\d{3}\D?\d{3}\D?\d{4}\D?\d{2})", text[m_empresa_antes_cnpj.start():m_empresa_antes_cnpj.end()+50])
+            cnpj_proximo = re.search(
+                r"(?:CPF/)?CNPJ\s*[:\-]?\s*(\d{2}\D?\d{3}\D?\d{3}\D?\d{4}\D?\d{2})",
+                text[m_empresa_antes_cnpj.start() : m_empresa_antes_cnpj.end() + 50],
+            )
             cnpj = cnpj_proximo.group(1) if cnpj_proximo else None
             if len(nome) >= 5 and not self._is_empresa_propria(nome, cnpj):
                 return nome
@@ -271,7 +288,7 @@ class NfseGenericExtractor(BaseExtractor):
         # Padrão 2: Após "Código de Verificação" + número (comum em NFS-e de prefeituras)
         m_apos_verificacao = re.search(
             r"(?i)(?:Código de Verificação|Verificação)\s+[\w\d]+\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+(?:LTDA|S/?A|EIRELI|ME|EPP))",
-            text
+            text,
         )
         if m_apos_verificacao:
             nome = m_apos_verificacao.group(1).strip()
@@ -286,7 +303,9 @@ class NfseGenericExtractor(BaseExtractor):
         )
         if m_before_cnpj:
             nome = re.sub(r"\s+", " ", m_before_cnpj.group(1)).strip()
-            if not re.match(r"(?i)^(TOMADOR|CPF|CNPJ|INSCRI|PREFEITURA|NOTA\s+FISCAL)\b", nome):
+            if not re.match(
+                r"(?i)^(TOMADOR|CPF|CNPJ|INSCRI|PREFEITURA|NOTA\s+FISCAL)\b", nome
+            ):
                 if not self._is_empresa_propria(nome):
                     return nome
 
@@ -310,7 +329,7 @@ class NfseGenericExtractor(BaseExtractor):
         m_primeira_empresa = re.search(
             r"\b([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]{5,80}(?:LTDA|S/?A|EIRELI|ME|EPP))\b",
             text,
-            re.IGNORECASE
+            re.IGNORECASE,
         )
         if m_primeira_empresa:
             nome = m_primeira_empresa.group(1).strip()
@@ -326,11 +345,16 @@ class NfseGenericExtractor(BaseExtractor):
             start_pos = cnpj_match.end()
             text_after_cnpj = text[start_pos : start_pos + 100]
             # Evitar capturar "Inscrição municipal" ou similar
-            nome_match = re.search(r"([A-ZÀÁÂÃÇÉÊÍÓÔÕÚ][A-Za-zÀ-ÿ\s&\.\-]{5,80})", text_after_cnpj)
+            nome_match = re.search(
+                r"([A-ZÀÁÂÃÇÉÊÍÓÔÕÚ][A-Za-zÀ-ÿ\s&\.\-]{5,80})", text_after_cnpj
+            )
             if nome_match:
                 nome = nome_match.group(1).strip()
                 # Rejeitar se começar com palavras-chave de metadados
-                if re.match(r"(?i)^(Inscri[çc][ãa]o|Municipal|Estadual|CEP|AV\.|RUA|Telefone|Email)", nome):
+                if re.match(
+                    r"(?i)^(Inscri[çc][ãa]o|Municipal|Estadual|CEP|AV\.|RUA|Telefone|Email)",
+                    nome,
+                ):
                     return None
                 nome = re.sub(r"\d{2}/\d{2}/\d{4}", "", nome).strip()
                 nome = re.sub(r"\d+", "", nome).strip()

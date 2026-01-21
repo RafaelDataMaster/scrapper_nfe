@@ -480,4 +480,4 @@ for doc in result.all_documents:
 - [Core](core.md) - Módulos base (processor, models)
 - [Services](services.md) - Serviço de ingestão
 - [Guia de Ingestão](../guide/ingestion.md) - Configuração e uso
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
+- [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x

@@ -259,5 +259,5 @@ python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 ## Próximos Passos
 
 - [Guia de Debug](../development/debugging_guide.md) - Técnicas avançadas de debug de PDFs
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Detalhes da migração v0.1.x → v0.2.x
+- [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Detalhes da migração v0.1.x → v0.2.x
 - [API Reference](../api/overview.md) - Documentação técnica completa

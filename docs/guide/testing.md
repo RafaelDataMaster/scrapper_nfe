@@ -1,267 +1,299 @@
 # Guia de Testes Automatizados
 
-Este documento descreve como executar e expandir a suíte de testes do projeto.
+Este guia descreve como validar e testar o sistema de extração de documentos fiscais, garantindo que as regras de extração funcionem corretamente e que modificações não causem regressões.
 
 ## Visão Geral
 
-Utilizamos o framework `pytest` para testes. Os testes estão localizados na pasta `tests/` e cobrem:
+O sistema inclui várias ferramentas de teste e validação:
 
-1. **Estratégias de Leitura (`test_strategies.py`):** Valida se o `pdfplumber` e o fallback para OCR estão funcionando.
-2. **Ingestão de E-mail (`test_ingestion.py`):** Simula a conexão IMAP e o download de anexos (usando Mocks).
-3. **Batch Processing (`test_batch_processing.py`):** Testes para os novos módulos de processamento em lote (BatchProcessor, CorrelationService, EmailMetadata, BatchResult, IngestionService).
+1. **Validação de regras de extração** - Testa todos os extratores contra PDFs de referência
+2. **Testes de integração** - Valida o fluxo completo de processamento
+3. **Testes de performance** - Mede tempo de extração e uso de recursos
+4. **Monitoramento de qualidade** - Analisa taxa de sucesso em dados reais
 
-## Executando os Testes
+## Validação de Regras de Extração
 
-### Rodar Todos os Testes
+A ferramenta principal para validação é o script `validate_extraction_rules.py`.
 
-```bash
-python -m pytest tests/ -v
-```
-
-### Rodar Apenas Testes de Batch Processing
+### Testes Básicos
 
 ```bash
-python -m pytest tests/test_batch_processing.py -v
-```
-
-### Rodar um Teste Específico
-
-```bash
-python -m pytest tests/test_batch_processing.py::TestBatchProcessor::test_process_single_file -v
-```
-
-### Saída Esperada
-
-Se tudo estiver correto, você verá uma saída similar a esta:
-
-```text
-========================= test session starts ==========================
-collected 164 items
-
-tests/test_strategies.py ......                                   [  3%]
-tests/test_ingestion.py ...                                       [  5%]
-tests/test_batch_processing.py ................................................ [ 35%]
-...
-========================= 164 passed in 2.34s ==========================
-```
-
-## Estrutura dos Testes
-
-### 1. Testes de Estratégia (`test_strategies.py`)
-
-Verifica se a lógica de extração de texto está resiliente.
-
-- `test_extract_success`: Garante que PDFs legíveis retornam texto.
-- `test_extract_fallback_empty_text`: Garante que PDFs vazios/imagens retornam string vazia (para acionar o OCR).
-- `test_extract_file_error`: Garante que o sistema não trava com arquivos corrompidos.
-
-### 2. Testes de Ingestão (`test_ingestion.py`)
-
-Verifica a integração com e-mail sem precisar de credenciais reais.
-
-- `test_connect`: Verifica se os parâmetros de host/user/pass são passados corretamente para o `imaplib`.
-- `test_fetch_attachments_success`: Simula uma resposta do servidor IMAP contendo um PDF e verifica se o parser extrai o anexo corretamente.
-- `test_save_bytes_to_disk_with_unique_name`: **Crítico.** Verifica se a lógica de salvar arquivos temporários gera nomes únicos (UUID) para evitar sobrescrita.
-
-### 3. Testes de Batch Processing (`test_batch_processing.py`)
-
-Testes para os módulos da v0.2.x:
-
-- **TestEmailMetadata**: Criação, serialização e carregamento de metadados de e-mail.
-- **TestBatchResult**: Agregação de resultados, cálculo de totais, serialização.
-- **TestBatchProcessor**: Processamento de lotes com e sem metadata, modo legado.
-- **TestCorrelationService**: Correlação DANFE/Boleto, herança de campos, validação cruzada.
-- **TestIngestionService**: Criação de lotes, limpeza automática, integração com ingestor.
-
-## Criando Novos Testes
-
-Ao adicionar uma nova funcionalidade, crie testes na pasta `tests/`.
-
-### Exemplo de Teste Simples
-
-```python
-import pytest
-
-def test_caso_sucesso():
-    resultado = minha_funcao(10)
-    assert resultado == 20
-
-def test_caso_erro():
-    with pytest.raises(ValueError):
-        minha_funcao(-1)
-```
-
-### Exemplo com Fixtures
-
-```python
-import pytest
-from pathlib import Path
-
-@pytest.fixture
-def sample_metadata():
-    return {
-        "batch_id": "test_123",
-        "email_subject": "Test Subject",
-        "email_sender_name": "Test Sender"
-    }
-
-def test_with_fixture(sample_metadata):
-    assert sample_metadata["batch_id"] == "test_123"
-```
-
----
-
-## Scripts Utilitários para Validação
-
-Além dos testes unitários, o projeto conta com scripts na pasta `scripts/` para validar regras de extração com dados reais.
-
-### 1. Validação de Regras (`scripts/validate_extraction_rules.py`)
-
-Valida as regras de extração em PDFs reais, suportando modo legado e batch.
-
-**Uso básico (modo legado):**
-
-```bash
+# Validar regras básicas (failed_cases_pdf/)
 python scripts/validate_extraction_rules.py
-```
 
-**Modo batch com correlação:**
-
-```bash
-python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
-```
-
-**Flags disponíveis:**
-
-| Flag                      | Descrição                          |
-| :------------------------ | :--------------------------------- |
-| `--batch-mode`            | Processa lotes com metadata.json   |
-| `--apply-correlation`     | Aplica correlação entre documentos |
-| `--revalidar-processados` | Reprocessa arquivos já validados   |
-| `--validar-prazo`         | Valida vencimentos (obrigatório)   |
-| `--exigir-nf`             | Exige número da nota               |
-| `--input-dir <path>`      | Diretório customizado              |
-
-**Saída:** Gera CSVs em `data/debug_output/` separados por tipo (danfe, boleto, nfse, outros).
-
-### 2. Inspeção de PDFs (`scripts/inspect_pdf.py`)
-
-Permite inspecionar rapidamente um PDF e ver os campos extraídos.
-
-```bash
-# Busca automática pelo nome do arquivo
-python scripts/inspect_pdf.py exemplo.pdf
-
-# Caminho completo
-python scripts/inspect_pdf.py failed_cases_pdf/pasta/boleto.pdf
-
-# Mostrar apenas campos específicos
-python scripts/inspect_pdf.py danfe.pdf --fields fornecedor valor vencimento
-
-# Mostrar texto bruto completo
-python scripts/inspect_pdf.py nota.pdf --raw
-```
-
-**Funcionalidades:**
-
-- Busca recursiva em `failed_cases_pdf/` e `temp_email/`
-- Mostra campos relevantes baseado no tipo do documento
-- Suporta filtro de campos específicos
-- Exibe texto bruto (truncado ou completo)
-
-### 3. Exemplos de Batch Processing (`scripts/example_batch_processing.py`)
-
-Demonstra como usar os novos módulos de batch processing.
-
-```bash
-# Criar lote de teste
-python scripts/example_batch_processing.py --create-test-batch
-
-# Processar lote existente
-python scripts/example_batch_processing.py --process temp_email/email_123
-```
-
-### 4. Teste de Setup Docker (`scripts/test_docker_setup.py`)
-
-Verifica se os pré-requisitos (Tesseract, Poppler, etc.) estão instalados.
-
-```bash
-python scripts/test_docker_setup.py
-```
-
----
-
-## Workflow de Validação Recomendado
-
-### 1. Após Mudanças no Código
-
-```bash
-# Rodar todos os testes
-python -m pytest tests/ -v
-
-# Se todos passarem, validar com PDFs reais
+# Modo batch (lotes com metadata.json)
 python scripts/validate_extraction_rules.py --batch-mode
-```
 
-### 2. Debug de PDF Problemático
-
-```bash
-# 1. Inspecionar o PDF
-python scripts/inspect_pdf.py arquivo_problematico.pdf
-
-# 2. Ver texto bruto para criar regex
-python scripts/inspect_pdf.py arquivo_problematico.pdf --raw
-
-# 3. Após ajustar o código, rodar testes
-python -m pytest tests/ -v
-
-# 4. Validar em lote
-python scripts/validate_extraction_rules.py
-```
-
-### 3. Validação Completa (CI/CD)
-
-```bash
-# Testes unitários
-python -m pytest tests/ -v --tb=short
-
-# Validação de regras
+# Validação completa com correlação
 python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
+
+# Gerar relatório detalhado
+python scripts/validate_extraction_rules.py --report
 ```
 
----
+### Outputs Gerados
 
-## Cobertura de Testes
+O script cria CSVs detalhados em `data/debug_output/`:
 
-Para gerar relatório de cobertura:
+| Arquivo                      | Descrição                        |
+| ---------------------------- | -------------------------------- |
+| `boletos_sucesso_debug.csv`  | Boletos processados com sucesso  |
+| `boletos_falha_debug.csv`    | Boletos que falharam na extração |
+| `danfes_sucesso_debug.csv`   | DANFEs processados com sucesso   |
+| `danfes_falha_debug.csv`     | DANFEs que falharam na extração  |
+| `nfses_sucesso_debug.csv`    | NFSEs processadas com sucesso    |
+| `nfses_falha_debug.csv`      | NFSEs que falharam na extração   |
+| `outros_sucesso_debug.csv`   | Documentos "outros" processados  |
+| `extractors_performance.csv` | Tempo de execução por extrator   |
+
+### Interpretando os Resultados
+
+1. **Taxa de sucesso**: `sucesso / (sucesso + falha)`
+2. **Campos problemáticos**: Campos frequentemente vazios ou incorretos
+3. **Extratores lentos**: Extratores com tempo médio de execução alto
+4. **Padrões de falha**: PDFs com problemas semelhantes (OCR, layout, etc.)
+
+## Testes de Extratores
+
+### Testar um Extrator Específico
 
 ```bash
-# Instalar pytest-cov
-pip install pytest-cov
+# Testar o extrator de boletos
+python scripts/test_extractor_routing.py data/test/boletos/exemplo.pdf
 
-# Rodar com cobertura
-python -m pytest tests/ --cov=core --cov=extractors --cov=services --cov-report=html
+# Testar com texto OCR
+python scripts/test_extractor_routing.py --texto caminho/do/pdf.pdf
 
-# Abrir relatório
-open htmlcov/index.html  # macOS
-start htmlcov/index.html  # Windows
+# Testar múltiplos PDFs
+find data/test/boletos -name "*.pdf" | xargs -I {} python scripts/test_extractor_routing.py {}
 ```
 
----
+### Criar Novos Casos de Teste
 
-## Resumo dos Comandos
+1. **Colete PDFs representativos** em `data/test/<tipo>/`
+2. **Execute validação**: `python scripts/validate_extraction_rules.py`
+3. **Analise falhas**: Revise `data/debug_output/*_falha_debug.csv`
+4. **Ajuste extratores**: Modifique regex ou lógica de extração
+5. **Revalide**: Execute novamente para garantir correção
 
-| Ação                    | Comando                                                    |
-| :---------------------- | :--------------------------------------------------------- |
-| Rodar todos os testes   | `python -m pytest tests/ -v`                               |
-| Rodar testes de batch   | `python -m pytest tests/test_batch_processing.py -v`       |
-| Validar regras (legado) | `python scripts/validate_extraction_rules.py`              |
-| Validar regras (batch)  | `python scripts/validate_extraction_rules.py --batch-mode` |
-| Inspecionar PDF         | `python scripts/inspect_pdf.py arquivo.pdf`                |
-| Testar setup            | `python scripts/test_docker_setup.py`                      |
+## Testes de Processamento em Lote
 
-## Próximos Passos
+### Debug de Lotes Completos
+
+```bash
+# Analisar um lote específico
+python scripts/debug_batch.py temp_email/email_20260105_125518_4e51c5e2
+
+# Analisar todos os lotes
+python scripts/analyze_all_batches.py
+
+# Identificar lotes problemáticos
+python scripts/list_problematic.py
+```
+
+### Validação de Correlação
+
+A correlação entre DANFE e Boleto pode ser testada com:
+
+```python
+from core.correlation_service import CorrelationService
+
+service = CorrelationService()
+result = service.correlate(batch_documents, email_metadata)
+
+print(f"Status: {result.status}")
+print(f"Divergência: {result.divergencia}")
+print(f"Documentos correlacionados: {len(result.enriched_documents)}")
+```
+
+## Testes de Performance
+
+### Benchmark de Extratores
+
+```bash
+# Medir tempo de extração
+python scripts/validate_extraction_rules.py --benchmark
+
+# Limitar tempo máximo por PDF
+python scripts/validate_extraction_rules.py --timeout 10
+
+# Testar com diferentes estratégias de OCR
+python scripts/validate_extraction_rules.py --strategy ocr
+python scripts/validate_extraction_rules.py --strategy native
+```
+
+### Métricas de Performance
+
+| Métrica                    | Alvo          | Como Medir                   |
+| -------------------------- | ------------- | ---------------------------- |
+| Tempo médio de extração    | < 5s por PDF  | `extractors_performance.csv` |
+| Taxa de sucesso            | > 95%         | CSVs de sucesso/falha        |
+| Uso de memória             | < 500MB       | Monitorar durante execução   |
+| Tempo de correlacionamento | < 1s por lote | Logs do `CorrelationService` |
+
+## Testes de Integração
+
+### Pipeline Completo
+
+```bash
+# Pipeline completo (ingestão + processamento + exportação)
+python run_ingestion.py --test-mode
+
+# Testar apenas extração (sem enviar e-mails)
+python run_ingestion.py --dry-run
+
+# Validar exportação para Google Sheets
+python scripts/export_to_sheets.py --dry-run
+```
+
+### Testes com Dados Reais
+
+1. **Prepare dados de teste** em `temp_email/test_batch/`
+2. **Execute processamento**: `python run_ingestion.py --batch-folder temp_email/test_batch`
+3. **Verifique resultados**: `data/output/relatorio_lotes.csv`
+4. **Compare com esperado**: Valide campos críticos (valor, vencimento, fornecedor)
+
+## Monitoramento Contínuo
+
+### Scripts de Análise Periódica
+
+```bash
+# Analisar saúde do sistema
+python scripts/analyze_all_batches.py
+
+# Identificar padrões de falha
+python scripts/check_problematic_pdfs.py
+
+# Monitorar qualidade de OCR
+python scripts/diagnose_ocr_issue.py
+
+# Analisar padrões de e-mail
+python scripts/analyze_emails_no_attachment.py --limit 100
+```
+
+### Métricas de Qualidade
+
+| Métrica                      | Como Calcular                              | Frequência   |
+| ---------------------------- | ------------------------------------------ | ------------ |
+| Taxa de extração completa    | `campos_preenchidos / campos_totais`       | Diária       |
+| Taxa de correlação           | `lotes_correlacionados / lotes_totais`     | Por execução |
+| Tempo médio de processamento | `soma_tempos / lotes_processados`          | Semanal      |
+| Taxa de falsos positivos     | `outros_mal_classificados / outros_totais` | Mensal       |
+
+## Testes após Modificações
+
+### Checklist de Validação
+
+Antes de considerar uma modificação como concluída:
+
+1. [ ] **Testes unitários** passam: `pytest tests/test_extractors.py`
+2. [ ] **Validação de regras** sem regressões: `python scripts/validate_extraction_rules.py --batch-mode`
+3. [ ] **Performance** dentro dos limites: Verificar `extractors_performance.csv`
+4. [ ] **Integração** funciona: `python run_ingestion.py --test-mode`
+5. [ ] **Documentação** atualizada: Atualizar docstrings e guias relevantes
+
+### Fluxo de Trabalho para Novos Extratores
+
+1. **Criar extrator** em `extractors/nome_do_extrator.py`
+2. **Adicionar testes** em `tests/test_extractors.py`
+3. **Validar com PDFs reais** em `data/test/nome_do_extrator/`
+4. **Executar validação completa**: `python scripts/validate_extraction_rules.py`
+5. **Monitorar em produção**: Analisar logs e métricas após deploy
+
+## Solução de Problemas Comuns
+
+### Problema: Validação falha em muitos PDFs
+
+**Possíveis causas:**
+
+- Regex muito específica
+- Problemas de OCR
+- Layout de PDF incomum
+
+**Solução:**
+
+1. Use `python scripts/inspect_pdf.py arquivo.pdf --raw` para ver texto
+2. Ajuste regex no extrator correspondente
+3. Teste com `python scripts/test_extractor_routing.py`
+
+### Problema: Performance ruim
+
+**Solução:**
+
+1. Identifique extratores lentos: `extractors_performance.csv`
+2. Considere cache de texto extraído
+3. Avalie uso de OCR apenas quando necessário
+
+### Problema: Correlação incorreta
+
+**Solução:**
+
+1. Use `python scripts/debug_batch.py` para analisar lote
+2. Verifique `metadata.json` para contexto
+3. Ajuste regras no `CorrelationService`
+
+## Integração com CI/CD
+
+### Exemplo de Pipeline
+
+```yaml
+# .github/workflows/validate.yml
+name: Validate Extraction Rules
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.10"
+
+            - name: Install dependencies
+              run: |
+                  pip install -r requirements.txt
+
+            - name: Run validation
+              run: |
+                  python scripts/validate_extraction_rules.py --batch-mode
+
+            - name: Check for regressions
+              run: |
+                  # Comparar com baseline
+                  python scripts/compare_with_baseline.py
+```
+
+### Baseline de Performance
+
+Mantenha um arquivo `data/baseline/performance_baseline.json` com:
+
+```json
+{
+    "extraction_success_rate": 0.95,
+    "average_extraction_time": 3.5,
+    "correlation_success_rate": 0.98,
+    "test_cases_count": 150
+}
+```
+
+## Referências
 
 - [Guia de Debug](../development/debugging_guide.md) - Técnicas avançadas de debug
 - [Guia de Uso](usage.md) - Processar PDFs locais
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Migrar para v0.2.x
+- [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Migrar para v0.2.x
+- [Como Estender](extending.md) - Criar novos extratores
+- [API Reference](../api/overview.md) - Documentação técnica completa
+
+---
+
+**Última atualização:** 2025-01-21  
+**Versão:** v0.3.x (Google Sheets Export)

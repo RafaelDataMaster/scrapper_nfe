@@ -77,6 +77,7 @@ _current_orchestrator: Optional[EmailIngestionOrchestrator] = None
 # Usa a configuração de logging do settings.py (já importado acima)
 # que configura RotatingFileHandler + console automaticamente
 logger = logging.getLogger(__name__)
+logging.getLogger("extractors.carrier_telecom").setLevel(logging.DEBUG)
 
 
 def create_ingestor_from_config() -> EmailIngestorStrategy:
@@ -98,14 +99,11 @@ def create_ingestor_from_config() -> EmailIngestorStrategy:
         host=settings.EMAIL_HOST,
         user=settings.EMAIL_USER,
         password=settings.EMAIL_PASS,
-        folder=settings.EMAIL_FOLDER
+        folder=settings.EMAIL_FOLDER,
     )
 
 
-def export_batch_results(
-    batches: List[BatchResult],
-    output_dir: Path
-) -> None:
+def export_batch_results(batches: List[BatchResult], output_dir: Path) -> None:
     """
     Exporta resultados dos lotes para CSVs.
 
@@ -141,9 +139,9 @@ def export_batch_results(
             doc_dict = doc.to_dict()
 
             # Adiciona contexto do lote
-            doc_dict['batch_id'] = batch.batch_id
-            doc_dict['email_subject'] = batch.email_subject
-            doc_dict['email_sender'] = batch.email_sender
+            doc_dict["batch_id"] = batch.batch_id
+            doc_dict["email_subject"] = batch.email_subject
+            doc_dict["email_sender"] = batch.email_sender
 
             documentos_por_tipo[doc_type].append(doc_dict)
             todos_documentos.append(doc_dict)
@@ -154,7 +152,9 @@ def export_batch_results(
         resumos_lotes.extend(batch_summaries)
 
         if len(batch_summaries) > 1:
-            logger.debug(f"📊 Lote {batch.batch_id}: {len(batch_summaries)} pares NF↔Boleto identificados")
+            logger.debug(
+                f"📊 Lote {batch.batch_id}: {len(batch_summaries)} pares NF↔Boleto identificados"
+            )
 
     # Exporta cada tipo separadamente
     for doc_type, documentos in documentos_por_tipo.items():
@@ -165,7 +165,7 @@ def export_batch_results(
         output_path = output_dir / nome_arquivo
 
         df = pd.DataFrame(documentos)
-        df.to_csv(output_path, index=False, sep=';', encoding='utf-8-sig', decimal=',')
+        df.to_csv(output_path, index=False, sep=";", encoding="utf-8-sig", decimal=",")
 
         logger.info(f"✅ {len(documentos)} {doc_type} exportados -> {output_path}")
 
@@ -176,18 +176,33 @@ def export_batch_results(
 
         # Reordena colunas para melhor visualização
         colunas_prioritarias = [
-            'batch_id', 'tipo_documento', 'status_conciliacao', 'valor_compra',
-            'fornecedor_nome', 'valor_documento', 'valor_total', 'vencimento',
-            'data_emissao', 'numero_nota', 'numero_documento', 'email_subject'
+            "batch_id",
+            "tipo_documento",
+            "status_conciliacao",
+            "valor_compra",
+            "fornecedor_nome",
+            "valor_documento",
+            "valor_total",
+            "vencimento",
+            "data_emissao",
+            "numero_nota",
+            "numero_documento",
+            "email_subject",
         ]
-        colunas_existentes = [c for c in colunas_prioritarias if c in df_consolidado.columns]
-        outras_colunas = [c for c in df_consolidado.columns if c not in colunas_prioritarias]
+        colunas_existentes = [
+            c for c in colunas_prioritarias if c in df_consolidado.columns
+        ]
+        outras_colunas = [
+            c for c in df_consolidado.columns if c not in colunas_prioritarias
+        ]
         df_consolidado = df_consolidado[colunas_existentes + outras_colunas]
 
         df_consolidado.to_csv(
-            output_consolidado, index=False, sep=';', encoding='utf-8-sig', decimal=','
+            output_consolidado, index=False, sep=";", encoding="utf-8-sig", decimal=","
         )
-        logger.info(f"✅ {len(todos_documentos)} documentos -> {output_consolidado.name} (CONSOLIDADO)")
+        logger.info(
+            f"✅ {len(todos_documentos)} documentos -> {output_consolidado.name} (CONSOLIDADO)"
+        )
 
     # Exporta relatório de lotes (resumo por batch)
     if resumos_lotes:
@@ -196,33 +211,46 @@ def export_batch_results(
 
         # Reordena colunas do resumo
         colunas_lote = [
-            'batch_id', 'data', 'status_conciliacao', 'divergencia', 'diferenca_valor',
-            'fornecedor', 'vencimento', 'numero_nota', 'valor_compra', 'valor_boleto',
-            'total_documents', 'total_errors',
-            'danfes', 'boletos', 'nfses', 'outros',
-            'email_subject', 'email_sender', 'empresa'
+            "batch_id",
+            "data",
+            "status_conciliacao",
+            "divergencia",
+            "diferenca_valor",
+            "fornecedor",
+            "vencimento",
+            "numero_nota",
+            "valor_compra",
+            "valor_boleto",
+            "total_documents",
+            "total_errors",
+            "danfes",
+            "boletos",
+            "nfses",
+            "outros",
+            "email_subject",
+            "email_sender",
+            "empresa",
         ]
         colunas_existentes = [c for c in colunas_lote if c in df_lotes.columns]
         outras_colunas = [c for c in df_lotes.columns if c not in colunas_lote]
         df_lotes = df_lotes[colunas_existentes + outras_colunas]
 
         df_lotes.to_csv(
-            output_lotes, index=False, sep=';', encoding='utf-8-sig', decimal=','
+            output_lotes, index=False, sep=";", encoding="utf-8-sig", decimal=","
         )
 
         # Conta quantos batches originais e quantos pares gerados
         batches_originais = len(batches)
         pares_gerados = len(resumos_lotes)
         if pares_gerados > batches_originais:
-            logger.info(f"✅ {pares_gerados} pares NF↔Boleto (de {batches_originais} emails) -> {output_lotes.name}")
+            logger.info(
+                f"✅ {pares_gerados} pares NF↔Boleto (de {batches_originais} emails) -> {output_lotes.name}"
+            )
         else:
             logger.info(f"✅ {pares_gerados} lotes -> {output_lotes.name} (AUDITORIA)")
 
 
-def export_avisos_to_csv(
-    avisos: List[EmailAvisoData],
-    output_dir: Path
-) -> None:
+def export_avisos_to_csv(avisos: List[EmailAvisoData], output_dir: Path) -> None:
     """
     Exporta avisos de e-mails sem anexo para CSV.
 
@@ -245,27 +273,31 @@ def export_avisos_to_csv(
     # CSV principal para integração com Google Sheets
     output_path_sheets = output_dir / "avisos_emails_sem_anexo_latest.csv"
     df_full = pd.DataFrame(avisos_dicts_full)
-    df_full.to_csv(output_path_sheets, index=False, sep=';', encoding='utf-8-sig')
-    logger.info(f"✅ {len(avisos)} aviso(s) -> {output_path_sheets.name} (Google Sheets)")
+    df_full.to_csv(output_path_sheets, index=False, sep=";", encoding="utf-8-sig")
+    logger.info(
+        f"✅ {len(avisos)} aviso(s) -> {output_path_sheets.name} (Google Sheets)"
+    )
 
     # Formato resumido para leitura humana rápida
     avisos_dicts_simple = []
     for aviso in avisos:
-        avisos_dicts_simple.append({
-            'email_id': aviso.email_id,
-            'subject': aviso.subject,
-            'sender_name': aviso.sender_name,
-            'sender_address': aviso.sender_address,
-            'received_date': aviso.received_date,
-            'link_nfe': aviso.link_nfe,
-            'codigo_verificacao': aviso.codigo_verificacao,
-            'empresa': aviso.empresa,
-            'status': 'PENDENTE_DOWNLOAD',
-        })
+        avisos_dicts_simple.append(
+            {
+                "email_id": aviso.email_id,
+                "subject": aviso.subject,
+                "sender_name": aviso.sender_name,
+                "sender_address": aviso.sender_address,
+                "received_date": aviso.received_date,
+                "link_nfe": aviso.link_nfe,
+                "codigo_verificacao": aviso.codigo_verificacao,
+                "empresa": aviso.empresa,
+                "status": "PENDENTE_DOWNLOAD",
+            }
+        )
 
     output_path_simple = output_dir / "relatorio_avisos_links.csv"
     df_simple = pd.DataFrame(avisos_dicts_simple)
-    df_simple.to_csv(output_path_simple, index=False, sep=';', encoding='utf-8-sig')
+    df_simple.to_csv(output_path_simple, index=False, sep=";", encoding="utf-8-sig")
     logger.info(f"✅ {len(avisos)} aviso(s) -> {output_path_simple.name} (relatório)")
 
 
@@ -342,7 +374,9 @@ def ingest_unified(
     except KeyboardInterrupt:
         logger.warning("\n⚠️ Ingestão interrompida pelo usuário")
         # Retorna orchestrator para permitir exportação de dados parciais
-        return IngestionResult(status=IngestionStatus.INTERRUPTED), _current_orchestrator
+        return IngestionResult(
+            status=IngestionStatus.INTERRUPTED
+        ), _current_orchestrator
 
 
 def show_ingestion_status() -> None:
@@ -365,14 +399,21 @@ def show_ingestion_status() -> None:
         logger.info("📦 DADOS PARCIAIS SALVOS:")
         logger.info(f"   Lotes salvos: {status.get('partial_batches_saved', 0)}")
         logger.info(f"   Avisos salvos: {status.get('partial_avisos_saved', 0)}")
-        logger.info(f"   Trabalho pendente: {'Sim' if status['has_pending_work'] else 'Não'}")
+        logger.info(
+            f"   Trabalho pendente: {'Sim' if status['has_pending_work'] else 'Não'}"
+        )
         logger.info("=" * 60)
 
-        if status['has_pending_work']:
-            logger.info("\n💡 Execute 'python run_ingestion.py' para continuar de onde parou")
+        if status["has_pending_work"]:
+            logger.info(
+                "\n💡 Execute 'python run_ingestion.py' para continuar de onde parou"
+            )
             logger.info("   ou 'python run_ingestion.py --fresh' para iniciar do zero")
 
-        if status.get('partial_batches_saved', 0) > 0 or status.get('partial_avisos_saved', 0) > 0:
+        if (
+            status.get("partial_batches_saved", 0) > 0
+            or status.get("partial_avisos_saved", 0) > 0
+        ):
             logger.info("\n📁 Para exportar dados parciais:")
             logger.info("   python run_ingestion.py --export-partial")
 
@@ -410,7 +451,7 @@ def export_partial_data() -> None:
 def ingest_and_process(
     ingestor: Optional[EmailIngestorStrategy] = None,
     subject_filter: str = "ENC",
-    apply_correlation: bool = True
+    apply_correlation: bool = True,
 ) -> List[BatchResult]:
     """
     Executa ingestão de e-mails e processamento em lote.
@@ -434,16 +475,12 @@ def ingest_and_process(
         ingestor = create_ingestor_from_config()
 
     # 2. Prepara serviços
-    ingestion_service = IngestionService(
-        ingestor=ingestor,
-        temp_dir=settings.DIR_TEMP
-    )
+    ingestion_service = IngestionService(ingestor=ingestor, temp_dir=settings.DIR_TEMP)
     batch_processor = BatchProcessor()
 
     # 3. Prepara diretórios
     file_manager = FileSystemManager(
-        temp_dir=settings.DIR_TEMP,
-        output_dir=settings.DIR_SAIDA
+        temp_dir=settings.DIR_TEMP, output_dir=settings.DIR_SAIDA
     )
     file_manager.setup_directories()
 
@@ -452,8 +489,7 @@ def ingest_and_process(
 
     try:
         batch_folders = ingestion_service.ingest_emails(
-            subject_filter=subject_filter,
-            create_ignored_folder=True
+            subject_filter=subject_filter, create_ignored_folder=True
         )
     except Exception as e:
         logger.error(f"❌ Erro na ingestão: {e}")
@@ -473,8 +509,7 @@ def ingest_and_process(
             logger.info(f"🔄 Processando lote: {folder.name}")
 
             batch_result = batch_processor.process_batch(
-                folder,
-                apply_correlation=apply_correlation
+                folder, apply_correlation=apply_correlation
             )
 
             if batch_result.total_documents > 0:
@@ -495,7 +530,7 @@ def ingest_and_process(
 def reprocess_existing_batches(
     root_folder: Optional[Path] = None,
     apply_correlation: bool = True,
-    timeout_seconds: int = 300
+    timeout_seconds: int = 300,
 ) -> List[BatchResult]:
     """
     Reprocessa lotes existentes (pastas já criadas).
@@ -521,7 +556,7 @@ def reprocess_existing_batches(
     results = batch_processor.process_multiple_batches(
         root_folder,
         apply_correlation=apply_correlation,
-        timeout_seconds=timeout_seconds
+        timeout_seconds=timeout_seconds,
     )
 
     # Contabiliza resultados
@@ -529,7 +564,9 @@ def reprocess_existing_batches(
     timeout_count = sum(1 for r in results if r.status == "TIMEOUT")
     error_count = sum(1 for r in results if r.status == "ERROR")
 
-    logger.info(f"📦 {len(results)} lote(s) reprocessado(s): {ok_count} OK, {timeout_count} TIMEOUT, {error_count} ERRO")
+    logger.info(
+        f"📦 {len(results)} lote(s) reprocessado(s): {ok_count} OK, {timeout_count} TIMEOUT, {error_count} ERRO"
+    )
 
     return results
 
@@ -537,7 +574,7 @@ def reprocess_existing_batches(
 def reprocess_timeout_batches(
     root_folder: Optional[Path] = None,
     apply_correlation: bool = True,
-    timeout_seconds: int = 600  # Timeout maior para segunda tentativa
+    timeout_seconds: int = 600,  # Timeout maior para segunda tentativa
 ) -> List[BatchResult]:
     """
     Reprocessa apenas lotes que deram timeout anteriormente.
@@ -564,7 +601,7 @@ def reprocess_timeout_batches(
 
     # Carrega lista de timeouts
     try:
-        timeouts = json.loads(timeout_log_path.read_text(encoding='utf-8'))
+        timeouts = json.loads(timeout_log_path.read_text(encoding="utf-8"))
     except Exception as e:
         logger.error(f"❌ Erro ao ler {timeout_log_path}: {e}")
         return []
@@ -574,7 +611,7 @@ def reprocess_timeout_batches(
         return []
 
     # Extrai batch_ids únicos
-    batch_ids = list(set(t['batch_id'] for t in timeouts))
+    batch_ids = list(set(t["batch_id"] for t in timeouts))
     logger.info(f"🔄 Reprocessando {len(batch_ids)} lote(s) que deram timeout...")
 
     batch_processor = BatchProcessor()
@@ -597,7 +634,9 @@ def reprocess_timeout_batches(
             batch_start = time.time()
 
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(batch_processor.process_batch, batch_folder, apply_correlation)
+                future = executor.submit(
+                    batch_processor.process_batch, batch_folder, apply_correlation
+                )
                 result = future.result(timeout=timeout_seconds)
                 result.processing_time = time.time() - batch_start
                 result.status = "OK"
@@ -611,7 +650,7 @@ def reprocess_timeout_batches(
                 source_folder=str(batch_folder),
                 status="TIMEOUT",
                 processing_time=timeout_seconds,
-                timeout_error=f"TIMEOUT na segunda tentativa ({timeout_seconds}s)"
+                timeout_error=f"TIMEOUT na segunda tentativa ({timeout_seconds}s)",
             )
             results.append(result)
 
@@ -621,19 +660,19 @@ def reprocess_timeout_batches(
                 batch_id=batch_id,
                 source_folder=str(batch_folder),
                 status="ERROR",
-                timeout_error=str(e)
+                timeout_error=str(e),
             )
             results.append(result)
 
     # Remove timeouts que foram resolvidos
     resolved = [r.batch_id for r in results if r.status == "OK"]
     if resolved:
-        remaining_timeouts = [t for t in timeouts if t['batch_id'] not in resolved]
+        remaining_timeouts = [t for t in timeouts if t["batch_id"] not in resolved]
         try:
             if remaining_timeouts:
                 timeout_log_path.write_text(
                     json.dumps(remaining_timeouts, indent=2, ensure_ascii=False),
-                    encoding='utf-8'
+                    encoding="utf-8",
                 )
             else:
                 timeout_log_path.unlink()  # Remove arquivo se não há mais timeouts
@@ -645,8 +684,7 @@ def reprocess_timeout_batches(
 
 
 def process_single_batch(
-    folder_path: Path,
-    apply_correlation: bool = True
+    folder_path: Path, apply_correlation: bool = True
 ) -> Optional[BatchResult]:
     """
     Processa um único lote específico.
@@ -687,7 +725,7 @@ def main(ingestor: Optional[EmailIngestorStrategy] = None):
     """
     # Parse argumentos
     parser = argparse.ArgumentParser(
-        description='Ingestão e processamento de e-mails com notas fiscais',
+        description="Ingestão e processamento de e-mails com notas fiscais",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
@@ -732,86 +770,82 @@ Exemplos:
 
   # Reprocessar e limpar em seguida
   python run_ingestion.py --reprocess --cleanup
-        """
+        """,
     )
 
     parser.add_argument(
-        '--reprocess',
-        action='store_true',
-        help='Reprocessar lotes existentes em temp_email'
+        "--reprocess",
+        action="store_true",
+        help="Reprocessar lotes existentes em temp_email",
     )
     parser.add_argument(
-        '--batch-folder',
+        "--batch-folder", type=str, help="Processar pasta de lote específica"
+    )
+    parser.add_argument(
+        "--subject",
         type=str,
-        help='Processar pasta de lote específica'
+        default="*",
+        help="Filtro de assunto para busca (default: * = TODOS)",
     )
     parser.add_argument(
-        '--subject',
-        type=str,
-        default='*',
-        help='Filtro de assunto para busca (default: * = TODOS)'
+        "--no-correlation",
+        action="store_true",
+        help="Desabilitar correlação entre documentos",
     )
     parser.add_argument(
-        '--no-correlation',
-        action='store_true',
-        help='Desabilitar correlação entre documentos'
+        "--cleanup",
+        action="store_true",
+        help="Limpar lotes antigos (> 48h) após processamento",
     )
     parser.add_argument(
-        '--cleanup',
-        action='store_true',
-        help='Limpar lotes antigos (> 48h) após processamento'
+        "--reprocess-timeouts",
+        action="store_true",
+        help="Reprocessar apenas lotes que deram timeout anteriormente",
     )
     parser.add_argument(
-        '--reprocess-timeouts',
-        action='store_true',
-        help='Reprocessar apenas lotes que deram timeout anteriormente'
-    )
-    parser.add_argument(
-        '--timeout',
+        "--timeout",
         type=int,
         default=300,
-        help='Timeout por lote em segundos (default: 300 = 5 min)'
+        help="Timeout por lote em segundos (default: 300 = 5 min)",
     )
     parser.add_argument(
-        '--only-attachments',
-        action='store_true',
-        help='Processar apenas e-mails COM anexos (modo legado)'
+        "--only-attachments",
+        action="store_true",
+        help="Processar apenas e-mails COM anexos (modo legado)",
     )
     parser.add_argument(
-        '--only-links',
-        action='store_true',
-        help='Processar apenas e-mails SEM anexos (links/códigos)'
+        "--only-links",
+        action="store_true",
+        help="Processar apenas e-mails SEM anexos (links/códigos)",
     )
     parser.add_argument(
-        '--fresh',
-        action='store_true',
-        help='Forçar nova ingestão (ignorar checkpoint existente)'
+        "--fresh",
+        action="store_true",
+        help="Forçar nova ingestão (ignorar checkpoint existente)",
     )
     parser.add_argument(
-        '--status',
-        action='store_true',
-        help='Exibir status do checkpoint de ingestão'
+        "--status", action="store_true", help="Exibir status do checkpoint de ingestão"
     )
     parser.add_argument(
-        '--export-partial',
-        action='store_true',
-        help='Exportar dados parciais de execuções anteriores'
+        "--export-partial",
+        action="store_true",
+        help="Exportar dados parciais de execuções anteriores",
     )
     parser.add_argument(
-        '--max-emails',
+        "--max-emails",
         type=int,
         default=None,
-        help='Limite máximo de e-mails a processar por execução (default: sem limite)'
+        help="Limite máximo de e-mails a processar por execução (default: sem limite)",
     )
     parser.add_argument(
-        '--links-first',
-        action='store_true',
-        help='Processar e-mails SEM anexo (links/códigos) ANTES dos COM anexo'
+        "--links-first",
+        action="store_true",
+        help="Processar e-mails SEM anexo (links/códigos) ANTES dos COM anexo",
     )
     parser.add_argument(
-        '--export-metrics',
-        action='store_true',
-        help='Exportar métricas de telemetria para arquivo JSON'
+        "--export-metrics",
+        action="store_true",
+        help="Exportar métricas de telemetria para arquivo JSON",
     )
 
     args = parser.parse_args()
@@ -830,7 +864,12 @@ Exemplos:
 
     # 1. Verificação de configuração
     try:
-        if ingestor is None and not args.reprocess and not args.batch_folder and not args.reprocess_timeouts:
+        if (
+            ingestor is None
+            and not args.reprocess
+            and not args.batch_folder
+            and not args.reprocess_timeouts
+        ):
             ingestor = create_ingestor_from_config()
     except ValueError as e:
         logger.error(f"❌ Erro de configuração: {e}")
@@ -848,16 +887,13 @@ Exemplos:
         results = reprocess_timeout_batches(
             settings.DIR_TEMP,
             apply_correlation,
-            timeout_seconds=args.timeout * 2  # Dobra o timeout para segunda tentativa
+            timeout_seconds=args.timeout * 2,  # Dobra o timeout para segunda tentativa
         )
 
     elif args.batch_folder:
         # Modo: Processar pasta específica
         logger.info(f"🔄 Processando lote: {args.batch_folder}")
-        result = process_single_batch(
-            Path(args.batch_folder),
-            apply_correlation
-        )
+        result = process_single_batch(Path(args.batch_folder), apply_correlation)
         if result:
             results.append(result)
 
@@ -865,24 +901,26 @@ Exemplos:
         # Modo: Reprocessar lotes existentes
         logger.info("🔄 Reprocessando lotes existentes...")
         results = reprocess_existing_batches(
-            settings.DIR_TEMP,
-            apply_correlation,
-            timeout_seconds=args.timeout
+            settings.DIR_TEMP, apply_correlation, timeout_seconds=args.timeout
         )
 
     elif args.only_attachments:
         # Modo: Apenas e-mails COM anexos (legado)
         filter_msg = "TODOS" if args.subject == "*" else f"'{args.subject}'"
-        logger.info(f"📧 Iniciando ingestão apenas COM anexos (filtro: {filter_msg})...")
+        logger.info(
+            f"📧 Iniciando ingestão apenas COM anexos (filtro: {filter_msg})..."
+        )
         results = ingest_and_process(
             ingestor=ingestor,
             subject_filter=args.subject,
-            apply_correlation=apply_correlation
+            apply_correlation=apply_correlation,
         )
 
     else:
         # Modo: Ingestão UNIFICADA (COM e SEM anexos)
-        filter_msg = "TODOS os e-mails" if args.subject == "*" else f"filtro: '{args.subject}'"
+        filter_msg = (
+            "TODOS os e-mails" if args.subject == "*" else f"filtro: '{args.subject}'"
+        )
         logger.info(f"📧 Iniciando ingestão UNIFICADA ({filter_msg})...")
 
         # Determina o que processar
@@ -951,22 +989,32 @@ Exemplos:
             logger.info(f"\n📋 AVISOS (e-mails sem anexo com links/códigos):")
             logger.info(f"   Total de avisos: {len(avisos)}")
             for aviso in avisos[:5]:  # Mostra apenas os 5 primeiros
-                logger.info(f"      • {aviso.subject[:50]}... -> {aviso.link_nfe or aviso.codigo_verificacao}")
+                logger.info(
+                    f"      • {aviso.subject[:50]}... -> {aviso.link_nfe or aviso.codigo_verificacao}"
+                )
             if len(avisos) > 5:
                 logger.info(f"      ... e mais {len(avisos) - 5} aviso(s)")
 
         # Aviso se teve timeouts
         if timeout_count > 0:
             logger.warning(f"\n⚠️  {timeout_count} lote(s) deram timeout!")
-            logger.warning("   Execute 'python run_ingestion.py --reprocess-timeouts' para tentar novamente")
+            logger.warning(
+                "   Execute 'python run_ingestion.py --reprocess-timeouts' para tentar novamente"
+            )
 
         # Aviso sobre checkpoint se foi interrompido
         if ingestion_result and ingestion_result.status == IngestionStatus.INTERRUPTED:
             logger.warning("\n⚠️ Ingestão foi interrompida!")
             logger.warning("   ✅ Dados parciais foram salvos automaticamente")
-            logger.warning("   Execute 'python run_ingestion.py' para continuar de onde parou")
-            logger.warning("   ou 'python run_ingestion.py --fresh' para iniciar do zero")
-            logger.warning("   Para exportar apenas os parciais: 'python run_ingestion.py --export-partial'")
+            logger.warning(
+                "   Execute 'python run_ingestion.py' para continuar de onde parou"
+            )
+            logger.warning(
+                "   ou 'python run_ingestion.py --fresh' para iniciar do zero"
+            )
+            logger.warning(
+                "   Para exportar apenas os parciais: 'python run_ingestion.py --export-partial'"
+            )
 
     else:
         logger.warning("⚠️ Nenhum resultado para exportar.")
@@ -987,7 +1035,7 @@ Exemplos:
         logger.info("\n🧹 Limpando lotes antigos...")
         ingestion_service = IngestionService(
             ingestor=ingestor or create_ingestor_from_config(),
-            temp_dir=settings.DIR_TEMP
+            temp_dir=settings.DIR_TEMP,
         )
         removed = ingestion_service.cleanup_old_batches(max_age_hours=48)
         logger.info(f"   {removed} pasta(s) removida(s)")

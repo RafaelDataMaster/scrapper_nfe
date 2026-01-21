@@ -2,79 +2,180 @@
 
 Este guia apresenta o workflow e as ferramentas recomendadas para debugar problemas de extração, desde um único PDF até a lógica de correlação em lotes.
 
-## Ferramentas Principais
+## Estrutura de Scripts de Debug
 
-O projeto agora conta com scripts dedicados que automatizam 90% do trabalho de debug. **Sempre comece por eles.**
+O projeto conta com uma estrutura organizada de scripts na pasta `scripts/`, categorizados por finalidade:
 
-### 1. `inspect_pdf.py`: O Canivete Suíço para PDFs Individuais
+### 📊 **Análise de Dados e Relatórios**
 
-Esta é a **ferramenta de entrada** para qualquer problema de extração. Ela processa um único PDF e mostra um resumo completo dos dados extraídos, o tipo de documento detectado e o extrator utilizado.
+- `analyze_admin_nfse.py` - Analisa casos de NFSEs classificadas como administrativas com valor zero
+- `analyze_all_batches.py` - Processa todos os batches em `temp_email` e gera relatório comparativo
+- `analyze_emails_no_attachment.py` - Analisa e-mails sem anexos para identificar padrões úteis
+- `simple_list.py` - Lista simples de lotes problemáticos (outros > 0 e valor = 0)
+- `list_problematic.py` - Versão mais completa com classificação de tipos de problemas
+- `generate_report.py` - Converte relatório pyright JSON para markdown formatado
 
-**Recursos:**
+### 🔍 **Diagnóstico e Debug Específico**
 
-- 🔍 **Busca automática**: Encontra o PDF em `failed_cases_pdf/` e `temp_email/` apenas pelo nome.
-- 📊 **Campos por tipo**: Mostra apenas os campos relevantes para o documento (Boleto, DANFE, etc.).
-- 📋 **Texto bruto**: Permite ver o texto exato que o sistema está lendo, crucial para criar regex.
-- 🎯 **Filtro de campos**: Isola apenas os campos que você precisa analisar.
+- `diagnose_import_issues.py` - Diagnóstico de erros de importação de módulos
+- `diagnose_inbox_patterns.py` - Analisa padrões de e-mail na caixa de entrada para otimização
+- `diagnose_ocr_issue.py` - Diagnóstico específico do problema do caractere 'Ê' no OCR
+- `debug_pdf_text.py` - Extrai e analisa texto de PDFs para debug de extração
+- `inspect_pdf.py` - Inspeção rápida de PDFs para debug (mais prático)
+- `check_problematic_pdfs.py` - Analisa PDFs de casos problemáticos onde "outros" têm valor zero
+- `repro_extraction_failure.py` - Reproduz falhas de extração específicas para debugging
 
-**Exemplos de Uso:**
+### 🧪 **Testes e Validação**
+
+- `test_admin_detection.py` - Testa padrões de detecção de documentos administrativos
+- `test_extractor_routing.py` - Testa qual extrator seria usado para um PDF específico
+- `test_docker_setup.py` - Testa configuração do Docker e variáveis de ambiente
+- `validate_extraction_rules.py` - Valida regras de extração contra casos conhecidos
+
+### 🔧 **Utilitários e Operações**
+
+- `export_to_sheets.py` - Exporta dados para Google Sheets
+- `ingest_emails_no_attachment.py` - Ingestão de e-mails sem anexos para criação de avisos
+- `consolidate_batches.py` - Consolida resultados de múltiplos batches
+- `clean_dev.py` - Limpeza de arquivos temporários de desenvolvimento
+- `_init_env.py` - Configuração de paths para importação de módulos
+- `demo_pairing.py` - Demonstração do sistema de pareamento de documentos
+
+## Workflow de Debug Recomendado
+
+### 1. **Problema com um PDF Individual**
+
+**Use: `inspect_pdf.py` (primeira escolha) ou `debug_pdf_text.py`**
 
 ```bash
-# Busca automática e inspeção completa
+# Para debug rápido e prático
 python scripts/inspect_pdf.py exemplo.pdf
 
-# Inspecionar campos específicos de um DANFE
-python scripts/inspect_pdf.py danfe.pdf --fields fornecedor_nome valor_total vencimento
+# Para análise detalhada do texto extraído
+python scripts/inspect_pdf.py exemplo.pdf --raw
 
-# Ver o texto bruto completo para criar uma regex
-python scripts/inspect_pdf.py nota_complexa.pdf --raw
+# Para inspecionar campos específicos
+python scripts/inspect_pdf.py nota_fiscal.pdf --fields fornecedor_nome valor_total vencimento
+
+# Para teste de roteamento de extrator
+python scripts/test_extractor_routing.py caminho/do/pdf.pdf
 ```
 
-**Workflow:**
+**Análise:**
 
-1.  **Identifique o PDF com problema.**
-2.  Execute `python scripts/inspect_pdf.py nome_do_arquivo.pdf`.
-3.  **Analise o output:**
-    - O `[tipo]` detectado está correto? Se não, o problema está no método `can_handle()` do extrator.
-    - O `[extrator]` selecionado é o correto?
-    - Os campos extraídos estão corretos? Se não, o problema está no método `extract()` do extrator.
-4.  Se precisar de mais detalhes, use a flag `--raw` para ver o texto completo.
+- Verifique se o `[tipo]` detectado está correto
+- Confirme se o `[extrator]` selecionado é apropriado
+- Revise os campos extraídos vs. esperados
+- Use `--raw` para ver o texto completo e ajustar regex
 
-### 2. `debug_batch.py`: O Diagnóstico para Lotes e Correlação
+### 2. **Problema com Lotes (resultados no CSV)**
 
-Use esta ferramenta quando a extração individual parece correta, mas o resultado final no CSV de lotes está errado (ex: status `DIVERGENTE`, `numero_nota` vazio).
-
-Ela processa uma pasta de lote inteira e mostra:
-
-- Detalhes de cada documento no lote.
-- O resultado do pareamento de documentos (NF vs Boleto).
-- A lógica de fallback para o `numero_nota`.
-- Uma comparação entre o método de sumarização legado e o novo método de pareamento.
-
-**Exemplos de Uso:**
+**Use: `analyze_admin_nfse.py`, `list_problematic.py`, ou `check_problematic_pdfs.py`**
 
 ```bash
-# Analisar um lote específico
-python scripts/debug_batch.py temp_email/email_20260105_125518_4e51c5e2
+# Para análise específica de NFSEs mal classificadas
+python scripts/analyze_admin_nfse.py
+
+# Para lista completa de lotes problemáticos
+python scripts/list_problematic.py
+
+# Para versão simplificada
+python scripts/simple_list.py
+
+# Para análise detalhada dos PDFs problemáticos
+python scripts/check_problematic_pdfs.py
 ```
 
-**Workflow:**
+**Análise:**
 
-1.  **Identifique a pasta do lote com problema** (ex: `temp_email/email_...`).
-2.  Execute `python scripts/debug_batch.py caminho_da_pasta`.
-3.  **Analise o output:**
-    - **Seção 3 (Detalhes dos Documentos):** Os campos de cada documento foram extraídos corretamente?
-    - **Seção 5 (DocumentPairingService):** Os pares NF↔Boleto foram formados corretamente?
-    - **Seção 7 (Análise de Fallbacks):** De onde veio o `numero_nota`? Foi do campo certo? O extrator pode estar falhando em extrair um campo prioritário.
-    - **Seção 8 (Recomendações):** O script oferece avisos automáticos sobre problemas comuns.
+- Verifique se "outros > 0 e valor = 0" indica NFSEs/DANFEs mal classificadas
+- Analise padrões de assuntos de e-mail
+- Identifique fornecedores problemáticos recorrentes
 
-## Técnicas Avançadas (Manuais)
+### 3. **Problema de OCR ou Qualidade de Texto**
 
-Use estas técnicas quando os scripts automáticos não forem suficientes para identificar a causa raiz.
+**Use: `diagnose_ocr_issue.py`**
+
+```bash
+# Para diagnóstico do problema do caractere 'Ê'
+python scripts/diagnose_ocr_issue.py
+
+# Para debug específico de texto de PDF
+python scripts/debug_pdf_text.py
+```
+
+**Análise:**
+
+- Identifique caracteres problemáticos ('Ê' substituindo espaços)
+- Teste estratégias de normalização
+- Verifique se extratores processam texto normalizado
+
+### 4. **Problema de Importação ou Configuração**
+
+**Use: `diagnose_import_issues.py` ou `test_docker_setup.py`**
+
+```bash
+# Para diagnóstico de erros de importação
+python scripts/diagnose_import_issues.py
+
+# Para validação de ambiente Docker
+python scripts/test_docker_setup.py
+
+# Para diagnóstico de padrões de inbox
+python scripts/diagnose_inbox_patterns.py --limit 100
+```
+
+## Scripts Chave para Casos Comuns
+
+### Para debug rápido de um PDF suspeito:
+
+```bash
+python scripts/inspect_pdf.py arquivo_problematico.pdf --raw
+```
+
+### Para identificar lotes com problemas de classificação:
+
+```bash
+python scripts/simple_list.py
+```
+
+### Para análise detalhada de padrões de classificação errada:
+
+```bash
+python scripts/analyze_admin_nfse.py
+```
+
+### Para validar regras de extração após modificações:
+
+```bash
+python scripts/validate_extraction_rules.py --batch-mode
+```
+
+### Para testar detecção de documentos administrativos:
+
+```bash
+python scripts/test_admin_detection.py
+```
+
+## Estrutura de Diretórios para Debug
+
+```
+scrapper/
+├── scripts/                    # Scripts de debug e utilidades
+├── data/
+│   ├── output/                # Relatórios gerados (CSV, JSON, MD)
+│   │   ├── relatorio_lotes.csv
+│   │   ├── pyright_report.json
+│   │   └── pyright_report.md
+│   ├── debug_output/          # Outputs de scripts de debug
+│   └── cache/                 # Cache de processamento
+├── temp_email/                # Lotes de e-mail processados
+└── failed_cases_pdf/          # PDFs de casos de falha para análise
+```
+
+## Técnicas Avançadas de Debug
 
 ### 1. Extrair Texto Bruto com `repr()`
-
-Visualize o texto exato que o `pdfplumber` está extraindo, incluindo caracteres invisíveis como `\n` (quebra de linha) e espaços múltiplos.
 
 ```python
 import pdfplumber
@@ -82,69 +183,86 @@ import pdfplumber
 with pdfplumber.open('caminho/do/arquivo.pdf') as pdf:
     page = pdf.pages[0]
     text = page.extract_text()
-    print(repr(text))
+    print(repr(text))  # Mostra caracteres ocultos como \n, \t, espaços
 ```
 
-Isso é fundamental para entender por que uma regex pode estar falhando (ex: um `\n` inesperado quebrando uma linha).
-
-### 2. Testar Padrões Regex Iterativamente
-
-Use um site como [regex101.com](https://regex101.com) (com o "flavor" Python) ou um script simples para testar suas expressões regulares de forma isolada.
+### 2. Testar Regex Interativamente
 
 ```python
 import re
 
-text = "Nosso Número\n109/00000507-1"
+# Testar padrão com texto problemático
+text = "TOTALÊAÊPAGAR:ÊR$Ê29.250,00"  # Problema do caractere 'Ê'
 
-# Padrão que falha com quebra de linha
-pattern1 = r'Nosso Número.*?(\d+/\d+-\d+)'
+# Padrão que falha
+pattern1 = r'TOTAL A PAGAR.*?R\$\s*([\d.,]+)'
 match1 = re.search(pattern1, text)
-print(f"Match 1: {match1}") # -> None
+print(f"Match 1: {match1}")  # None
 
-# Padrão correto com re.DOTALL para atravessar linhas
-pattern2 = r'Nosso Número.*?(\d+/\d+-\d+)'
-match2 = re.search(pattern2, text, re.DOTALL)
-print(f"Match 2: {match2.group(1) if match2 else 'None'}") # -> 109/00000507-1
+# Padrão corrigido para 'Ê'
+pattern2 = r'TOTALÊAÊPAGAR.*?R\$\s*([\d.,]+)'
+match2 = re.search(pattern2, text)
+print(f"Match 2: {match2.group(1) if match2 else 'None'}")  # 29.250,00
+
+# Normalizar texto primeiro
+normalized = text.replace('Ê', ' ')
+pattern3 = r'TOTAL A PAGAR.*?R\$\s*([\d.,]+)'
+match3 = re.search(pattern3, normalized, re.IGNORECASE)
+print(f"Match 3: {match3.group(1) if match3 else 'None'}")  # 29.250,00
 ```
 
-### 3. Validar Resultados com `pandas`
-
-Após rodar o script `validate_extraction_rules.py`, use o `pandas` para analisar os CSVs de debug em `data/debug_output/`.
+### 3. Analisar CSV de Resultados com pandas
 
 ```python
 import pandas as pd
 
-df = pd.read_csv('data/debug_output/boletos_sucesso_debug.csv', sep=';')
+# Carregar relatório de lotes
+df = pd.read_csv('data/output/relatorio_lotes.csv', sep=';')
 
-# Ver campos vazios
-print(df['nosso_numero'].isna().sum())
+# Filtrar lotes problemáticos
+problematicos = df[(df['outros'] > 0) & (df['valor_compra'] == 0)]
+print(f"Lotes problemáticos: {len(problematicos)}")
 
-# Inspecionar uma linha específica
-print(df[df['arquivo_origem'].str.contains('boleto_especifico')])
+# Analisar padrões de assunto
+assuntos = problematicos['email_subject'].value_counts().head(10)
+print("\nTop 10 assuntos problemáticos:")
+print(assuntos)
 ```
 
-## Workflow de Debug Completo
+## Referência Rápida por Tipo de Problema
 
-1.  **Problema em um PDF?** Comece com `inspect_pdf.py`.
-    - `python scripts/inspect_pdf.py nome_do_pdf.pdf`
-    - Se os campos estiverem errados, use a flag `--raw` para copiar o texto e criar/ajustar a regex no extrator correspondente.
+| Problema                              | Script Primário                   | Scripts Secundários                                  | Comando Exemplo                                             |
+| ------------------------------------- | --------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
+| **PDF não extrai campos**             | `inspect_pdf.py`                  | `debug_pdf_text.py`, `test_extractor_routing.py`     | `python scripts/inspect_pdf.py arquivo.pdf --raw`           |
+| **Lote com status DIVERGENTE**        | `list_problematic.py`             | `analyze_admin_nfse.py`, `check_problematic_pdfs.py` | `python scripts/list_problematic.py`                        |
+| **NFSE classificada como "outros"**   | `analyze_admin_nfse.py`           | `check_problematic_pdfs.py`                          | `python scripts/analyze_admin_nfse.py`                      |
+| **Problema de caractere 'Ê' no OCR**  | `diagnose_ocr_issue.py`           | `debug_pdf_text.py`                                  | `python scripts/diagnose_ocr_issue.py`                      |
+| **Erro de importação de módulos**     | `diagnose_import_issues.py`       | `test_docker_setup.py`                               | `python scripts/diagnose_import_issues.py`                  |
+| **Validação após modificar extrator** | `validate_extraction_rules.py`    | `test_extractor_routing.py`                          | `python scripts/validate_extraction_rules.py --batch-mode`  |
+| **E-mails sem anexo úteis**           | `analyze_emails_no_attachment.py` | `diagnose_inbox_patterns.py`                         | `python scripts/analyze_emails_no_attachment.py --limit 50` |
+| **Exportação para Google Sheets**     | `export_to_sheets.py`             | -                                                    | `python scripts/export_to_sheets.py`                        |
 
-2.  **Problema no `relatorio_lotes.csv`?** Use `debug_batch.py`.
-    - `python scripts/debug_batch.py temp_email/pasta_do_lote`
-    - Verifique as seções de **Pareamento** e **Análise de Fallbacks** para entender a lógica.
+## Dicas de Produtividade
 
-3.  **Ainda não resolveu?** Use as técnicas avançadas.
-    - Extraia o texto bruto com `repr()` para ver caracteres ocultos.
-    - Teste a regex isoladamente no [regex101.com](https://regex101.com).
-    - Faça uma alteração no extrator.
-    - Rode `python scripts/validate_extraction_rules.py --batch-mode` para validar em lote.
-    - Analise os CSVs de debug com `pandas`.
+1. **Sempre comece com `inspect_pdf.py`** para problemas de extração individual
+2. **Use `simple_list.py`** para visão rápida de lotes problemáticos
+3. **Execute `validate_extraction_rules.py`** após modificar qualquer extrator
+4. **Consulte `diagnose_ocr_issue.py`** para problemas de qualidade de texto OCR
+5. **Analise padrões com `analyze_emails_no_attachment.py`** para otimizar filtros de ingestão
 
-## Scripts de Diagnóstico Disponíveis
+## Monitoramento Contínuo
 
-| Script                         | Descrição                                   | Quando Usar                                                                                          |
-| ------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `inspect_pdf.py`               | Inspeção rápida de um PDF.                  | **Primeiro passo** para qualquer problema de extração em um arquivo.                                 |
-| `debug_batch.py`               | Diagnóstico completo de um lote.            | Quando a extração individual parece OK, mas a correlação ou o resultado final do lote estão errados. |
-| `validate_extraction_rules.py` | Valida todos os PDFs de teste.              | Após modificar um extrator, para garantir que não houve regressão.                                   |
-| `analyze_all_batches.py`       | Analisa todos os lotes e reporta problemas. | Para ter uma visão geral da saúde de todos os lotes processados.                                     |
+Para monitorar a saúde do sistema:
+
+```bash
+# Gerar relatório de todos os batches
+python scripts/analyze_all_batches.py
+
+# Validar todas as regras periodicamente
+python scripts/validate_extraction_rules.py --full-scan
+
+# Analisar padrões de inbox para ajustar filtros
+python scripts/diagnose_inbox_patterns.py --all --resume
+```
+
+Os scripts estão organizados para suportar debug desde problemas pontuais até análise sistêmica, sempre com foco em identificar a causa raiz e fornecer recomendações acionáveis.

@@ -1,0 +1,125 @@
+# Documentação de Debugging e Diagnóstico
+
+Esta seção contém documentação e referências para debugging, diagnóstico e solução de problemas no sistema de extração de documentos fiscais.
+
+## Visão Geral
+
+O sistema conta com uma suite completa de scripts organizados na pasta `scripts/` para auxiliar em todas as fases de debugging, desde problemas pontuais até análise sistêmica.
+
+## Documentos Disponíveis
+
+| Documento | Descrição |
+|-----------|-----------|
+| **[scripts_quick_reference.md](scripts_quick_reference.md)** | Referência rápida de todos os scripts de debug com comandos essenciais |
+| **[../development/debugging_guide.md](../development/debugging_guide.md)** | Guia completo de debugging com workflows detalhados |
+
+## Categorias de Scripts
+
+Os scripts estão organizados em quatro categorias principais:
+
+### 📊 Análise de Dados e Relatórios
+Scripts para análise de lotes problemáticos, geração de relatórios e identificação de padrões.
+
+- `analyze_admin_nfse.py` - Análise de NFSEs classificadas como administrativas com valor zero
+- `analyze_all_batches.py` - Processa todos os batches e gera relatório comparativo  
+- `analyze_emails_no_attachment.py` - Analisa e-mails sem anexos para identificar padrões úteis
+- `simple_list.py` - Lista simples de lotes problemáticos (outros > 0 e valor = 0)
+- `list_problematic.py` - Versão mais completa com classificação de tipos de problemas
+- `generate_report.py` - Converte relatório pyright JSON para markdown formatado
+
+### 🔍 Diagnóstico e Debug Específico
+Scripts para diagnóstico de problemas individuais, análise de texto e qualidade OCR.
+
+- `inspect_pdf.py` - Inspeção rápida de PDFs (busca automática em `failed_cases_pdf/` e `temp_email/`)
+- `debug_pdf_text.py` - Extrai e analisa texto de PDFs para debug de extração
+- `check_problematic_pdfs.py` - Analisa PDFs de casos problemáticos onde "outros" têm valor zero
+- `diagnose_ocr_issue.py` - Diagnóstico específico do problema do caractere 'Ê' no OCR
+- `diagnose_import_issues.py` - Diagnóstico de erros de importação de módulos
+- `diagnose_inbox_patterns.py` - Analisa padrões de e-mail na caixa de entrada
+- `repro_extraction_failure.py` - Reproduz falhas de extração específicas para debugging
+
+### 🧪 Testes e Validação
+Scripts para teste de extratores, validação de regras e detecção de documentos.
+
+- `test_extractor_routing.py` - Testa qual extrator seria usado para um PDF específico
+- `validate_extraction_rules.py` - Valida regras de extração contra casos conhecidos
+- `test_admin_detection.py` - Testa padrões de detecção de documentos administrativos
+- `test_docker_setup.py` - Testa configuração do Docker e variáveis de ambiente
+
+### 🔧 Utilitários e Operações
+Scripts para exportação, ingestão, consolidação e outras operações.
+
+- `export_to_sheets.py` - Exporta dados para Google Sheets
+- `ingest_emails_no_attachment.py` - Ingestão de e-mails sem anexos para criação de avisos
+- `consolidate_batches.py` - Consolida resultados de múltiplos batches
+- `clean_dev.py` - Limpeza de arquivos temporários de desenvolvimento
+- `_init_env.py` - Configuração de paths para importação de módulos
+- `demo_pairing.py` - Demonstração do sistema de pareamento de documentos
+- `example_batch_processing.py` - Exemplo de processamento de lote completo
+
+## Fluxos de Trabalho Comuns
+
+### Para um PDF que não extrai campos corretamente:
+1. `python scripts/inspect_pdf.py arquivo.pdf --raw`
+2. Analise o texto bruto e ajuste regex no extrator correspondente
+3. `python scripts/validate_extraction_rules.py --batch-mode` para validar
+
+### Para múltiplos lotes com problemas no CSV final:
+1. `python scripts/simple_list.py` para visão rápida
+2. `python scripts/list_problematic.py` para análise detalhada
+3. `python scripts/analyze_admin_nfse.py` para casos específicos de NFSE
+
+### Para problemas de qualidade de texto (OCR):
+1. `python scripts/diagnose_ocr_issue.py` para diagnóstico específico
+2. Considere normalizar texto nos extratores (ex: `text.replace('Ê', ' ')`)
+
+## Dicas Importantes
+
+1. **Sempre comece com `inspect_pdf.py`** - Busca automaticamente em `failed_cases_pdf/` e `temp_email/`
+2. **Use `simple_list.py` para visão geral** - Rápido e direto, mostra batch IDs problemáticos
+3. **Valide após cada modificação** - Execute `validate_extraction_rules.py` após modificar extratores
+4. **Analise padrões recorrentes** - Use `analyze_emails_no_attachment.py` para identificar e-mails úteis
+
+## Monitoramento Contínuo
+
+Para manter a saúde do sistema:
+
+```bash
+# Análise periódica de todos os batches
+python scripts/analyze_all_batches.py
+
+# Validação completa das regras
+python scripts/validate_extraction_rules.py --full-scan
+
+# Análise de padrões de inbox (ajustar filtros)
+python scripts/diagnose_inbox_patterns.py --all --resume
+```
+
+## Contribuindo com Novos Scripts
+
+Ao criar novos scripts de debug, siga estas diretrizes:
+
+1. **Nome descritivo**: Use nomes que indiquem claramente a função (ex: `diagnose_ocr_issue.py`)
+2. **Documentação completa**: Inclua docstring com exemplos de uso no topo do arquivo
+3. **Argumentos de linha de comando**: Use `argparse` para opções flexíveis
+4. **Output estruturado**: Produza resultados fáceis de ler e processar
+5. **Tratamento de erros**: Capture e relata erros de forma útil para debugging
+
+## Estrutura de Diretórios
+
+```
+scrapper/
+├── scripts/                    # Todos os scripts de debug
+├── data/
+│   ├── output/                # Relatórios (relatorio_lotes.csv, etc.)
+│   ├── debug_output/          # Outputs de scripts de debug
+│   └── cache/                 # Cache de processamento
+├── temp_email/                # Lotes de e-mail processados
+├── failed_cases_pdf/          # PDFs de falha para análise
+└── tests/                     # Testes unitários
+```
+
+---
+
+**Última atualização**: 2025-01-21  
+**Localização**: `scrapper/scripts/` e `scrapper/docs/debug/`

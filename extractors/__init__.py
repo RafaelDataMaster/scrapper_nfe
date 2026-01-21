@@ -7,7 +7,10 @@ from .net_center import NetCenterExtractor
 from .nfse_custom_montes_claros import NfseCustomMontesClarosExtractor
 from .nfse_custom_vila_velha import NfseCustomVilaVelhaExtractor
 from .sicoob import SicoobExtractor
+from .carrier_telecom import CarrierTelecomExtractor
 
+# Extrator especializado para documentos administrativos (deve vir antes dos genéricos)
+from .admin_document import AdminDocumentExtractor
 
 # Extrator de corpo de e-mail (não usa EXTRACTOR_REGISTRY, é chamado diretamente)
 from .email_body_extractor import (
@@ -32,6 +35,7 @@ __all__ = [
     "NetCenterExtractor",
     "OutrosExtractor",
     "SicoobExtractor",
+    "CarrierTelecomExtractor",
     "NfseCustomMontesClarosExtractor",
     "NfseCustomVilaVelhaExtractor",
     "NfseGenericExtractor",
@@ -42,4 +46,6 @@ __all__ = [
     "EmailBodyExtractor",
     "EmailBodyExtractionResult",
     "extract_from_email_body",
+    # Extrator especializado para documentos administrativos
+    "AdminDocumentExtractor",
 ]

@@ -242,11 +242,11 @@ python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 1. **Adicione novos extratores** - Ver [Como Estender](extending.md)
 2. **Customize os campos** - Edite `core/models.py`
 3. **Integre com sistemas** - Importe os CSVs no seu ERP/sistema financeiro
-4. **Migre para batch** - Ver [Migração Batch](../MIGRATION_BATCH_PROCESSING.md)
+4. **Migre para batch** - Ver [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md)
 
 ## Links Úteis
 
 - [Documentação Completa de Boletos](boletos.md)
 - [Como Estender o Sistema](extending.md)
 - [Guia de Debug](../development/debugging_guide.md)
-- [Migração Batch Processing](../MIGRATION_BATCH_PROCESSING.md)
+- [Migração Batch Processing](../development/MIGRATION_BATCH_PROCESSING.md)

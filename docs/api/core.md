@@ -517,5 +517,5 @@ print(f"Valor Total Lote: R$ {boleto.valor_total_lote:.2f}")
 - [Extractors](extractors.md) - Implementações de extratores
 - [Strategies](strategies.md) - Estratégias de extração de texto
 - [Diagnostics](diagnostics.md) - Sistema de análise de qualidade
-- [Migração Batch](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
+- [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
 - [Exportação Google Sheets](../guide/google_sheets_export.md) - 🆕 Guia de exportação para planilhas (v0.3.x)

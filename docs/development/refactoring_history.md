@@ -225,7 +225,7 @@ Refatoração do pipeline de ingestão para processar documentos em **lotes por 
 
 ### Documentação Criada
 
-- [`docs/MIGRATION_BATCH_PROCESSING.md`](../MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
+- [`docs/development/MIGRATION_BATCH_PROCESSING.md`](../development/MIGRATION_BATCH_PROCESSING.md) - Guia de migração v0.1.x → v0.2.x
 - [`docs/api/batch.md`](../api/batch.md) - Documentação dos módulos de batch
 - [`docs/api/services.md`](../api/services.md) - Documentação do IngestionService
 - [`scripts/example_batch_processing.py`](../../scripts/example_batch_processing.py) - Exemplos de uso
