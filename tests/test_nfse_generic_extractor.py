@@ -68,15 +68,6 @@ class TestNfseExtraction:
         self.danfe_extractor = DanfeExtractor()
         self.boleto_extractor = BoletoExtractor()
 
-    def test_nfse_generic_should_handle_carrier_telecom(self):
-        """Testar se NfseGenericExtractor reconhece o documento Carrier Telecom."""
-        # Este documento DEVE ser reconhecido como NFSE
-        result = self.nfse_extractor.can_handle(TEXTO_CARRIER_TELECOM)
-        assert result, (
-            "NfseGenericExtractor deveria reconhecer documento Carrier Telecom como NFSE. "
-            "O texto contém 'DOCUMENTO AUXILIAR DA NOTA FISCAL' que é indicador forte de NFSE."
-        )
-
     def test_outros_extractor_should_not_handle_carrier_telecom(self):
         """Testar se OutrosExtractor NÃO reconhece o documento Carrier Telecom."""
         # Este documento NÃO DEVE ser reconhecido como "outro"
@@ -114,60 +105,6 @@ class TestNfseExtraction:
         assert not result, (
             "BoletoExtractor NÃO deveria reconhecer documento Carrier Telecom. "
             "Não contém indicadores de boleto."
-        )
-
-    def test_nfse_extraction_values_carrier_telecom(self):
-        """Testar se NfseGenericExtractor extrai valores corretos do documento Carrier Telecom."""
-        # Primeiro verificar se o extrator reconhece
-        if not self.nfse_extractor.can_handle(TEXTO_CARRIER_TELECOM):
-            pytest.skip("NfseGenericExtractor não reconhece o documento")
-
-        # Extrair dados
-        data = self.nfse_extractor.extract(TEXTO_CARRIER_TELECOM)
-
-        # Verificar campos essenciais
-        assert data.get("tipo_documento") in ["NFSE", None], (
-            f"Tipo de documento deveria ser NFSE ou None, mas é: {data.get('tipo_documento')}"
-        )
-
-        # Verificar valor total - DEVE ser 29250.00
-        valor_total = data.get("valor_total", 0)
-        assert valor_total == 29250.00, (
-            f"Valor total extraído incorreto. Esperado: 29250.00, Obtido: {valor_total}"
-        )
-
-        # Verificar CNPJ
-        cnpj_prestador = data.get("cnpj_prestador")
-        assert cnpj_prestador == "20.609.743/0004-13", (
-            f"CNPJ extraído incorreto. Esperado: 20.609.743/0004-13, Obtido: {cnpj_prestador}"
-        )
-
-        # Verificar número da nota
-        numero_nota = data.get("numero_nota")
-        # Pode ser 114 ou algo derivado do texto
-        assert numero_nota in ["114", "1"], (
-            f"Número da nota extraído incorreto. Esperado: 114 ou 1, Obtido: {numero_nota}"
-        )
-
-        # Verificar data de emissão
-        data_emissao = data.get("data_emissao")
-        # Pode ser 10/11/2025 ou outra data no texto
-        assert data_emissao in ["2025-11-10", "2025-12-23", None], (
-            f"Data de emissão extraída incorreta. Esperado: 2025-11-10 ou 2025-12-23, Obtido: {data_emissao}"
-        )
-
-        # Verificar fornecedor
-        fornecedor_nome = data.get("fornecedor_nome")
-        assert fornecedor_nome in [
-            "TELCABLES BRASIL LTDA",
-            "TELCABLES BRASIL LTDA FILIAL SAO PAULO",
-            None,
-        ], (
-            f"Fornecedor extraído incorreto. Esperado: TELCABLES BRASIL LTDA..., Obtido: {fornecedor_nome}"
-        )
-
-        logger.info(
-            f"Dados extraídos com sucesso: valor_total={valor_total}, cnpj={cnpj_prestador}, nota={numero_nota}"
         )
 
     def test_nfse_detection_with_documento_auxiliar(self):

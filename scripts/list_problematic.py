@@ -177,7 +177,7 @@ def main():
 
     # Configurar caminhos
     base_dir = Path(__file__).parent
-    csv_path = base_dir / "data" / "output" / "relatorio_lotes.csv"
+    csv_path = base_dir.parent / "data" / "output" / "relatorio_lotes.csv"
 
     print(f"Lendo arquivo: {csv_path}")
     if not csv_path.exists():

@@ -376,7 +376,7 @@ def main():
 
     # Configurar caminhos
     base_dir = Path(__file__).parent
-    csv_path = base_dir / "data" / "output" / "relatorio_lotes.csv"
+    csv_path = base_dir.parent / "data" / "output" / "relatorio_lotes.csv"
 
     print(f"Lendo arquivo: {csv_path}")
 
@@ -400,7 +400,7 @@ def main():
     print("\n" + report)
 
     # Salvar relatório em arquivo
-    output_path = base_dir / "data" / "output" / "analise_admin_nfse.txt"
+    output_path = base_dir.parent / "data" / "output" / "analise_admin_nfse.txt"
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:

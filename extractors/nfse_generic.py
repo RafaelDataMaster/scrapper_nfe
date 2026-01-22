@@ -36,7 +36,6 @@ class NfseGenericExtractor(BaseExtractor):
             "CODIGO DE VERIFICACAO",
             "DOCUMENTO AUXILIAR DA NOTA FISCAL DE SERVIÇO",
             "DOCUMENTO AUXILIAR DA NFS-E",
-            "DOCUMENTO AUXILIAR DA NOTA FISCAL",
         ]
         is_strong_nfse = any(
             indicator in text_upper for indicator in nfse_strong_indicators
@@ -190,6 +189,7 @@ class NfseGenericExtractor(BaseExtractor):
             r"(?i)(?:(?:Número|Numero|N[º°o])\s*da\s*)?NFS-e\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*\b(\d{1,15})\b",
             r"(?i)Número\s+da\s+Nota[\s\S]*?\b(\d{1,15})\b",
             r"(?i)Nota\s*Fiscal\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*(\d{1,15})",
+            r"(?i)Nota\s*Fiscal\s*Fatura\s*[:\-]?\s*(\d{1,15})",
             r"(?i)(?<!RPS\s)(?<!Lote\s)(?<!S[eé]rie\s)(?:Número|N[º°o])\s*[:.-]?\s*(\d{1,15})",
         ]
 

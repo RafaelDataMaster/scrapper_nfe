@@ -22,11 +22,39 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
+# Adicionar caminho para importar módulos do projeto
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 # Configurar logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+# Importar extratores e matchers do projeto
+try:
+    from extractors.admin_document import AdminDocumentExtractor
+    from extractors.nfse_generic import NfseGenericExtractor
+    from extractors.boleto import BoletoExtractor
+    from core.empresa_matcher import (
+        infer_fornecedor_from_text,
+        is_nome_nosso,
+        pick_first_non_our_cnpj,
+    )
+    from core.empresa_matcher_email import find_empresa_in_email
+
+    EXTRACTORS_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Não foi possível importar módulos do projeto: {e}")
+    EXTRACTORS_AVAILABLE = False
+    AdminDocumentExtractor = None
+    NfseGenericExtractor = None
+    BoletoExtractor = None
+    infer_fornecedor_from_text = None
+    is_nome_nosso = None
+    pick_first_non_our_cnpj = None
+    find_empresa_in_email = None
 
 
 class PDFAnalyzer:
@@ -248,6 +276,8 @@ def load_problematic_cases(csv_path: Path) -> List[Dict[str, Any]]:
                         "email_sender": row.get("email_sender", ""),
                         "source_folder": row.get("source_folder", ""),
                         "empresa": row.get("empresa", ""),
+                        "numero_nota": row.get("numero_nota", ""),
+                        "vencimento": row.get("vencimento", ""),
                         "pdf_analysis": [],
                         "classification_summary": {},
                     }
@@ -264,6 +294,88 @@ def load_problematic_cases(csv_path: Path) -> List[Dict[str, Any]]:
         return []
 
 
+def check_csv_extraction_quality(case: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Verifica a qualidade da extração diretamente dos dados do CSV.
+
+    Args:
+        case: Dicionário com dados do caso do CSV
+
+    Returns:
+        Dicionário com problemas detectados na extração
+    """
+    problems = {
+        "fornecedor_issues": [],
+        "valor_issues": [],
+        "vencimento_issues": [],
+        "numero_nota_issues": [],
+        "extrator_identification_issues": [],
+    }
+
+    # 1. Verificar fornecedor
+    fornecedor = case.get("fornecedor", "")
+    if not fornecedor or fornecedor.strip() == "":
+        problems["fornecedor_issues"].append("Fornecedor vazio")
+    elif fornecedor.upper() in ["CNPJ FORNECEDOR", "FORNECEDOR", "NOME FORNECEDOR"]:
+        problems["fornecedor_issues"].append(f"Fornecedor genérico: {fornecedor}")
+    elif EXTRACTORS_AVAILABLE and is_nome_nosso:
+        # Verificar se o fornecedor não é uma empresa nossa
+        if is_nome_nosso(fornecedor):
+            problems["fornecedor_issues"].append(
+                f"Fornecedor é empresa nossa: {fornecedor}"
+            )
+
+    # 2. Verificar valor
+    valor = case.get("valor_compra", 0)
+    outros = case.get("outros", 0)
+    nfses = case.get("nfses", 0)
+
+    if valor == 0 and (outros > 0 or nfses > 0):
+        # Documentos foram encontrados mas valor é zero
+        problems["valor_issues"].append(
+            f"Valor zero com {outros} outros e {nfses} NFSEs"
+        )
+
+    # 3. Verificar vencimento (para boletos)
+    vencimento = case.get("vencimento", "")
+    email_subject = case.get("email_subject", "").upper()
+
+    # Se o assunto sugere boleto/fatura e vencimento está vazio
+    is_boleto_subject = "BOLETO" in email_subject or "FATURA" in email_subject
+    is_vencimento_subject = "VENCIMENTO" in email_subject or "VENCE" in email_subject
+
+    # Não marcar problema de vencimento se for NFSE (documento classificada como NFSE)
+    numero_nota = case.get("numero_nota", "")
+    is_nfse = nfses > 0
+
+    if outros > 0 and not vencimento and not is_nfse:
+        # Poderia ser um boleto sem vencimento extraído
+        message = "Vencimento não extraído"
+        if is_boleto_subject or is_vencimento_subject:
+            message += " (assunto sugere boleto/fatura)"
+        else:
+            message += " (pode ser boleto)"
+        problems["vencimento_issues"].append(message)
+
+    # 4. Verificar número da nota (para NFSEs)
+    if nfses > 0 and not numero_nota:
+        problems["numero_nota_issues"].append("Número da nota não extraído (para NFSE)")
+
+    # 5. Tentar identificar o tipo de documento baseado no assunto/fornecedor
+    email_subject = case.get("email_subject", "").upper()
+    fornecedor_upper = fornecedor.upper() if fornecedor else ""
+
+    # Padrões comuns para identificar tipo de documento
+    if "BOLETO" in email_subject or "FATURA" in email_subject:
+        problems["extrator_identification_issues"].append(
+            "Assunto sugere boleto/fatura"
+        )
+    elif "NF" in email_subject or "NOTA" in email_subject:
+        problems["extrator_identification_issues"].append("Assunto sugere nota fiscal")
+
+    return problems
+
+
 def analyze_pdfs_for_case(
     case: Dict[str, Any], analyzer: PDFAnalyzer
 ) -> Dict[str, Any]:
@@ -277,6 +389,10 @@ def analyze_pdfs_for_case(
     Returns:
         Caso atualizado com análise de PDFs
     """
+    # Primeiro verificar qualidade da extração do CSV
+    csv_quality = check_csv_extraction_quality(case)
+    case["csv_extraction_quality"] = csv_quality
+
     source_folder = case.get("source_folder", "")
     if not source_folder:
         logger.warning(f"Sem pasta fonte para caso: {case['batch_id']}")
@@ -298,6 +414,10 @@ def analyze_pdfs_for_case(
     for pdf_path in pdf_files:
         analysis = analyzer.analyze_pdf(pdf_path)
         if analysis:
+            # Analisar qualidade da extração com extratores reais
+            if EXTRACTORS_AVAILABLE and analysis.get("text_sample"):
+                extraction_quality = check_extraction_quality(analysis["text_sample"])
+                analysis["extraction_quality"] = extraction_quality
             pdf_analyses.append(analysis)
 
     case["pdf_analysis"] = pdf_analyses
@@ -334,6 +454,157 @@ def analyze_pdfs_for_case(
     return case
 
 
+def check_extraction_quality(text: str) -> Dict[str, Any]:
+    """
+    Verifica a qualidade da extração usando os extratores reais do projeto.
+
+    Args:
+        text: Texto extraído do PDF
+
+    Returns:
+        Dicionário com informações sobre qualidade da extração
+    """
+    if not EXTRACTORS_AVAILABLE or not text:
+        return {"available": False}
+
+    quality_report = {
+        "available": True,
+        "extractors_tested": [],
+        "missing_fields": [],
+        "fornecedor_issues": [],
+        "valor_issues": [],
+        "vencimento_issues": [],
+        "numero_nota_issues": [],
+    }
+
+    # Testar cada extrator relevante
+    extractors_to_test = []
+
+    if NfseGenericExtractor:
+        nfse_extractor = NfseGenericExtractor()
+        if nfse_extractor.can_handle(text):
+            extractors_to_test.append(("NFSE", nfse_extractor))
+
+    if BoletoExtractor:
+        boleto_extractor = BoletoExtractor()
+        if boleto_extractor.can_handle(text):
+            extractors_to_test.append(("BOLETO", boleto_extractor))
+
+    if AdminDocumentExtractor:
+        admin_extractor = AdminDocumentExtractor()
+        if admin_extractor.can_handle(text):
+            extractors_to_test.append(("ADMIN", admin_extractor))
+
+    for extractor_name, extractor in extractors_to_test:
+        try:
+            extracted_data = extractor.extract(text)
+            quality_report["extractors_tested"].append(extractor_name)
+
+            # Verificar campos críticos
+            if extractor_name == "NFSE":
+                # Para NFSE: verificar número da nota e fornecedor
+                numero_nota = extracted_data.get("numero_nota")
+                if not numero_nota or numero_nota.strip() == "":
+                    quality_report["numero_nota_issues"].append(
+                        f"{extractor_name}: Não extraiu número da nota"
+                    )
+
+                valor_total = extracted_data.get("valor_total")
+                if not valor_total or valor_total == 0:
+                    quality_report["valor_issues"].append(
+                        f"{extractor_name}: Não extraiu valor total"
+                    )
+
+            elif extractor_name == "BOLETO":
+                # Para Boleto: verificar vencimento e valor
+                vencimento = extracted_data.get("vencimento")
+                if not vencimento:
+                    quality_report["vencimento_issues"].append(
+                        f"{extractor_name}: Não extraiu vencimento"
+                    )
+
+                valor_documento = extracted_data.get("valor_documento")
+                if not valor_documento or valor_documento == 0:
+                    quality_report["valor_issues"].append(
+                        f"{extractor_name}: Não extraiu valor do documento"
+                    )
+
+            # Verificar fornecedor para todos os extratores
+            fornecedor_nome = extracted_data.get(
+                "fornecedor_nome"
+            ) or extracted_data.get("fornecedor")
+            if fornecedor_nome:
+                # Verificar se o fornecedor não é uma empresa nossa
+                if is_nome_nosso and is_nome_nosso(fornecedor_nome):
+                    quality_report["fornecedor_issues"].append(
+                        f"{extractor_name}: Fornecedor é empresa nossa: {fornecedor_nome}"
+                    )
+
+                # Verificar se o fornecedor tem conteúdo significativo
+                if fornecedor_nome.upper() in [
+                    "CNPJ FORNECEDOR",
+                    "FORNECEDOR",
+                    "NOME FORNECEDOR",
+                    "",
+                ]:
+                    quality_report["fornecedor_issues"].append(
+                        f"{extractor_name}: Fornecedor genérico: {fornecedor_nome}"
+                    )
+            else:
+                quality_report["fornecedor_issues"].append(
+                    f"{extractor_name}: Não extraiu fornecedor"
+                )
+
+            # Tentar inferir fornecedor do texto usando empresa_matcher
+            if infer_fornecedor_from_text and not fornecedor_nome:
+                inferred_fornecedor = infer_fornecedor_from_text(text, None)
+                if inferred_fornecedor:
+                    quality_report["fornecedor_issues"].append(
+                        f"{extractor_name}: Fornecedor inferível do texto: {inferred_fornecedor}"
+                    )
+
+        except Exception as e:
+            quality_report["missing_fields"].append(
+                f"{extractor_name}: Erro na extração: {e}"
+            )
+
+    # Se nenhum extrator foi testado, tentar análise genérica
+    if not extractors_to_test:
+        # Verificar valores no texto
+        value_patterns = [r"R\$\s*[\d\.]+,\d{2}", r"VALOR.*TOTAL.*R\$\s*[\d\.]+,\d{2}"]
+        has_values = any(re.search(pattern, text.upper()) for pattern in value_patterns)
+        if has_values:
+            quality_report["valor_issues"].append(
+                "GENÉRICO: Valores detectados mas não extraídos"
+            )
+
+        # Verificar datas de vencimento
+        vencimento_patterns = [
+            r"VENCIMENTO.*\d{2}/\d{2}/\d{4}",
+            r"DATA.*VENCIMENTO.*\d{2}/\d{2}/\d{4}",
+        ]
+        has_vencimento = any(
+            re.search(pattern, text.upper()) for pattern in vencimento_patterns
+        )
+        if has_vencimento:
+            quality_report["vencimento_issues"].append(
+                "GENÉRICO: Vencimento detectado mas não extraído"
+            )
+
+        # Verificar números de nota
+        nota_patterns = [
+            r"N[º°o]\.?\s*[:.-]?\s*\d+",
+            r"NOTA.*FISCAL.*N[º°o]\.?\s*[:.-]?\s*\d+",
+        ]
+        has_nota = any(re.search(pattern, text.upper()) for pattern in nota_patterns)
+        if has_nota:
+            quality_report["numero_nota_issues"].append(
+                "GENÉRICO: Número de nota detectado mas não extraído"
+            )
+
+    return quality_report
+
+
 def generate_detailed_report(cases: List[Dict[str, Any]]) -> str:
     """
     Gera relatório detalhado da análise.
@@ -363,6 +634,29 @@ def generate_detailed_report(cases: List[Dict[str, Any]]) -> str:
     report.append(f"Total de casos analisados: {total_cases}")
     report.append(f"Casos com PDFs disponíveis: {cases_with_pdfs}")
     report.append(f"Casos classificados automaticamente: {cases_classified}")
+
+    # Estatísticas de problemas de extração
+    problem_counts = {
+        "fornecedor_issues": 0,
+        "valor_issues": 0,
+        "vencimento_issues": 0,
+        "numero_nota_issues": 0,
+        "extrator_identification_issues": 0,
+    }
+
+    for case in cases:
+        csv_quality = case.get("csv_extraction_quality", {})
+        for problem_type in problem_counts.keys():
+            issues = csv_quality.get(problem_type, [])
+            if issues:
+                problem_counts[problem_type] += 1
+
+    report.append("\nPROBLEMAS DE EXTRAÇÃO DO CSV")
+    report.append("-" * 50)
+    for problem_type, count in sorted(problem_counts.items()):
+        if count > 0:
+            problem_name = problem_type.replace("_", " ").title()
+            report.append(f"  {problem_name}: {count} casos")
     report.append("")
 
     # Resumo por classificação
@@ -414,6 +708,27 @@ def generate_detailed_report(cases: List[Dict[str, Any]]) -> str:
         report.append(
             f"  Outros: {case['outros']}, NFSEs: {case['nfses']}, Valor: R$ {case['valor_compra']:.2f}"
         )
+
+        # Problemas de extração do CSV
+        csv_quality = case.get("csv_extraction_quality", {})
+        if csv_quality:
+            problems_found = False
+            for problem_type in [
+                "fornecedor_issues",
+                "valor_issues",
+                "vencimento_issues",
+                "numero_nota_issues",
+                "extrator_identification_issues",
+            ]:
+                issues = csv_quality.get(problem_type, [])
+                if issues:
+                    if not problems_found:
+                        report.append("  ⚠️  Problemas de extração do CSV:")
+                        problems_found = True
+                    for issue in issues[:2]:  # Limita a 2 problemas por tipo
+                        report.append(f"    - {issue}")
+                    if len(issues) > 2:
+                        report.append(f"      ... (+{len(issues) - 2} mais)")
 
         # Análise de PDFs
         pdf_analyses = case.get("pdf_analysis", [])
@@ -467,6 +782,32 @@ def generate_detailed_report(cases: List[Dict[str, Any]]) -> str:
                         if len(patterns[0]) > 80
                         else f"      Padrões: {patterns[0]}"
                     )
+
+            # Qualidade da extração
+            extraction_quality = pdf_analysis.get("extraction_quality")
+            if extraction_quality and extraction_quality.get("available"):
+                report.append(
+                    f"      Extração testada com: {', '.join(extraction_quality.get('extractors_tested', []))}"
+                )
+                issues = []
+                if extraction_quality.get("fornecedor_issues"):
+                    issues.extend(extraction_quality["fornecedor_issues"])
+                if extraction_quality.get("valor_issues"):
+                    issues.extend(extraction_quality["valor_issues"])
+                if extraction_quality.get("vencimento_issues"):
+                    issues.extend(extraction_quality["vencimento_issues"])
+                if extraction_quality.get("numero_nota_issues"):
+                    issues.extend(extraction_quality["numero_nota_issues"])
+                if extraction_quality.get("missing_fields"):
+                    issues.extend(extraction_quality["missing_fields"])
+                if issues:
+                    report.append(f"      Problemas na extração:")
+                    for issue in issues[:3]:  # Limita a 3 problemas
+                        report.append(f"        - {issue}")
+                    if len(issues) > 3:
+                        report.append(f"        ... (+{len(issues) - 3} mais)")
+                else:
+                    report.append(f"      Extração OK (sem problemas detectados)")
 
         report.append("")
 
@@ -534,7 +875,7 @@ def main():
 
     # Configurar caminhos
     base_dir = Path(__file__).parent
-    csv_path = base_dir / "data" / "output" / "relatorio_lotes.csv"
+    csv_path = base_dir.parent / "data" / "output" / "relatorio_lotes.csv"
 
     print(f"\nLendo arquivo: {csv_path}")
     if not csv_path.exists():
@@ -592,8 +933,55 @@ def main():
     else:
         print("⚠️  Nenhum PDF foi analisado")
 
+    # Estatísticas de problemas de extração do CSV
+    problem_counts = {
+        "fornecedor_issues": 0,
+        "valor_issues": 0,
+        "vencimento_issues": 0,
+        "numero_nota_issues": 0,
+        "extrator_identification_issues": 0,
+    }
+
+    for case in analyzed_cases:
+        csv_quality = case.get("csv_extraction_quality", {})
+        for problem_type in problem_counts.keys():
+            issues = csv_quality.get(problem_type, [])
+            if issues:
+                problem_counts[problem_type] += 1
+
+    total_cases_with_problems = sum(problem_counts.values())
+    if total_cases_with_problems > 0:
+        print("\nProblemas de extração identificados:")
+        print("-" * 50)
+        for problem_type, count in sorted(problem_counts.items()):
+            if count > 0:
+                problem_name = problem_type.replace("_", " ").title()
+                percentage = (count / len(analyzed_cases)) * 100
+                print(f"  {problem_name}: {count} casos ({percentage:.1f}%)")
+
+        # Resumo dos problemas mais comuns
+        print("\nPrincipais problemas:")
+        for problem_type, count in sorted(
+            problem_counts.items(), key=lambda x: x[1], reverse=True
+        ):
+            if count > 0:
+                if problem_type == "fornecedor_issues":
+                    print(f"  • Fornecedor incorreto/genérico: {count} casos")
+                elif problem_type == "valor_issues":
+                    print(
+                        f"  • Valor não extraído (zero com documentos): {count} casos"
+                    )
+                elif problem_type == "vencimento_issues":
+                    print(f"  • Vencimento não extraído (boletos): {count} casos")
+                elif problem_type == "numero_nota_issues":
+                    print(f"  • Número da nota não extraído (NFSEs): {count} casos")
+                elif problem_type == "extrator_identification_issues":
+                    print(f"  • Tipo de documento mal identificado: {count} casos")
+    else:
+        print("\n✅ Nenhum problema de extração identificado no CSV")
+
     # Salvar relatório
-    output_dir = base_dir / "data" / "output"
+    output_dir = base_dir.parent / "data" / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "analise_pdfs_detalhada.txt"
 

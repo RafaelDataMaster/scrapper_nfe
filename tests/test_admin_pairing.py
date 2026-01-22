@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Teste da integração entre detecção de documentos administrativos e pareamento.
 
@@ -6,11 +5,12 @@ Este script testa se os avisos de documento administrativo gerados pelo
 CorrelationService são corretamente propagados para os DocumentPair
 gerados pelo DocumentPairingService.
 """
+
 import os
 import sys
+import re
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.stdout.reconfigure(encoding='utf-8')
 
 from core.batch_result import BatchResult
 from core.correlation_service import CorrelationService
@@ -19,39 +19,36 @@ from core.models import OtherDocumentData
 
 
 def test_admin_detection_in_pairing():
-    """
-    Testa se documentos administrativos têm o aviso correto nos DocumentPair.
-    """
+    """Testa se documentos administrativos têm o aviso correto nos DocumentPair."""
     pairing_service = DocumentPairingService()
     correlation_service = CorrelationService()
-
-    print('=' * 80)
-    print('TESTE DE PROPAGAÇÃO DE DOCUMENTOS ADMINISTRATIVOS PARA DocumentPair')
-    print('=' * 80)
 
     # Casos de teste: assuntos administrativos que DEVEM gerar aviso
     test_cases = [
         # (assunto, descrição esperada)
-        ('Lembrete Gentil: Vencimento de Fatura', 'Lembrete administrativo'),
-        ('Sua ordem Equinix n.º 1-255425159203 agendada com sucesso', 'Ordem de serviço/agendamento'),
-        ('GUIA | Processo - Miralva Macedo Dias x CSC', 'Guia jurídica/fiscal'),
-        ('Cobrança Indevida 11/2025 - 4security', 'Reclamação de cobrança'),
-        ('December - 2025 Invoice for 6343 - ATIVE', 'Invoice internacional'),
-        ('CONTRATO_SITE MASTER INTERNET', 'Documento de contrato'),
-        ('Tarifas CSC - Acerto MOC - apuração até 31/12/2025', 'Documento de tarifas internas'),
+        ("Lembrete Gentil: Vencimento de Fatura", "Lembrete administrativo"),
+        (
+            "Sua ordem Equinix n.º 1-255425159203 agendada com sucesso",
+            "Ordem de serviço/agendamento",
+        ),
+        ("GUIA | Processo - Miralva Macedo Dias x CSC", "Guia jurídica/fiscal"),
+        ("Cobrança Indevida 11/2025 - 4security", "Reclamação de cobrança"),
+        ("December - 2025 Invoice for 6343 - ATIVE", "Invoice internacional"),
+        ("CONTRATO_SITE MASTER INTERNET", "Documento de contrato"),
+        (
+            "Tarifas CSC - Acerto MOC - apuração até 31/12/2025",
+            "Documento de tarifas internas",
+        ),
     ]
 
     # Assuntos que NÃO devem gerar aviso (cobranças reais)
     normal_cases = [
-        'CEMIG FATURA ONLINE - 214687921',
-        'NFS-e + Boleto No 3494',
-        'Boleto ACIV',
-        'Sua fatura chegou',
-        'Nota Fiscal Eletrônica Nº 103977',
+        "CEMIG FATURA ONLINE - 214687921",
+        "NFS-e + Boleto No 3494",
+        "Boleto ACIV",
+        "Sua fatura chegou",
+        "Nota Fiscal Eletrônica Nº 103977",
     ]
-
-    print('\n📋 TESTANDO ASSUNTOS ADMINISTRATIVOS:')
-    print('-' * 80)
 
     admin_ok = 0
     admin_fail = 0
@@ -63,8 +60,7 @@ def test_admin_detection_in_pairing():
 
         # Adiciona um documento "outro" com valor 0 (típico de documentos administrativos)
         doc = OtherDocumentData(
-            arquivo_origem=f"doc_{subject[:10]}.pdf",
-            valor_total=0.0
+            arquivo_origem=f"test_doc_{admin_ok}.pdf", valor_total=0.0
         )
         batch.add_document(doc)
 
@@ -76,36 +72,37 @@ def test_admin_detection_in_pairing():
         pairs = pairing_service.pair_documents(batch)
 
         # Verifica se o pair contém o aviso
-        if pairs:
-            pair = pairs[0]
-            has_admin_warning = pair.divergencia and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in pair.divergencia
+        assert pairs, f"Nenhum pair gerado para assunto: {subject}"
+        pair = pairs[0]
 
-            # Verifica também no correlation_result diretamente
-            correlation_has_warning = correlation_result.divergencia and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in correlation_result.divergencia
+        has_admin_warning = (
+            pair.divergencia and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in pair.divergencia
+        )
+        correlation_has_warning = (
+            correlation_result.divergencia
+            and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in correlation_result.divergencia
+        )
 
-            if has_admin_warning and correlation_has_warning:
-                # Extrai descrição para verificar se é a esperada
-                import re
-                match = re.search(r'POSSÍVEL DOCUMENTO ADMINISTRATIVO - ([^\]]+)', pair.divergencia or "")
-                actual_desc = match.group(1) if match else "N/A"
+        assert has_admin_warning, f"Pair não tem aviso administrativo para: {subject}"
+        assert correlation_has_warning, (
+            f"Correlation não tem aviso administrativo para: {subject}"
+        )
 
-                if expected_desc in actual_desc:
-                    status = f'✅ OK: {expected_desc}'
-                    admin_ok += 1
-                else:
-                    status = f'⚠️ Descrição diferente: esperado "{expected_desc}", obtido "{actual_desc}"'
-                    admin_fail += 1
-            else:
-                status = f'❌ SEM AVISO ADMIN'
-                admin_fail += 1
-        else:
-            status = f'❌ SEM PAIRS'
-            admin_fail += 1
+        # Extrai descrição para verificar se é a esperada
+        match = re.search(
+            r"POSSÍVEL DOCUMENTO ADMINISTRATIVO - ([^\]]+)", pair.divergencia or ""
+        )
+        actual_desc = match.group(1) if match else ""
+        assert expected_desc in actual_desc, (
+            f"Descrição diferente para {subject}: "
+            f"esperado '{expected_desc}', obtido '{actual_desc}'"
+        )
 
-        print(f'{status:60} | {subject[:40]}...')
+        admin_ok += 1
 
-    print('\n📄 TESTANDO ASSUNTOS NORMAIS (NÃO ADMINISTRATIVOS):')
-    print('-' * 80)
+    assert admin_ok == len(test_cases), (
+        f"{admin_ok}/{len(test_cases)} casos administrativos passaram"
+    )
 
     normal_ok = 0
     normal_fail = 0
@@ -117,8 +114,7 @@ def test_admin_detection_in_pairing():
 
         # Adiciona um documento com valor (cobrança real)
         doc = OtherDocumentData(
-            arquivo_origem=f"doc_{subject[:10]}.pdf",
-            valor_total=150.75
+            arquivo_origem=f"normal_doc_{normal_ok}.pdf", valor_total=150.75
         )
         batch.add_document(doc)
 
@@ -132,69 +128,60 @@ def test_admin_detection_in_pairing():
         # Verifica se NÃO tem aviso administrativo
         has_admin_warning = False
         if pairs and pairs[0].divergencia:
-            has_admin_warning = "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in pairs[0].divergencia
+            has_admin_warning = (
+                "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in pairs[0].divergencia
+            )
 
-        correlation_has_warning = correlation_result.divergencia and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in correlation_result.divergencia
+        correlation_has_warning = (
+            correlation_result.divergencia
+            and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in correlation_result.divergencia
+        )
 
-        if not has_admin_warning and not correlation_has_warning:
-            status = '✅ SEM AVISO (correto)'
-            normal_ok += 1
-        elif has_admin_warning:
-            status = '⚠️ FALSO POSITIVO em pair'
-            normal_fail += 1
-        elif correlation_has_warning:
-            status = '⚠️ FALSO POSITIVO em correlation'
-            normal_fail += 1
-        else:
-            status = '❌ ERRO'
-            normal_fail += 1
+        assert not has_admin_warning, f"Falso positivo em pair para: {subject}"
+        assert not correlation_has_warning, (
+            f"Falso positivo em correlation para: {subject}"
+        )
 
-        print(f'{status:60} | {subject[:40]}...')
+        normal_ok += 1
 
-    print('\n' + '=' * 80)
-    print('RESUMO:')
-    print(f'  Administrativo: {admin_ok}/{len(test_cases)} com aviso correto')
-    print(f'  Normal: {normal_ok}/{len(normal_cases)} sem aviso (correto)')
-    if admin_fail > 0:
-        print(f'  ⚠️ {admin_fail} assuntos admin SEM aviso ou com aviso incorreto!')
-    if normal_fail > 0:
-        print(f'  ⚠️ {normal_fail} falsos positivos!')
+    assert normal_ok == len(normal_cases), (
+        f"{normal_ok}/{len(normal_cases)} casos normais passaram"
+    )
 
-    # Teste adicional: verificar se aviso aparece no CSV final
-    print('\n📊 TESTE DE FORMATAÇÃO DO AVISO NO DIVERGENCIA:')
-    print('-' * 80)
+
+def test_admin_warning_format_in_csv():
+    """Testa se o aviso administrativo está formatado corretamente para exportação CSV."""
+    pairing_service = DocumentPairingService()
+    correlation_service = CorrelationService()
 
     # Testa um caso específico
     batch = BatchResult(batch_id="test_format")
     batch.email_subject = "Lembrete Gentil: Vencimento de Fatura"
-    batch.add_document(OtherDocumentData(arquivo_origem="lembrete.pdf", valor_total=0.0))
+    batch.add_document(
+        OtherDocumentData(arquivo_origem="test_lembrete.pdf", valor_total=0.0)
+    )
 
     correlation_result = correlation_service.correlate(batch)
     batch.correlation_result = correlation_result
 
     pairs = pairing_service.pair_documents(batch)
 
-    if pairs:
-        pair = pairs[0]
-        print(f'Assunto: {batch.email_subject}')
-        print(f'Correlation divergencia: {correlation_result.divergencia}')
-        print(f'Pair divergencia: {pair.divergencia}')
-        print(f'Pair status: {pair.status}')
+    assert pairs, "Nenhum pair gerado"
+    pair = pairs[0]
 
-        # Verifica se o formato está correto para exportação CSV
-        summary = pair.to_summary()
-        print(f'CSV divergencia: {summary.get("divergencia")}')
+    # Verifica se o aviso está presente
+    assert (
+        pair.divergencia and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in pair.divergencia
+    ), "Aviso administrativo não encontrado no pair"
+    assert (
+        correlation_result.divergencia
+        and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in correlation_result.divergencia
+    ), "Aviso administrativo não encontrado no correlation"
 
-        if summary.get("divergencia") and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in summary.get("divergencia", ""):
-            print('✅ Aviso presente no CSV summary')
-        else:
-            print('❌ Aviso NÃO presente no CSV summary')
-
-    print('=' * 80)
-
-    # Retorna resultado geral
-    return admin_ok == len(test_cases) and normal_ok == len(normal_cases)
-
-if __name__ == "__main__":
-    success = test_admin_detection_in_pairing()
-    sys.exit(0 if success else 1)
+    # Verifica se o formato está correto para exportação CSV
+    summary = pair.to_summary()
+    assert "divergencia" in summary, "Campo divergencia não encontrado no summary"
+    assert (
+        summary["divergencia"]
+        and "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in summary["divergencia"]
+    ), "Aviso administrativo não presente no CSV summary"

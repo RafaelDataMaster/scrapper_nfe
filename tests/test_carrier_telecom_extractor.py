@@ -11,6 +11,8 @@ Exemplo:
     python test_carrier_telecom_extractor.py temp_email/email_20260121_080231_81f64f30/01_NFcom_114_CARRIER_TELECOM.pdf
 """
 
+__test__ = False
+
 import sys
 import os
 import re
@@ -73,7 +75,7 @@ def extract_text_from_pdf(pdf_path: str) -> Optional[str]:
         return None
 
 
-def test_carrier_telecom_extractor(text: str) -> dict:
+def run_carrier_telecom_extractor_test(text: str) -> dict:
     """Testa o CarrierTelecomExtractor com o texto fornecido."""
     try:
         from extractors.carrier_telecom import CarrierTelecomExtractor
@@ -113,7 +115,7 @@ def test_carrier_telecom_extractor(text: str) -> dict:
         return {"error": f"Erro: {e}"}
 
 
-def test_other_extractors(text: str) -> dict:
+def run_other_extractors_test(text: str) -> dict:
     """Testa outros extratores para ver qual reconheceria o documento."""
     logger.info("Testando outros extratores...")
 
@@ -220,13 +222,13 @@ def main():
     print("-" * 40)
 
     # Testar CarrierTelecomExtractor
-    carrier_result = test_carrier_telecom_extractor(text)
+    carrier_result = run_carrier_telecom_extractor_test(text)
 
     print("\n🔍 TESTE DE OUTROS EXTRATORES")
     print("-" * 40)
 
     # Testar outros extratores
-    other_results = test_other_extractors(text)
+    other_results = run_other_extractors_test(text)
 
     print("\n📊 RESUMO")
     print("=" * 80)

@@ -138,7 +138,7 @@ class AdminDocumentExtractor(BaseExtractor):
         # Padrões baseados em análise dos casos problemáticos
         patterns = [
             # 1. Lembretes gentis (corrigido para capturar variações)
-            (r"LEMBRE?TE\s+GENTIL", "Lembrete administrativo"),
+            (r"LEMBR(?:ETE|E)\s+GENTIL", "Lembrete administrativo"),
             # 2. Ordens de serviço/agendamento (Equinix, etc.)
             (r"SUA\s+ORDEM\s+.*\s+AGENDAD[OA]", "Ordem de serviço/agendamento"),
             (r"ORDEM\s+DE\s+SERVI[ÇC]O", "Ordem de serviço/agendamento"),
@@ -160,6 +160,7 @@ class AdminDocumentExtractor(BaseExtractor):
                 r"DOCUMENTO\s+\d{6,9}\s+[-–]\s+NOTIFICA[ÇC][AÃ]O",
                 "Notificação automática",
             ),
+            (r"DOCUMENTO\s*:\s*\d{6,9}", "Notificação automática"),
             # 6. Guias jurídicas/fiscais
             (r"GUIA\s*[\|\-–]\s*PROCESSO", "Guia jurídica/fiscal"),
             (r"GUIA\s*[\|\-–]\s*EXECU[ÇC][AÃ]O", "Guia jurídica/fiscal"),
@@ -292,7 +293,7 @@ class AdminDocumentExtractor(BaseExtractor):
 
         # Mapeamento de padrões para subtipos e descrições
         patterns_map = [
-            (r"LEMBRE?TE\s+GENTIL", "LEMBRETE", "Lembrete administrativo"),
+            (r"LEMBR(?:ETE|E)\s+GENTIL", "LEMBRETE", "Lembrete administrativo"),
             (
                 r"SUA\s+ORDEM\s+.*\s+AGENDAD[OA]",
                 "ORDEM_SERVICO",
@@ -444,6 +445,7 @@ class AdminDocumentExtractor(BaseExtractor):
             "RECLAMACAO",
             "INVOICE_INTERNACIONAL",
             "GUIA_JURIDICA",
+            "ORDEM_SERVICO",
         ]:
             # Tentar padrões específicos para contratos e guias
             value_patterns = [
@@ -470,6 +472,7 @@ class AdminDocumentExtractor(BaseExtractor):
             "CONTRATO",
             "GUIA_JURIDICA",
             "RECLAMACAO",
+            "ORDEM_SERVICO",
         ]:
             for pattern in [r"\bR\$\s*([\d\.]+,\d{2})\b", BR_MONEY_RE]:
                 matches = list(re.finditer(pattern, text))
@@ -487,10 +490,51 @@ class AdminDocumentExtractor(BaseExtractor):
 
         # Datas
         # 1. Vencimento (quando aplicável)
-        if data["subtipo"] in ["LEMBRETE", "CONTRATO", "CONDOMINIO", "GUIA_JURIDICA"]:
+        if data["subtipo"] in [
+            "LEMBRETE",
+            "CONTRATO",
+            "CONDOMINIO",
+            "GUIA_JURIDICA",
+            "ORDEM_SERVICO",
+        ]:
+            # Padrão 1: VENCIMENTO seguido diretamente por data (mesma linha)
             m_venc = re.search(
                 r"(?i)\bVENCIMENTO\b\s*[:\-–]?\s*(\d{2}/\d{2}/\d{4})", text
             )
+
+            # Padrão 2: VENCIMENTO seguido por data em qualquer lugar próximo (até 50 caracteres, incluindo quebras)
+            if not m_venc:
+                # Usar re.DOTALL para que . capture quebras de linha também
+                m_venc = re.search(
+                    r"(?i)\bVENCIMENTO\b.{0,50}?(\d{2}/\d{2}/\d{4})", text, re.DOTALL
+                )
+
+            # Padrão 3: Para documentos de ordem de serviço, procurar datas próximas a "Vencimento" em tabelas
+            if not m_venc and data["subtipo"] == "ORDEM_SERVICO":
+                # Procurar padrão específico de tabela: "Vencimento" e data na mesma linha ou próxima
+                lines = text.split("\n")
+                for i, line in enumerate(lines):
+                    if re.search(r"(?i)\bVENCIMENTO\b", line):
+                        # Verificar se há data na mesma linha
+                        date_match = re.search(r"(\d{2}/\d{2}/\d{4})", line)
+                        if date_match:
+                            m_venc = date_match
+                            break
+                        # Verificar próxima linha para data
+                        if i + 1 < len(lines):
+                            next_line = lines[i + 1]
+                            date_match = re.search(r"(\d{2}/\d{2}/\d{4})", next_line)
+                            if date_match:
+                                m_venc = date_match
+                                break
+                        # Verificar linha anterior (caso "Vencimento" esteja após a data)
+                        if i > 0:
+                            prev_line = lines[i - 1]
+                            date_match = re.search(r"(\d{2}/\d{2}/\d{4})", prev_line)
+                            if date_match:
+                                m_venc = date_match
+                                break
+
             if m_venc:
                 data["vencimento"] = parse_date_br(m_venc.group(1))
                 logger.debug(

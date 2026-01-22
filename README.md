@@ -32,25 +32,32 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ## To Do - Notas mentais
 
-- [ ] Conferir os emails que retornaram valor zero. Analise no md analise-falhas.md.
-- [ ] Conferir os testes unitários. Atualizar eles pro projeto atual.
+- [ ] Fazer um script pra automatizar a analise de logs
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**.
 - [ ] Lembrar de atualizar os dados do imap pro email da empresa.
-- [ ] Procurar APIs da openAI para OCR e validadção dos dados no documento no caso para a coluna NF num primeiro momento.
+- [ ] Procurar APIs da openAI para OCR e valibdadção dos dados no documento no caso para a coluna NF num primeiro momento.
 - [ ] Quando o projeto estiver no estágio real pra primeira release ler git-futuro.md e pesquisar ferramentas/plugins/qualquer coisa que ajude a melhorar a maluquice que é os commits e tudo mais.
 - [ ] Verificar cada caso a fundo dos pdfs e avaliar possíveis estratégias para os casos onde o pdf em si não esta anexado no email (link de prefeitura ou redirecionador de terceiros) [LOW_PRIORITY].
 
 # Estudar por agora
 
-### Comandos de terminal uteis
-
-Procurar pdfs com nome de empresas específicas ao identificar casos falhos nos debugs do validate
-
-```bash
-Get-ChildItem -Path .\failed_cases_pdf\ -Recurse -Filter "*MOTO*" -Name
-```
-
 ## Done
+
+### 22/01/2026
+
+- [x] **Resolução do caso VCOM Tecnologia**: Correção do AdminDocumentExtractor para extrair valores de ordens de serviço e melhoria na extração de vencimento para documentos tabulares, resolvendo 6 casos de documentos classificados como administrativos com valores não extraídos.
+- [x] **Correção de scripts de diagnóstico**: Ajuste no check_problematic_pdfs.py para chamada correta da função infer_fornecedor_from_text com argumento faltante.
+- [x] **Análise sistemática de casos problemáticos**: Identificação e correção de 6 casos VCOM onde documentos de ordem de serviço não extraíam valores, reduzindo "Valor Issues" de 23 para 17 casos.
+- [x] **Documentação das correções**: Criação de análise detalhada em docs/analysis/caso_vcom_tecnologia_correcoes.md para referência futura e aprendizado do sistema.
+- [x] **Padronização completa da suíte de testes**: Correção de 9 testes que estavam falhando após padronização para pytest, incluindo:
+    - Correção do teste `test_admin_pairing.py` para não usar "contrato" no nome do arquivo (ativava filtro de documento auxiliar)
+    - Ajuste do AdminDocumentExtractor para aceitar documentos com padrão "DOCUMENTO: 000000135"
+    - Melhoria na extração de fornecedor no OutrosExtractor com padrão "Fornecedor: NOME LTDA"
+    - Correção da detecção de chave de acesso de 44 dígitos com regex robusta `(?<!\d)\d{44}(?!\d)`
+    - Ajuste nos mocks de timeout para apontar corretamente para `config.settings`
+- [x] **Ajustes no extrator Carrier Telecom**: Remoção de "DOCUMENTO AUXILIAR DA NOTA FISCAL" dos indicadores fortes de NFSe no NfseGenericExtractor, evitando falsos positivos em DANFEs e garantindo que o CarrierTelecomExtractor específico tenha prioridade.
+- [x] **Melhoria na extração de número da nota**: Adição de padrão `Nota\s*Fiscal\s*Fatura\s*[:\-]?\s*(\d{1,15})` no NfseGenericExtractor para capturar melhor números em documentos como "NOTA FISCAL FATURA: 114".
+- [x] **Resultado final**: Suíte de testes com 547 testes (546 passando, 1 pulado), todos os extratores funcionando corretamente e sistema pronto para execução integrada.
 
 ### 21/01/2026
 

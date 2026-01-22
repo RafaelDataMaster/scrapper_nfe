@@ -100,8 +100,7 @@ class OutrosExtractor(BaseExtractor):
             return False
 
         # Verificar chave de acesso de 44 dígitos
-        digits = re.sub(r"\D", "", text or "")
-        if re.search(r"\b\d{44}\b", digits):
+        if re.search(r"(?<!\d)\d{44}(?!\d)", text or ""):
             logging.getLogger(__name__).debug(
                 f"OutrosExtractor: can_handle excluído - chave de acesso de 44 dígitos"
             )
@@ -183,7 +182,17 @@ class OutrosExtractor(BaseExtractor):
             data["fornecedor_nome"] = "LOCAWEB"
 
         if not data.get("fornecedor_nome"):
-            m = re.search(r"(?im)^\s*([A-ZÀ-ÿ][A-ZÀ-ÿ0-9\s\.&\-]{5,80}LTDA)\b", text)
+            # Tentar padrão "Fornecedor: NOME LTDA"
+            m = re.search(
+                r"(?i)Fornecedor\s*:\s*([A-ZÀ-ÿ][A-ZÀ-ÿ0-9\s\.&\-]+LTDA)\b", text
+            )
+            if m:
+                data["fornecedor_nome"] = re.sub(r"\s+", " ", m.group(1)).strip()
+
+        if not data.get("fornecedor_nome"):
+            m = re.search(
+                r"(?im)^\s*(?!FATURA)([A-ZÀ-ÿ][A-ZÀ-ÿ0-9\s\.&\-]{5,80}LTDA)\b", text
+            )
             if m:
                 data["fornecedor_nome"] = re.sub(r"\s+", " ", m.group(1)).strip()
 
