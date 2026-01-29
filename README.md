@@ -32,6 +32,7 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 ## To Do - Notas mentais
 
+- [ ] Corrigir os ultimos erros e fazer o cara crachá das tabelas enviada pela pela Melyssa com os dados atuais de contrato.
 - [ ] **Verificar se o projeto roda corretamente em container de docker e testar local mesmo no docker desktop do windows**.
 - [ ] Lembrar de atualizar os dados do imap pro email da empresa.
 - [ ] Procurar APIs da openAI para OCR e valibdadção dos dados no documento no caso para a coluna NF num primeiro momento.
@@ -40,7 +41,17 @@ Sistema para extração e processamento de documentos fiscais (DANFE, NFSe e Bol
 
 # Estudar por agora
 
+Avaliar criação de um RAG de melhorias constantes, com context prompt e automanuntenabilidade.
+
 ## Done
+
+### 29/01/2026
+
+- [x] **Criação de extratores especializados para faturas comerciais**:
+    - **TunnaFaturaExtractor**: Para faturas da Tunna Entretenimento e Audiovisual LTDA (FishTV), detectando padrões "TUNNA" + "FATURA"/"FAT/" e número de fatura no formato `000.XXX.XXX`
+    - **UfinetExtractor**: Para faturas da Ufinet Brasil S.A., extraindo número da fatura, CNPJ, valor total e vencimento de documentos comerciais de telecomunicações
+- [x] **Correção de extração de vencimento em boletos via código de barras**: Implementação do método `_decode_vencimento_from_linha_digitavel()` no BoletoExtractor, que calcula a data de vencimento a partir do fator de vencimento (posições 33-36 da linha digitável), incluindo tratamento para reinício do fator a cada 10000 dias desde 2025-02-22
+- [x] **Limpeza de logs e redução de verbosidade**: Ajuste de logs desnecessários de WARNING para DEBUG em `strategies/pdf_utils.py` e `core/processor.py`, reduzindo poluição no output durante o processamento em lote
 
 ### 28/01/2026
 

@@ -82,17 +82,17 @@ def abrir_pdfplumber_com_senha(file_path: str) -> Optional[Any]:
         pdf = pdfplumber.open(file_path)
         # Tenta acessar páginas para verificar se realmente abriu
         _ = pdf.pages
-        logger.debug(f"📄 PDF aberto sem senha (pdfplumber): {filename}")
+        logger.debug(f"PDF aberto sem senha (pdfplumber): {filename}")
         return pdf
     except Exception as e:
         error_msg = str(e).lower()
         # pdfplumber/pdfminer usa "password" ou "encrypted" nas mensagens de erro
         if "password" not in error_msg and "encrypted" not in error_msg:
-            # Erro diferente de senha - propagar
-            logger.warning(f"Erro ao abrir PDF {filename} (pdfplumber): {e}")
+            # Erro diferente de senha - logar debug e tentar outra estratégia
+            logger.debug(f"PDF {filename}: pdfplumber indisponível ({type(e).__name__})")
             return None
 
-        logger.info(f"🔐 PDF protegido por senha, tentando desbloqueio (pdfplumber): {filename}")
+        logger.debug(f"PDF {filename}: protegido por senha, tentando desbloqueio (pdfplumber)")
 
     # 2. Gerar candidatos e tentar cada um
     candidatos = gerar_candidatos_senha()
@@ -110,7 +110,7 @@ def abrir_pdfplumber_com_senha(file_path: str) -> Optional[Any]:
             continue
 
     # 3. Nenhuma senha funcionou
-    logger.warning(f"⚠️ Falha ao desbloquear PDF {filename} (pdfplumber): Senha desconhecida")
+    logger.info(f"PDF {filename}: senha desconhecida (pdfplumber)")
     return None
 
 
@@ -137,16 +137,16 @@ def abrir_pypdfium_com_senha(file_path: str) -> Optional[Any]:
     # 1. Tentar abrir sem senha
     try:
         pdf = pdfium.PdfDocument(file_path)
-        logger.debug(f"📄 PDF aberto sem senha (pypdfium2): {filename}")
+        logger.debug(f"PDF aberto sem senha (pypdfium2): {filename}")
         return pdf
     except pdfium.PdfiumError as e:
         error_msg = str(e).lower()
         if "password" not in error_msg:
-            # Erro diferente de senha - propagar
-            logger.warning(f"Erro ao abrir PDF {filename} (pypdfium2): {e}")
+            # Erro diferente de senha - logar debug e tentar outra estratégia
+            logger.debug(f"PDF {filename}: pypdfium2 indisponível ({type(e).__name__})")
             return None
 
-        logger.info(f"🔐 PDF protegido por senha, tentando desbloqueio (pypdfium2): {filename}")
+        logger.debug(f"PDF {filename}: protegido por senha, tentando desbloqueio (pypdfium2)")
 
     # 2. Gerar candidatos e tentar cada um
     candidatos = gerar_candidatos_senha()
@@ -162,5 +162,5 @@ def abrir_pypdfium_com_senha(file_path: str) -> Optional[Any]:
             continue
 
     # 3. Nenhuma senha funcionou
-    logger.warning(f"⚠️ Falha ao desbloquear PDF {filename} (pypdfium2): Senha desconhecida")
+    logger.info(f"PDF {filename}: senha desconhecida (pypdfium2)")
     return None

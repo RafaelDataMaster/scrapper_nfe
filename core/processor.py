@@ -56,16 +56,22 @@ class BaseInvoiceProcessor(ABC):
         """Factory Method: Escolhe o extrator certo para o texto."""
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[Router] Ordem dos extratores: {[cls.__name__ for cls in EXTRACTOR_REGISTRY]}")
+        
+        # Log da ordem apenas uma vez por sessão (na primeira chamada)
+        if not hasattr(self, '_logged_order'):
+            logger.debug(f"[Router] Ordem: {[cls.__name__ for cls in EXTRACTOR_REGISTRY]}")
+            self._logged_order = True
+        
         for extractor_cls in EXTRACTOR_REGISTRY:
-            logger.info(f"[Router] Testando extrator: {extractor_cls.__name__}")
             result = extractor_cls.can_handle(text)
-            logger.info(f"[Router] Resultado do can_handle de {extractor_cls.__name__}: {result}")
             if result:
                 self.last_extractor = extractor_cls.__name__
-                logger.info(f"[Router] Selecionado: {extractor_cls.__name__}")
+                logger.info(f"[Router] {extractor_cls.__name__} selecionado")
                 return extractor_cls()
-        logger.warning("[Router] Nenhum extrator compatível encontrado para este documento.")
+            else:
+                logger.debug(f"[Router] {extractor_cls.__name__} recusou")
+        
+        logger.warning("[Router] Nenhum extrator compatível encontrado")
         raise ValueError("Nenhum extrator compatível encontrado para este documento.")
 
     def process(self, file_path: str) -> DocumentData:

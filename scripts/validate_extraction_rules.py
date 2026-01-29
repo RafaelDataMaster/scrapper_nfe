@@ -1,23 +1,26 @@
 """
 Script de validação de regras de extração para NFSe, Boletos, DANFE e Outros.
 
-Este script processa PDFs da pasta failed_cases_pdf (modo legado) ou pastas
-de lote (nova estrutura) e gera relatórios detalhados separando sucessos e falhas.
+Este script processa PDFs das pastas de lote (temp_email/) ou failed_cases_pdf (legado)
+e gera relatórios detalhados separando sucessos e falhas.
 
 MODOS DE OPERAÇÃO:
-1. Modo Legado (padrão): Processa PDFs soltos em failed_cases_pdf
-   python scripts/validate_extraction_rules.py
+1. Modo Lote (RECOMENDADO - novo padrão):
+   Processa batches de temp_email/ com metadata.json
+   python scripts/validate_extraction_rules.py --batch-mode --temp-email
 
-2. Modo Lote: Processa pastas organizadas com metadata.json
-   python scripts/validate_extraction_rules.py --batch-mode
+2. Modo Lote Específico:
+   Processa apenas batches específicos (útil para validar correções)
+   python scripts/validate_extraction_rules.py --batch-mode --temp-email --batches email_20260129_084433_c5c04540,email_20260129_084430_187f758c
 
-3. Revalidar processados anteriormente:
-   python scripts/validate_extraction_rules.py --revalidar-processados
+3. Modo Legado: Processa PDFs soltos em failed_cases_pdf
+   python scripts/validate_extraction_rules.py --input-dir failed_cases_pdf
 
 FLAGS OPCIONAIS:
-- --validar-prazo: Valida prazo de 4 dias úteis (desabilitado por padrão para docs antigos)
-- --exigir-nf: Exige número da NF na NFSe (desabilitado por padrão no MVP)
+- --validar-prazo: Valida prazo de 4 dias úteis
+- --exigir-nf: Exige número da NF na NFSe
 - --apply-correlation: Aplica correlação entre documentos do mesmo lote (modo lote)
+- --revalidar-processados: Reprocessa apenas PDFs já registrados no manifest
 
 Princípios SOLID aplicados:
 - SRP: Funções com responsabilidade única
@@ -48,6 +51,7 @@ from config.settings import (  # noqa: E402
     DEBUG_RELATORIO_QUALIDADE,
     DIR_DEBUG_INPUT,
     DIR_DEBUG_OUTPUT,
+    DIR_TEMP,  # Adicionado: temp_email/
 )
 from core.batch_processor import BatchProcessor  # noqa: E402
 
@@ -253,16 +257,15 @@ def classify_outros(
     relpath: str
 ) -> Tuple[bool, Dict[str, Any]]:
     """
-    Classifica resultado de extração de documentos 'Outros'.
+    Classifica resultado de extração de outros documentos.
 
     Returns:
         Tupla (eh_sucesso, dict_resultado)
     """
     motivos = []
-    if (result.valor_total or 0) <= 0:
-        motivos.append('VALOR_ZERO')
+    # Outros documentos são mais flexíveis - podem não ter valor
     if not (result.fornecedor_nome and result.fornecedor_nome.strip()):
-        motivos.append('SEM_RAZAO_SOCIAL')
+        motivos.append('SEM_FORNECEDOR')
 
     eh_sucesso = len(motivos) == 0
 
@@ -275,6 +278,146 @@ def classify_outros(
         result_dict['motivo_falha'] = '|'.join(motivos)
 
     return eh_sucesso, result_dict
+
+
+def _classify_and_store(
+    result: Any,
+    relpath: str,
+    validar_prazo: bool,
+    exigir_nf: bool,
+    validation_result: ValidationResult
+) -> None:
+    """Classifica e armazena o resultado no objeto de validação."""
+    doc_type = getattr(result, 'doc_type', 'UNKNOWN')
+
+    if doc_type == 'NFSE' and isinstance(result, InvoiceData):
+        eh_ok, data = classify_nfse(result, relpath, validar_prazo, exigir_nf)
+        if eh_ok:
+            validation_result.nfse_sucesso.append(data)
+        else:
+            validation_result.nfse_falha.append(data)
+
+    elif doc_type == 'BOLETO' and isinstance(result, BoletoData):
+        eh_ok, data = classify_boleto(result, relpath, validar_prazo)
+        if eh_ok:
+            validation_result.boletos_sucesso.append(data)
+        else:
+            validation_result.boletos_falha.append(data)
+
+    elif doc_type == 'DANFE' and isinstance(result, DanfeData):
+        eh_ok, data = classify_danfe(result, relpath)
+        if eh_ok:
+            validation_result.danfe_sucesso.append(data)
+        else:
+            validation_result.danfe_falha.append(data)
+
+    elif doc_type == 'OUTRO' and isinstance(result, OtherDocumentData):
+        eh_ok, data = classify_outros(result, relpath)
+        if eh_ok:
+            validation_result.outros_sucesso.append(data)
+        else:
+            validation_result.outros_falha.append(data)
+    else:
+        # Tipo desconhecido - tenta inferir
+        validation_result.count_erro += 1
+
+
+# === Exportadores ===
+
+def export_results(validation_result: ValidationResult) -> None:
+    """Exporta resultados para CSVs separados por tipo e status."""
+    def _export_csv(data: List[Dict], path: Path) -> None:
+        if not data:
+            # Cria CSV vazio com headers padrão
+            pd.DataFrame().to_csv(path, index=False, sep=';', encoding='utf-8-sig')
+            return
+        try:
+            df = pd.DataFrame(data)
+            df.to_csv(path, index=False, sep=';', encoding='utf-8-sig')
+        except Exception as e:
+            print(f"⚠️ Erro ao exportar {path}: {e}")
+
+    DIR_DEBUG_OUTPUT.mkdir(parents=True, exist_ok=True)
+
+    # NFSe
+    _export_csv(validation_result.nfse_sucesso, DEBUG_CSV_NFSE_SUCESSO)
+    _export_csv(validation_result.nfse_falha, DEBUG_CSV_NFSE_FALHA)
+
+    # Boletos
+    _export_csv(validation_result.boletos_sucesso, DEBUG_CSV_BOLETO_SUCESSO)
+    _export_csv(validation_result.boletos_falha, DEBUG_CSV_BOLETO_FALHA)
+
+    # DANFE
+    _export_csv(validation_result.danfe_sucesso, DEBUG_CSV_DANFE_SUCESSO)
+    _export_csv(validation_result.danfe_falha, DEBUG_CSV_DANFE_FALHA)
+
+    # Outros
+    _export_csv(validation_result.outros_sucesso, DEBUG_CSV_OUTROS_SUCESSO)
+    _export_csv(validation_result.outros_falha, DEBUG_CSV_OUTROS_FALHA)
+
+    print(f"📊 CSVs exportados em: {DIR_DEBUG_OUTPUT}")
+
+
+def export_quality_report(
+    validation_result: ValidationResult,
+    total_arquivos: int,
+    processados: int
+) -> None:
+    """Gera relatório de qualidade consolidado."""
+    lines = []
+    lines.append("# Relatório de Qualidade - Validação de Extração\n")
+    lines.append(f"Total de arquivos: {total_arquivos}")
+    lines.append(f"Processados: {processados}")
+    lines.append(f"Erros: {validation_result.count_erro}\n")
+
+    lines.append("## NFSe")
+    lines.append(f"- Sucesso: {validation_result.count_nfse_ok}")
+    lines.append(f"- Falha: {validation_result.count_nfse_falha}\n")
+
+    lines.append("## Boletos")
+    lines.append(f"- Sucesso: {validation_result.count_boleto_ok}")
+    lines.append(f"- Falha: {validation_result.count_boleto_falha}\n")
+
+    lines.append("## DANFE")
+    lines.append(f"- Sucesso: {validation_result.count_danfe_ok}")
+    lines.append(f"- Falha: {validation_result.count_danfe_falha}\n")
+
+    lines.append("## Outros")
+    lines.append(f"- Sucesso: {validation_result.count_outros_ok}")
+    lines.append(f"- Falha: {validation_result.count_outros_falha}\n")
+
+    content = "\n".join(lines)
+    DEBUG_RELATORIO_QUALIDADE.write_text(content, encoding="utf-8")
+
+
+def print_summary(validation_result: ValidationResult) -> None:
+    """Imprime resumo dos resultados."""
+    print("\n" + "=" * 80)
+    print("📊 RESUMO DA VALIDAÇÃO")
+    print("=" * 80)
+
+    total_ok = (
+        validation_result.count_nfse_ok +
+        validation_result.count_boleto_ok +
+        validation_result.count_danfe_ok +
+        validation_result.count_outros_ok
+    )
+    total_falha = (
+        validation_result.count_nfse_falha +
+        validation_result.count_boleto_falha +
+        validation_result.count_danfe_falha +
+        validation_result.count_outros_falha
+    )
+
+    print(f"✅ Sucessos: {total_ok}")
+    print(f"❌ Falhas: {total_falha}")
+    print(f"💥 Erros: {validation_result.count_erro}")
+    print("-" * 80)
+    print(f"NFSe: {validation_result.count_nfse_ok} ok, {validation_result.count_nfse_falha} falha")
+    print(f"Boletos: {validation_result.count_boleto_ok} ok, {validation_result.count_boleto_falha} falha")
+    print(f"DANFE: {validation_result.count_danfe_ok} ok, {validation_result.count_danfe_falha} falha")
+    print(f"Outros: {validation_result.count_outros_ok} ok, {validation_result.count_outros_falha} falha")
+    print("=" * 80)
 
 
 # === Processadores ===
@@ -387,204 +530,6 @@ def process_batch_mode(
     return total_docs
 
 
-def _classify_and_store(
-    result,
-    relpath: str,
-    validar_prazo: bool,
-    exigir_nf: bool,
-    validation_result: ValidationResult
-) -> None:
-    """
-    Classifica um documento e armazena no resultado apropriado.
-
-    Args:
-        result: Documento extraído
-        relpath: Caminho relativo do arquivo
-        validar_prazo: Se True, valida prazo
-        exigir_nf: Se True, exige NF
-        validation_result: Objeto para armazenar resultados
-    """
-    if isinstance(result, BoletoData):
-        eh_sucesso, result_dict = classify_boleto(result, relpath, validar_prazo)
-        if eh_sucesso:
-            result_dict['object'] = result
-            validation_result.boletos_sucesso.append(result_dict)
-        else:
-            validation_result.boletos_falha.append(result_dict)
-
-    elif isinstance(result, InvoiceData):
-        eh_sucesso, result_dict = classify_nfse(
-            result, relpath, validar_prazo, exigir_nf
-        )
-        if eh_sucesso:
-            result_dict['object'] = result
-            validation_result.nfse_sucesso.append(result_dict)
-        else:
-            validation_result.nfse_falha.append(result_dict)
-
-    elif isinstance(result, DanfeData):
-        eh_sucesso, result_dict = classify_danfe(result, relpath)
-        if eh_sucesso:
-            result_dict['object'] = result
-            validation_result.danfe_sucesso.append(result_dict)
-        else:
-            validation_result.danfe_falha.append(result_dict)
-
-    elif isinstance(result, OtherDocumentData):
-        eh_sucesso, result_dict = classify_outros(result, relpath)
-        if eh_sucesso:
-            result_dict['object'] = result
-            validation_result.outros_sucesso.append(result_dict)
-        else:
-            validation_result.outros_falha.append(result_dict)
-
-    else:
-        validation_result.count_erro += 1
-
-
-# === Exportação de Resultados ===
-
-def export_results(validation_result: ValidationResult) -> None:
-    """Exporta resultados para CSVs no formato PAF."""
-    print("\n" + "=" * 80)
-    print("💾 GERANDO RELATÓRIOS (Formato PAF - 18 colunas)")
-    print("=" * 80)
-
-    # Colunas PAF padrão (18 colunas)
-    COLUNAS_PAF = [
-        "DATA", "SETOR", "EMPRESA", "FORNECEDOR", "NF", "EMISSÃO",
-        "VALOR", "Nº PEDIDO", "VENCIMENTO", "FORMA PAGTO", "INDEX",
-        "DT CLASS", "Nº FAT", "TP DOC", "TRAT PAF", "LANC SISTEMA",
-        "OBSERVAÇÕES", "OBS INTERNA"
-    ]
-
-    # NFSe
-    if validation_result.nfse_sucesso:
-        rows_paf = [item['object'].to_sheets_row() for item in validation_result.nfse_sucesso]
-        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)  # type: ignore
-        df_paf.to_csv(DEBUG_CSV_NFSE_SUCESSO, index=False, encoding='utf-8-sig')
-        print(f"✅ {DEBUG_CSV_NFSE_SUCESSO.name} ({len(validation_result.nfse_sucesso)} registros)")
-
-        # Debug completo
-        df_debug = pd.DataFrame([
-            {k: v for k, v in item.items() if k != 'object'}
-            for item in validation_result.nfse_sucesso
-        ])
-        debug_path = DIR_DEBUG_OUTPUT / "nfse_sucesso_debug.csv"
-        df_debug.to_csv(debug_path, index=False, encoding='utf-8-sig')
-        print(f"ℹ️ {debug_path.name} (debug completo)")
-
-    if validation_result.nfse_falha:
-        df_falha = pd.DataFrame(validation_result.nfse_falha)
-        df_falha.to_csv(DEBUG_CSV_NFSE_FALHA, index=False, encoding='utf-8-sig')
-        print(f"⚠️ {DEBUG_CSV_NFSE_FALHA.name} ({len(validation_result.nfse_falha)} registros)")
-
-    # Boletos
-    if validation_result.boletos_sucesso:
-        rows_paf = [item['object'].to_sheets_row() for item in validation_result.boletos_sucesso]
-        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)  # type: ignore
-        df_paf.to_csv(DEBUG_CSV_BOLETO_SUCESSO, index=False, encoding='utf-8-sig')
-        print(f"✅ {DEBUG_CSV_BOLETO_SUCESSO.name} ({len(validation_result.boletos_sucesso)} registros)")
-
-        df_debug = pd.DataFrame([
-            {k: v for k, v in item.items() if k != 'object'}
-            for item in validation_result.boletos_sucesso
-        ])
-        debug_path = DIR_DEBUG_OUTPUT / "boletos_sucesso_debug.csv"
-        df_debug.to_csv(debug_path, index=False, encoding='utf-8-sig')
-        print(f"ℹ️ {debug_path.name} (debug completo)")
-
-    if validation_result.boletos_falha:
-        df_falha = pd.DataFrame(validation_result.boletos_falha)
-        df_falha.to_csv(DEBUG_CSV_BOLETO_FALHA, index=False, encoding='utf-8-sig')
-        print(f"⚠️ {DEBUG_CSV_BOLETO_FALHA.name} ({len(validation_result.boletos_falha)} registros)")
-
-    # DANFE
-    if validation_result.danfe_sucesso:
-        rows_paf = [item['object'].to_sheets_row() for item in validation_result.danfe_sucesso]
-        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)  # type: ignore
-        df_paf.to_csv(DEBUG_CSV_DANFE_SUCESSO, index=False, encoding='utf-8-sig')
-        print(f"✅ {DEBUG_CSV_DANFE_SUCESSO.name} ({len(validation_result.danfe_sucesso)} registros)")
-
-        df_debug = pd.DataFrame([
-            {k: v for k, v in item.items() if k != 'object'}
-            for item in validation_result.danfe_sucesso
-        ])
-        debug_path = DIR_DEBUG_OUTPUT / "danfe_sucesso_debug.csv"
-        df_debug.to_csv(debug_path, index=False, encoding='utf-8-sig')
-        print(f"ℹ️ {debug_path.name} (debug completo)")
-
-    if validation_result.danfe_falha:
-        df_falha = pd.DataFrame(validation_result.danfe_falha)
-        df_falha.to_csv(DEBUG_CSV_DANFE_FALHA, index=False, encoding='utf-8-sig')
-        print(f"⚠️ {DEBUG_CSV_DANFE_FALHA.name} ({len(validation_result.danfe_falha)} registros)")
-
-    # Outros
-    if validation_result.outros_sucesso:
-        rows_paf = [item['object'].to_sheets_row() for item in validation_result.outros_sucesso]
-        df_paf = pd.DataFrame(rows_paf, columns=COLUNAS_PAF)  # type: ignore
-        df_paf.to_csv(DEBUG_CSV_OUTROS_SUCESSO, index=False, encoding='utf-8-sig')
-        print(f"✅ {DEBUG_CSV_OUTROS_SUCESSO.name} ({len(validation_result.outros_sucesso)} registros)")
-
-        df_debug = pd.DataFrame([
-            {k: v for k, v in item.items() if k != 'object'}
-            for item in validation_result.outros_sucesso
-        ])
-        debug_path = DIR_DEBUG_OUTPUT / "outros_sucesso_debug.csv"
-        df_debug.to_csv(debug_path, index=False, encoding='utf-8-sig')
-        print(f"ℹ️ {debug_path.name} (debug completo)")
-
-    if validation_result.outros_falha:
-        df_falha = pd.DataFrame(validation_result.outros_falha)
-        df_falha.to_csv(DEBUG_CSV_OUTROS_FALHA, index=False, encoding='utf-8-sig')
-        print(f"⚠️ {DEBUG_CSV_OUTROS_FALHA.name} ({len(validation_result.outros_falha)} registros)")
-
-
-def export_quality_report(
-    validation_result: ValidationResult,
-    total_arquivos: int,
-    processados: int,
-    interrompido: bool = False
-) -> None:
-    """Exporta relatório de qualidade."""
-    dados_relatorio = {
-        'total': total_arquivos,
-        'processados': processados,
-        'interrompido': interrompido,
-        'nfse_ok': validation_result.count_nfse_ok,
-        'nfse_falha': validation_result.count_nfse_falha,
-        'boleto_ok': validation_result.count_boleto_ok,
-        'boleto_falha': validation_result.count_boleto_falha,
-        'danfe_ok': validation_result.count_danfe_ok,
-        'danfe_falha': validation_result.count_danfe_falha,
-        'outros_ok': validation_result.count_outros_ok,
-        'outros_falha': validation_result.count_outros_falha,
-        'erros': validation_result.count_erro,
-        'nfse_falhas_detalhe': validation_result.nfse_falha,
-        'boleto_falhas_detalhe': validation_result.boletos_falha,
-        'danfe_falhas_detalhe': validation_result.danfe_falha,
-        'outros_falhas_detalhe': validation_result.outros_falha,
-    }
-
-    ExtractionDiagnostics.salvar_relatorio(dados_relatorio, DEBUG_RELATORIO_QUALIDADE)
-    print(f"📊 {DEBUG_RELATORIO_QUALIDADE.name}")
-
-
-def print_summary(validation_result: ValidationResult) -> None:
-    """Imprime resumo final."""
-    print("\n" + "=" * 80)
-    print("📊 RESUMO FINAL")
-    print("=" * 80)
-    print(f"\n📈 NFSe: {validation_result.count_nfse_ok} OK / {validation_result.count_nfse_falha} Falhas")
-    print(f"📈 Boletos: {validation_result.count_boleto_ok} OK / {validation_result.count_boleto_falha} Falhas")
-    print(f"📈 DANFE: {validation_result.count_danfe_ok} OK / {validation_result.count_danfe_falha} Falhas")
-    print(f"📈 Outros: {validation_result.count_outros_ok} OK / {validation_result.count_outros_falha} Falhas")
-    print(f"❌ Erros: {validation_result.count_erro}")
-    print("\n" + "=" * 80)
-
-
-# === Main ===
-
 def main() -> None:
     """Função principal do script de validação."""
     _configure_stdout_utf8()
@@ -594,18 +539,21 @@ def main() -> None:
         description='Valida regras de extração de PDFs',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Exemplos:
-  # Modo legado (PDFs em failed_cases_pdf)
-  python scripts/validate_extraction_rules.py
+EXEMPLOS DE USO:
 
-  # Modo lote (pastas com metadata.json)
-  python scripts/validate_extraction_rules.py --batch-mode
+# Modo Lote - Processa TODOS os batches de temp_email/ (RECOMENDADO)
+  python scripts/validate_extraction_rules.py --batch-mode --temp-email
 
-  # Validar com prazo e exigir NF
-  python scripts/validate_extraction_rules.py --validar-prazo --exigir-nf
+# Modo Lote Específico - Apenas batches específicos (útil para validar correções)
+  python scripts/validate_extraction_rules.py --batch-mode --temp-email \\
+      --batches email_20260129_084433_c5c04540,email_20260129_084430_187f758c
 
-  # Revalidar arquivos já processados
-  python scripts/validate_extraction_rules.py --revalidar-processados
+# Modo Legado - PDFs soltos em failed_cases_pdf/
+  python scripts/validate_extraction_rules.py --input-dir failed_cases_pdf
+
+# Validação completa com prazo e NF
+  python scripts/validate_extraction_rules.py --batch-mode --temp-email \\
+      --validar-prazo --exigir-nf --apply-correlation
         """
     )
     parser.add_argument(
@@ -629,6 +577,17 @@ Exemplos:
         help='Processa pastas de lote (com metadata.json) ao invés de PDFs soltos'
     )
     parser.add_argument(
+        '--temp-email',
+        action='store_true',
+        help='Usa temp_email/ como diretório de entrada (padrão para modo batch)'
+    )
+    parser.add_argument(
+        '--batches',
+        type=str,
+        default=None,
+        help='Lista de batches específicos para processar (ex: batch1,batch2,batch3)'
+    )
+    parser.add_argument(
         '--apply-correlation',
         action='store_true',
         help='Aplica correlação entre documentos do mesmo lote (apenas modo lote)'
@@ -637,7 +596,7 @@ Exemplos:
         '--input-dir',
         type=str,
         default=None,
-        help='Diretório de entrada customizado (padrão: failed_cases_pdf)'
+        help='Diretório de entrada customizado (padrão: failed_cases_pdf ou temp_email)'
     )
 
     args = parser.parse_args()
@@ -648,7 +607,21 @@ Exemplos:
     revalidar_processados = args.revalidar_processados
     batch_mode = args.batch_mode
     apply_correlation = args.apply_correlation
-    input_dir = Path(args.input_dir) if args.input_dir else DIR_DEBUG_INPUT
+    use_temp_email = args.temp_email
+    batches_especificos = args.batches.split(',') if args.batches else None
+
+    # Determina diretório de entrada
+    if args.input_dir:
+        input_dir = Path(args.input_dir)
+    elif batch_mode and use_temp_email:
+        input_dir = DIR_TEMP  # temp_email/
+    else:
+        input_dir = DIR_DEBUG_INPUT  # failed_cases_pdf/ (legado)
+
+    # Se modo batch e --temp-email não foi passado, sugere usar
+    if batch_mode and not use_temp_email and not args.input_dir:
+        print("💡 Dica: Use --temp-email para processar batches de temp_email/")
+        print("   Ou especifique --input-dir para outro diretório\n")
 
     # Cria pasta de saída
     DIR_DEBUG_OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -659,7 +632,12 @@ Exemplos:
     print("=" * 80)
     print(f"📂 Lendo: {input_dir}")
     print(f"💾 Salvando em: {DIR_DEBUG_OUTPUT}")
-    print(f"🔄 Modo: {'LOTE (batch)' if batch_mode else 'LEGADO (arquivos soltos)'}")
+    if batch_mode:
+        print("🔄 Modo: LOTE (batches)")
+        if batches_especificos:
+            print(f"📋 Batches específicos: {len(batches_especificos)}")
+    else:
+        print("🔄 Modo: LEGADO (arquivos soltos)")
     if validar_prazo:
         print("⏰ Validação de prazo: ATIVA")
     else:
@@ -683,15 +661,26 @@ Exemplos:
 
     # Modo Lote
     if batch_mode:
-        # Lista pastas de lote (subpastas que contêm metadata.json ou PDFs)
-        batch_folders = []
-        for item in sorted(input_dir.iterdir()):
-            if item.is_dir() and not item.name.startswith('.'):
-                # Verifica se tem PDFs ou metadata.json
-                has_pdfs = any(f.suffix.lower() == '.pdf' for f in item.iterdir() if f.is_file())
-                has_metadata = (item / "metadata.json").exists()
-                if has_pdfs or has_metadata:
-                    batch_folders.append(item)
+        # Lista pastas de lote
+        if batches_especificos:
+            # Processa apenas batches específicos
+            batch_folders = []
+            for batch_name in batches_especificos:
+                batch_path = input_dir / batch_name.strip()
+                if batch_path.exists() and batch_path.is_dir():
+                    batch_folders.append(batch_path)
+                else:
+                    print(f"⚠️ Batch não encontrado: {batch_name}")
+        else:
+            # Lista todos os batches
+            batch_folders = []
+            for item in sorted(input_dir.iterdir()):
+                if item.is_dir() and not item.name.startswith('.'):
+                    # Verifica se tem PDFs ou metadata.json
+                    has_pdfs = any(f.suffix.lower() == '.pdf' for f in item.iterdir() if f.is_file())
+                    has_metadata = (item / "metadata.json").exists()
+                    if has_pdfs or has_metadata:
+                        batch_folders.append(item)
 
         if not batch_folders:
             print("⚠️ Nenhuma pasta de lote encontrada.")

@@ -6,6 +6,101 @@
 
 ---
 
+## 📊 Status Atual do Projeto
+
+> **IMPORTANTE:** Esta seção contém snapshots das sessões de trabalho. Mantém apenas os últimos 3 snapshots.  
+> **Template:** Ver `project_status_template.md` para o formato completo.
+
+### Snapshot: 29/01/2026 - 12:30 - CORRECAO_CONCLUIDA
+
+**Tipo:** CORRECAO_CONCLUIDA
+
+**Contexto da Sessão:**
+- Orquestração iniciada em: 29/01/2026 08:44
+- Correções concluídas: #1 e #2
+- Tempo total: ~3 horas 46 minutos
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | CSV Atualizado | Validado |
+|---|------|--------|---------------------|----------------|----------|
+| 1 | TunnaFaturaExtractor | ✅ CONCLUÍDA | tunna_fatura.py, __init__.py | Sim (29/01) | 3 batches FishTV |
+| 2 | Vencimento em Boletos | ✅ CONCLUÍDA | boleto.py | - | Função implementada |
+| 3 | (próximas do JSON) | ⏳ PENDENTE | - | - | Aguardando |
+
+**Correção #1: TunnaFaturaExtractor** ✅ CONCLUÍDA
+- **Fornecedor:** TUNNA ENTRETENIMENTO E AUDIOVISUAL LTDA
+- **Tipo:** FATURA COMERCIAL (tipo_documento="OUTRO", subtipo="FATURA")
+- **Padrão de detecção:** "TUNNA" + "FATURA" OU "FAT/XXXXX"
+- **Números processados:** 000.010.731, 000.010.732, 000.010.733
+- **E-mail:** faturamento@fishtv.com.br
+- **Referência temporal:** 3 batches processados em 29/01/2026
+
+**Correção #2: Vencimento em Boletos** ✅ CONCLUÍDA
+- **Problema:** Boletos com vencimento vazio no CSV
+- **Solução:** Função `_decode_vencimento_from_linha_digitavel()` no BoletoExtractor
+- **Como funciona:** Extrai fator de vencimento da linha digitável (posições 33-36) e calcula data
+- **Considera reinício do fator:** A cada 10000 dias (a partir de 22/02/2025)
+- **Fallback:** Usado quando vencimento não encontrado no texto
+- **Arquivo modificado:** `extractors/boleto.py`
+- **Testes:** Validados com basepyright e ruff ✅
+
+**Estado do Sistema:**
+- **Extractors no Registry:** 15 total (1 novo: TunnaFaturaExtractor)
+- **Ordem do Registry:** ✅ ATUALIZADA 
+  - DanfeExtractor antes de NfseGenericExtractor
+  - BoletoExtractor e SicoobExtractor antes de OutrosExtractor
+- **Validate Script:** ✅ ATUALIZADO - Adicionado --temp-email e --batches
+- **Código:** Validação basedpyright e ruff passando ✅
+
+**Estado dos Dados:**
+- **relatorio_lotes.csv:** Últimas entradas FishTV: 000.010.731, 000.010.732, 000.010.733
+- **relatorio_consolidado.csv:** Novo fornecedor: TUNNA ENTRETENIMENTO E AUDIOVISUAL LTDA
+- **Failed cases:** 0 novos (zero regressões confirmado)
+- **✅ Nota:** Ordem do registry corrigida - boletos agora classificados corretamente como BOLETO
+
+**Pendências Identificadas:**
+1. ✅ Ordem do registry corrigida (BoletoExtractor antes de OutrosExtractor)
+2. Próximas correções do JSON aguardando priorização
+3. Commitar mudanças quando solicitado pelo usuário
+
+**Decisões Tomadas:**
+- FishTV são FATURAS COMERCIAIS (não fiscais) → usar tipo="OUTRO", subtipo="FATURA"
+- OCR corrompe "Nº" para "N�" → usar regex tolerante `N[�º]?`
+- Reordenar registry é preferível a regex complexo para DANFE vs NFSe
+- Fator de vencimento em boletos: posições 33-36 da linha digitável, reinicia a cada 10000 dias
+
+**Para Reencontrar em Nova Sessão:**
+> ⚠️ **AVISO:** Batch IDs mudam a cada `clean_dev` + `run_ingestion`!
+> Use fornecedor/tipo para reencontrar casos:
+
+```powershell
+# Opção 1: Buscar no CSV por fornecedor (SEMPRE funciona)
+Get-Content data/output/relatorio_lotes.csv | Select-String "TUNNA" | Select-Object -Last 5
+
+# Opção 2: Validar extrator em todos os batches atuais
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
+
+# Opção 3: Procurar por padrão de assunto nos metadados
+Get-ChildItem temp_email/ | ForEach-Object { 
+    $m = Get-Content "$($_.FullName)\metadata.json" | ConvertFrom-Json
+    if ($m.subject -like "*FishTV*") { $_.Name }
+}
+
+# Opção 4: Buscar boletos com vencimento extraído
+Get-Content data/output/relatorio_lotes.csv | Select-String "boleto" | Where-Object { $_ -match "vencimento" }
+```
+
+**Arquivos em Modificação:**
+- [x] extractors/tunna_fatura.py (novo extrator)
+- [x] extractors/boleto.py (função decode vencimento da linha digitável)
+- [x] extractors/__init__.py (ordem do registry)
+- [x] scripts/validate_extraction_rules.py (novas flags)
+- [x] strategies/pdf_utils.py (logs revisados - evitar falsos positivos)
+- [x] core/processor.py (logs revisados - reduzir verbosidade)
+- [x] docs/context/* (documentação atualizada - README, coding_standards, logging_guide, logging_standards, etc)
+
+---
+
 ## 1. Objetivo do Projeto
 
 Sistema para extração e processamento automatizado de documentos fiscais (DANFE, NFSe e Boletos) a partir de PDFs recebidos por e-mail. O sistema realiza:
@@ -79,20 +174,25 @@ core/                # Núcleo do sistema
   └── __init__.py         # Inicialização do core
 
 extractors/          # Extratores especializados por tipo
-  ├── boleto.py           # Extrator genérico de boletos
-  ├── boleto_repromaq.py  # Extrator específico REPROMAQ
-  ├── danfe.py            # Extrator de DANFE (NF-e)
-  ├── nfse_generic.py     # Extrator genérico de NFSe
-  ├── nfse_custom_*.py    # Extratores específicos por cidade
-  ├── outros.py           # Documentos diversos (faturas)
-  ├── emc_fatura.py       # Faturas EMC Tecnologia
-  ├── energy_bill.py      # Contas de energia (EDP, CEMIG, COPEL)
-  ├── admin_document.py   # Documentos administrativos
-  ├── nfcom_telcables_extractor.py  # NFCom/Telcables
-  ├── email_body_extractor.py       # Extrator de corpo de e-mail (sem anexos)
-  ├── sicoob.py           # Boletos Sicoob específicos
-  ├── utils.py            # Utilitários de extração
-  └── xml_extractor.py    # Extração de XMLs fiscais
+  ├── acimoc_extractor.py         # Boletos ACIMOC específicos
+  ├── admin_document.py           # Documentos administrativos
+  ├── boleto.py                   # Extrator genérico de boletos
+  ├── boleto_repromaq.py          # Extrator específico REPROMAQ
+  ├── danfe.py                    # Extrator de DANFE (NF-e)
+  ├── email_body_extractor.py     # Extrator de corpo de e-mail (sem anexos)
+  ├── emc_fatura.py               # Faturas EMC Tecnologia
+  ├── energy_bill.py              # Contas de energia (EDP, CEMIG, COPEL)
+  ├── mugo_extractor.py           # Faturas MUGO Telecom
+  ├── net_center.py               # NFSe específica Net Center
+  ├── nfcom_telcables_extractor.py # NFCom/Telcables (faturas de telecom)
+  ├── nfse_custom_montes_claros.py # NFSe Montes Claros-MG
+  ├── nfse_custom_vila_velha.py   # NFSe Vila Velha-ES
+  ├── nfse_generic.py             # Extrator genérico de NFSe
+  ├── outros.py                   # Documentos diversos (faturas)
+  ├── pro_painel_extractor.py     # Faturas PRÓ - PAINEL LTDA
+  ├── sicoob.py                   # Boletos Sicoob específicos
+  ├── utils.py                    # Utilitários de extração
+  └── xml_extractor.py            # Extração de XMLs fiscais
 
 strategies/          # Estratégias de extração de texto
   ├── native.py           # PDF vetorial (pdfplumber)
@@ -200,12 +300,20 @@ A ordem de importação em `extractors/__init__.py` define a prioridade:
 5. **NfseCustomVilaVelhaExtractor** - NFSe Vila Velha-ES
 6. **EnergyBillExtractor** - Contas de energia (EDP, CEMIG, COPEL)
 7. **NfcomTelcablesExtractor** - NFCom/Telcables (faturas de telecom)
-8. **AdminDocumentExtractor** - Documentos administrativos (evita falsos positivos)
-9. **OutrosExtractor** - Documentos diversos (faturas, ordens de serviço)
-10. **NfseGenericExtractor** - NFSe genérico (fallback)
-11. **BoletoExtractor** - Boletos genéricos
-12. **SicoobExtractor** - Boletos Sicoob
-13. **DanfeExtractor** - DANFE/DF-e
+8. **AcimocExtractor** - Boletos ACIMOC específicos
+9. **MugoExtractor** - Faturas MUGO Telecom
+10. **ProPainelExtractor** - Faturas PRÓ - PAINEL LTDA
+11. **AdminDocumentExtractor** - Documentos administrativos (evita falsos positivos)
+12. **OutrosExtractor** - Documentos diversos (faturas, ordens de serviço)
+13. **NfseGenericExtractor** - NFSe genérico (fallback)
+14. **BoletoExtractor** - Boletos genéricos
+15. **SicoobExtractor** - Boletos Sicoob
+16. **DanfeExtractor** - DANFE/DF-e
+
+**Nota:** Além dos extratores acima, o sistema também inclui:
+
+- **EmailBodyExtractor** - Extração de corpo de e-mail (chamado diretamente, não via registry)
+- **XmlExtractor** - Extração de XMLs fiscais (chamado diretamente, não via registry)
 
 **Regra:** Extratores específicos devem vir ANTES dos genéricos para evitar classificação incorreta.
 
@@ -381,7 +489,7 @@ pytest --cov=.
 pytest tests/test_energy_extractor.py -v
 ```
 
-**Status atual:** ~547 testes (546 passando, 1 pulado)
+**Cobertura:** Testes abrangendo extratores, processamento, correlação e exportação.
 
 ---
 
@@ -425,109 +533,55 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 6. **Coluna RECEBIDO:** Nova coluna (adicionada 14/01/2026) que mostra a data de recebimento do e-mail, separada da data de processamento.
 
----
-
-## 13. Estado Atual do Código (Correções basedpyright)
-
-### Progresso de Correções de Tipos e Qualidade
-
-Em andamento: Análise e correção de erros/warnings do basedpyright/pyright para melhorar a qualidade do código e facilitar manutenção.
-
-#### ✅ Concluído
-
-**`core/` (15 arquivos):**
-
-- `batch_processor.py` - Removido import não utilizado
-- `batch_result.py` - Corrigidos parâmetros de construtores, renomeados métodos `_get_primeiro_vencimento` → `get_primeiro_vencimento` e `_get_primeiro_numero_nota` → `get_primeiro_numero_nota`
-- `correlation_service.py` - Removidos imports não usados, corrigido acesso a métodos privados
-- `diagnostics.py` - Corrigido tipo de retorno booleano
-- `document_pairing.py` - Removidos imports TYPE_CHECKING não usados
-- `empresa_matcher.py` - Removidos imports `List`, `Sequence`
-- `empresa_matcher_email.py` - Removido import `Any`, renomeadas variáveis não usadas
-- `exporters.py` - Corrigido tipo `spreadsheet_id: Optional[str]`, adicionada checagem de None
-- `extractors.py` - Removido import `Optional`
-- `interfaces.py` - Removidos imports não usados
-- `metadata.py` - Renomeada variável não usada
-- `metrics.py` - Removido import `Callable`
-- `models.py` - Adicionado campo `vencimento` na classe base `DocumentData`, corrigida conversão date→datetime
-- `processor.py` - Removidos imports, tipado `common_data: Dict[str, Any]`, corrigidos valores numéricos
-
-**`extractors/` (15 arquivos - ✅):**
-
-- `admin_document.py` - Removido import `Optional`
-- `boleto_repromaq.py` - Removido import `datetime`
-- `danfe.py` - Removido import `CNPJ_RE`
-- `email_body_extractor.py` - Removido import `Tuple`
-- `energy_bill.py` - Removidos import `List` + código morto
-- `nfcom_telcables_extractor.py` - Removidos imports `InvoiceData`, `format_cnpj`, variável `text_upper`
-- `nfse_custom_vila_velha.py` - Corrigidos retornos `str` → `Optional[str]` (3 funções)
-- `nfse_generic.py` - Corrigidos retornos `str` → `Optional[str]` (2 funções)
-- `outros.py` - Removido import `Optional`
-- `utils.py` - Corrigido `list[float]` → `List[float]`
-- `xml_extractor.py` - Removidos imports `datetime`, `Tuple`, `DocumentData`
-
-**`ingestors/` (1 arquivo - ✅):**
-
-- `imap.py` - Corrigido tipo `Message`, adicionada checagem de bytes, removidos imports não usados
-
-**`services/` (2 arquivos - ✅):**
-
-- `email_ingestion_orchestrator.py` - Removidos imports `sys`, `FilterResult`
-- `ingestion_service.py` - Removidos imports não usados, adicionado `# type: ignore`
-
-**`strategies/` (5 arquivos - ✅):**
-
-- Já estava limpo
-
-**`config/` (5 arquivos - ✅):**
-
-- Já estava limpo
-
-**`tests/` (excluído da análise):**
-
-- Testes excluídos pois frequentemente acessam métodos privados (comportamento esperado)
-
-**`scripts/` (excluído da análise):**
-
-- Scripts utilitários excluídos
-
-#### 📊 Resultado Final
-
-- **Erros corrigidos**: ~50+
-- **Warnings restantes**: 7 (todos aceitáveis - uso de métodos privados entre módulos relacionados)
-- **Status**: ✅ Todas as pastas principais do projeto estão limpas
-
-## 14. Dependências Principais
+## 13. Dependências Principais
 
 > **Nota:** Versões testadas e compatíveis. Atualizações devem ser validadas.
 
 ```
+# Extração de PDF e texto
 pdfplumber      # Extração nativa de PDF
 pytesseract     # OCR
 pdf2image       # Conversão PDF->imagem
 pypdfium2       # Manipulação de PDF
-pandas          # Processamento de CSV
-google-api-python-client  # Google Sheets
-python-dotenv   # Configurações
-pytest          # Testes
-basedpyright    # Análise estática de tipos (opcional, dev)
+pillow          # Processamento de imagens (PIL)
+
+# Processamento de dados
+pandas          # Processamento de CSV/DataFrames
+python-dateutil # Manipulação de datas
+
+# Configuração e ambiente
+python-dotenv   # Carregamento de variáveis de ambiente
+
+# Google Sheets API
+gspread         # Integração com Google Sheets
+
+# Utilitários
+tenacity        # Retry automático para falhas
+workalendar     # Cálculo de dias úteis e feriados
+
+# Testes
+pytest          # Framework de testes
+
+# Análise estática (desenvolvimento)
+basedpyright    # Verificação de tipos (opcional)
+
+# Documentação (Netlify)
+mkdocs          # Geração de documentação
+mkdocs-material # Tema Material para MkDocs
+mkdocstrings[python] # Documentação automática de código
+mkdocs-encryptcontent-plugin # Plugin de criptografia
+pymdown-extensions # Extensões Markdown
+mkdocs-panzoom-plugin # Plugin zoom para imagens
 ```
 
 ---
 
-## 15. Roadmap / To Do Atual
+## 14. Roadmap / To Do Atual
 
 Baseado no README.md:
 
 - [x] Script para automatizar análise de logs (`scripts/analyze_logs.py`)
-- [x] Correções de tipos e qualidade de código (basedpyright/pyright)
-    - [x] `core/` - 15 arquivos corrigidos ✅
-    - [x] `extractors/` - 15 arquivos corrigidos ✅
-    - [x] `ingestors/` - 1 arquivo corrigido ✅
-    - [x] `services/` - 2 arquivos corrigidos ✅
-    - [x] `strategies/` - 5 arquivos (já limpo) ✅
-    - [ ] `config/` - Pendente
-    - [ ] `tests/` - Pendente
+- [x] Correções de tipos e qualidade de código (basedpyright/pyright) ✅
 - [ ] Verificar funcionamento em container Docker
 - [ ] Atualizar dados IMAP para e-mail da empresa (não de teste)
 - [ ] Pesquisar APIs da OpenAI para OCR e validação

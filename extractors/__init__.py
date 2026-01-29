@@ -18,6 +18,12 @@ from .mugo_extractor import MugoExtractor
 # Extrator especializado para PRÓ - PAINEL LTDA
 from .pro_painel_extractor import ProPainelExtractor
 
+# Extrator especializado para faturas da Tunna (FishTV)
+from .tunna_fatura import TunnaFaturaExtractor
+
+# Extrator especializado para faturas Ufinet
+from .ufinet import UfinetExtractor
+
 # Extrator especializado para documentos administrativos (deve vir antes dos genéricos)
 from .admin_document import AdminDocumentExtractor
 
@@ -29,12 +35,16 @@ from .email_body_extractor import (
 )
 
 
+# Extractores de documentos fiscais (prioridade antes dos genéricos)
+from .danfe import DanfeExtractor  # Danfe antes de genéricos para evitar captura incorreta
+
+# Extractores de boletos (antes de OutrosExtractor para evitar classificação incorreta)
+from .boleto import BoletoExtractor
+from .sicoob import SicoobExtractor
+
 # Extractores genéricos (vêm depois dos específicos)
 from .outros import OutrosExtractor
 from .nfse_generic import NfseGenericExtractor
-from .boleto import BoletoExtractor
-from .sicoob import SicoobExtractor
-from .danfe import DanfeExtractor
 from .xml_extractor import XmlExtractionResult, XmlExtractor, extract_xml
 
 __all__ = [
@@ -62,4 +72,8 @@ __all__ = [
     # Extrator especializado para documentos administrativos
     "AdminDocumentExtractor",
     "ProPainelExtractor",
+    # Extrator especializado para faturas da Tunna (FishTV)
+    "TunnaFaturaExtractor",
+    # Extrator especializado para faturas Ufinet
+    "UfinetExtractor",
 ]
