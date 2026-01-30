@@ -107,13 +107,24 @@ class BaseInvoiceProcessor(ABC):
             )
 
         # 2. Seleção do Extrator e extração com timeout granular
-        def extract_with_extractor(extractor, text):
-            return extractor.extract(text)
+        # Prepara contexto com informações do arquivo
+        file_context = {
+            'arquivo_origem': os.path.basename(file_path),
+            'file_path': file_path,
+        }
+        
+        def extract_with_extractor(extractor, text, context):
+            # Tenta chamar extract com contexto (novos extractores)
+            try:
+                return extractor.extract(text, context)
+            except TypeError:
+                # Fallback: chama sem contexto (extractores legados)
+                return extractor.extract(text)
 
         try:
             extractor = self._get_extractor(raw_text)
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(extract_with_extractor, extractor, raw_text)
+                future = executor.submit(extract_with_extractor, extractor, raw_text, file_context)
                 extracted_data = future.result(timeout=300)  # Timeout de 5 minutos para extração
 
             # Dados comuns PAF (aplicados a todos os documentos)
@@ -217,6 +228,21 @@ class BaseInvoiceProcessor(ABC):
                     numero_pedido=extracted_data.get('numero_pedido'),
                     numero_fatura=extracted_data.get('numero_fatura'),
                     chave_acesso=extracted_data.get('chave_acesso'),
+                )
+            elif extracted_data.get('tipo_documento') == 'UTILITY_BILL':
+                # Contas de utilidade (energia, água, etc.) -> OtherDocumentData
+                return OtherDocumentData(
+                    arquivo_origem=os.path.basename(file_path),
+                    texto_bruto=' '.join(raw_text.split())[:500],
+                    # Campos PAF comuns
+                    **common_data,
+                    fornecedor_nome=extracted_data.get('fornecedor_nome'),
+                    cnpj_fornecedor=extracted_data.get('cnpj_fornecedor'),
+                    data_emissao=extracted_data.get('data_emissao'),
+                    vencimento=extracted_data.get('vencimento'),
+                    valor_total=float(extracted_data.get('valor_total') or 0.0),
+                    numero_documento=extracted_data.get('numero_documento'),
+                    subtipo=extracted_data.get('subtipo'),
                 )
             elif extracted_data.get('tipo_documento') == 'OUTRO':
                 return OtherDocumentData(

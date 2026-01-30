@@ -45,6 +45,17 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 30/01/2026
+
+- [x] **Criação de extratores especializados para casos específicos de OCR e contratos**:
+    - **AditivoContratoExtractor**: Para aditivos de contrato (ALARES, contratos de locação), detectando CNPJs conhecidos e padrões como "ADITIVO AO CONTRATO", corrige problema de fornecedor sendo sobrescrito por dados do email (R$ 10.072 corrigidos)
+    - **OcrDanfeExtractor**: Para DANFEs com texto corrompido por OCR (Auto Posto, postos de gasolina), detecta padrões como "RECEHEMOS", "HINAT", "CIVCRE" e usa regex tolerantes a corrupção
+- [x] **Correção na lógica de extração do corpo do email**: BatchProcessor modificado para não sobrescrever documentos PDF válidos (com fornecedor) com dados do email body, resolvendo casos onde aditivos e documentos válidos perdiam o fornecedor correto
+- [x] **Correção de fornecedor genérico em NFSe**: NfseGenericExtractor agora rejeita textos como "PRESTADOR DE SERVIÇOS" sem nome real do fornecedor
+- [x] **Refatoração de EnergyBillExtractor para UtilityBillExtractor**: Unificação de extratores de contas de energia e água em um único extrator com subtipos "ENERGY" e "WATER", mapeando corretamente para OtherDocumentData e eliminando 80 casos NFSE_SEM_NUMERO (R$ 173K)
+- [x] **Análise de erros com critérios reais**: Identificação de que 99,5% dos "erros" reportados eram falsos positivos (comportamento correto segundo regras de negócio), apenas 1 erro real permanece (Auto Posto com texto truncado)
+- [x] **Valor total corrigido**: ~R$ 118.236,39 em documentos que antes tinham fornecedor vazio/errado e agora estão corretos
+
 ### 29/01/2026
 
 - [x] **Criação de extratores especializados para faturas comerciais**:

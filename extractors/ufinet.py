@@ -21,24 +21,21 @@ class UfinetExtractor(BaseExtractor):
 
     @classmethod
     def can_handle(cls, text: str) -> bool:
-        """Verifica se o texto é de uma fatura Ufinet."""
+        """Verifica se o texto é de uma fatura ou NF da Ufinet."""
         text_upper = text.upper()
         
         # Deve conter UFINET
         if "UFINET" not in text_upper:
             return False
             
-        # Deve ser uma fatura (não NFS-e)
-        if "NOTA FISCAL" in text_upper or "NFS-E" in text_upper or "NFSE" in text_upper:
-            return False
-            
-        # Padrões de fatura Ufinet
-        fatura_patterns = [
-            r"FATURA\s*(No\.?|N[º°]?|NUMERO)?\s*:?\s*\d+",
+        # Padrões de documento Ufinet (fatura ou NF)
+        ufinet_patterns = [
             r"UFINET\s*BRASIL",
+            r"UFINET\s*BRASIL\s*S\.?A",
+            r"FATURA\s*(No\.?|N[º°]?|NUMERO)?\s*:?\s*\d+",
         ]
         
-        matches = sum(1 for p in fatura_patterns if re.search(p, text_upper))
+        matches = sum(1 for p in ufinet_patterns if re.search(p, text_upper))
         return matches >= 1
 
     def _extract_numero_fatura(self, text: str) -> Optional[str]:
@@ -108,10 +105,10 @@ class UfinetExtractor(BaseExtractor):
         """Extrai dados da fatura Ufinet."""
         return {
             "tipo_documento": "OUTRO",
-            "subtipo": "FATURA",
+            "subtipo": "FATURA_UFINET",
             "numero_documento": self._extract_numero_fatura(text),
             "fornecedor_nome": self._extract_fornecedor_nome(text),
-            "fornecedor_cnpj": self._extract_cnpj(text),
-            "valor": self._extract_valor(text),
+            "cnpj_fornecedor": self._extract_cnpj(text),
+            "valor_total": self._extract_valor(text) or 0.0,
             "vencimento": self._extract_vencimento(text),
         }

@@ -2,11 +2,12 @@
 # é definida pela ordem em que os módulos são importados.
 # REGRA: Extractors ESPECÍFICOS devem vir ANTES dos GENÉRICOS
 from .boleto_repromaq import BoletoRepromaqExtractor
+from .boleto_gox import BoletoGoxExtractor  # Boleto GOX específico (antes do genérico)
 from .emc_fatura import EmcFaturaExtractor
 from .net_center import NetCenterExtractor
 from .nfse_custom_montes_claros import NfseCustomMontesClarosExtractor
 from .nfse_custom_vila_velha import NfseCustomVilaVelhaExtractor
-from .energy_bill import EnergyBillExtractor
+from .utility_bill import UtilityBillExtractor  # Extrator unificado para utilidades (energia, água)
 from .nfcom_telcables_extractor import NfcomTelcablesExtractor
 
 # Extrator especializado para boletos ACIMOC
@@ -36,11 +37,15 @@ from .email_body_extractor import (
 
 
 # Extractores de documentos fiscais (prioridade antes dos genéricos)
+from .ocr_danfe import OcrDanfeExtractor  # Antes do DanfeExtractor para casos corrompidos
 from .danfe import DanfeExtractor  # Danfe antes de genéricos para evitar captura incorreta
 
 # Extractores de boletos (antes de OutrosExtractor para evitar classificação incorreta)
 from .boleto import BoletoExtractor
 from .sicoob import SicoobExtractor
+
+# Extrator especializado para aditivos de contrato
+from .aditivo_contrato import AditivoContratoExtractor
 
 # Extractores genéricos (vêm depois dos específicos)
 from .outros import OutrosExtractor
@@ -58,7 +63,8 @@ __all__ = [
     "NfcomTelcablesExtractor",
     "OutrosExtractor",
     "SicoobExtractor",
-    "EnergyBillExtractor",
+    "BoletoGoxExtractor",
+    "UtilityBillExtractor",
     "NfseCustomMontesClarosExtractor",
     "NfseCustomVilaVelhaExtractor",
     "NfseGenericExtractor",
@@ -76,4 +82,8 @@ __all__ = [
     "TunnaFaturaExtractor",
     # Extrator especializado para faturas Ufinet
     "UfinetExtractor",
+    # Extrator especializado para aditivos de contrato
+    "AditivoContratoExtractor",
+    # Extrator para DANFEs com OCR corrompido
+    "OcrDanfeExtractor",
 ]

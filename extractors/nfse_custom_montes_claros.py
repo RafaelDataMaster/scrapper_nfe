@@ -212,6 +212,23 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
         return None
 
     def _extract_fornecedor_nome(self, text: str) -> Optional[str]:
+        text_upper = text.upper()
+        
+        # Fornecedores conhecidos por CNPJ ou nome
+        KNOWN_SUPPLIERS_BY_CNPJ = {
+            "02.421.421": "TIM S.A.",
+            "02421421": "TIM S.A.",
+        }
+        
+        # Verifica CNPJ conhecido
+        for cnpj_key, supplier in KNOWN_SUPPLIERS_BY_CNPJ.items():
+            if cnpj_key in text:
+                return supplier
+        
+        # TIM S.A. específico
+        if "TIM S.A" in text_upper or "TIMS.A" in text_upper:
+            return "TIM S.A."
+        
         # Preferir RazaoSocial / NomeFantasia rótulos comuns em layout municipal
         m = re.search(r"Raz[ãa]o\s+Social[:\s\-]*([A-ZÀ-ÿ0-9\-\.\&\s\/]{4,120})", text, re.IGNORECASE)
         if m:

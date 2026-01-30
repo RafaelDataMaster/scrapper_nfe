@@ -11,6 +11,184 @@
 > **IMPORTANTE:** Esta seção contém snapshots das sessões de trabalho. Mantém apenas os últimos 3 snapshots.  
 > **Template:** Ver `project_status_template.md` para o formato completo.
 
+### Snapshot: 30/01/2026 - 13:00 - CORRECOES_ADITIVOS_OCR_CONCLUIDAS
+
+**Tipo:** CORRECOES_ADITIVOS_OCR_CONCLUIDAS
+
+**Contexto da Sessão:**
+- Sessão iniciada em: 30/01/2026 08:57
+- Foco: Resolver casos FORNECEDOR_VAZIO (R$ 27K) + Aditivos ALARES + OCR corrompido
+- Tempo total: ~4 horas
+- Continuação de: Snapshot 30/01/2026 - 11:00
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | Categoria |
+|---|------|--------|---------------------|-----------|
+| 1 | AditivoContratoExtractor | ✅ CONCLUÍDA | aditivo_contrato.py, __init__.py | Extrator novo |
+| 2 | OcrDanfeExtractor | ✅ CONCLUÍDA | ocr_danfe.py, __init__.py | Extrator novo |
+| 3 | BatchProcessor Email Body | ✅ CONCLUÍDA | batch_processor.py | Lógica de correlação |
+| 4 | NfseGenericExtractor | ✅ CONCLUÍDA | nfse_generic.py | Regex melhorado |
+
+**Correção #1: AditivoContratoExtractor** ✅ CONCLUÍDA
+- **Problema:** Aditivos de contrato (ALARES) com fornecedor vazio - sistema usava dados do email
+- **Causa raiz:** 
+  1. Extrator retornava `valor` em vez de `valor_total` (processor ignorava)
+  2. BatchProcessor adicionava documento do email quando valor=0
+- **Solução:**
+  - Novo extrator específico para aditivos de contrato
+  - Detecta CNPJs conhecidos (ALARES: 02.952.192/0001-61, 02.952.192/0029-62)
+  - Corrigido campo `valor` → `valor_total` para compatibilidade
+  - BatchProcessor modificado para não sobrescrever PDF válido com email
+- **Casos:** 
+  - ALARES aditivos (R$ 2.518 cada) - 4 casos
+  - Aditivos locação (Elton Messias) - 1 caso
+- **Arquivos:** extractors/aditivo_contrato.py (novo)
+
+**Correção #2: OcrDanfeExtractor** ✅ CONCLUÍDA
+- **Problema:** DANFEs com OCR corrompido (Auto Posto) - texto truncado, fornecedor vazio
+- **Solução:** Extrator específico que detecta corrupção e usa padrões OCR-tolerantes
+- **Padrões:** "RECEHEMOS" (corrompido), "HINAT", "CIVCRE", "VANGAS"
+- **Casos:** Auto Posto Portal de Minas (R$ 1.460,84)
+- **Arquivos:** extractors/ocr_danfe.py (novo)
+
+**Correção #3: BatchProcessor Email Body** ✅ CONCLUÍDA
+- **Problema:** Documentos válidos do PDF sendo sobrescritos por dados do email
+- **Causa:** `_has_nota_with_valor()` retornava False quando valor=0 (mesmo com fornecedor)
+- **Solução:** Nova lógica `has_valid_pdf_doc` verifica `fornecedor_nome` OR `valor_total > 0`
+- **Impacto:** Aditivos ALARES agora mantêm fornecedor correto
+- **Arquivos:** core/batch_processor.py
+
+**Correção #4: NfseGenericExtractor** ✅ CONCLUÍDA
+- **Problema:** Fornecedor extraído como "PRESTADOR DE SERVIÇOS" (texto genérico)
+- **Solução:** Rejeitar textos genéricos no padrão de Prestador
+- **Arquivos:** extractors/nfse_generic.py
+
+**Estado do Sistema:**
+- **Extractors no Registry:** 20 total (4 novos: AditivoContratoExtractor, OcrDanfeExtractor)
+- **Ordem do Registry:** ✅ ATUALIZADA
+  - OcrDanfeExtractor (prioridade 14, antes de DanfeExtractor)
+  - AditivoContratoExtractor (prioridade 18, antes de OutrosExtractor)
+- **Código:** Validação basedpyright passando ✅
+
+**Estado dos Dados (ANTES - aguardando reprocessamento):**
+- **FORNECEDOR_VAZIO:** 5 ocorrências | Valor: R$ 27.911,47
+  - Auto Posto R$ 1.460,84 → OcrDanfeExtractor ✅
+  - ALARES aditivos R$ 2.518,00 → AditivoContratoExtractor ✅
+- **FORNECEDOR_CURTO (E-mail):** 11 ocorrências → BatchProcessor fix ✅
+- **FORNECEDOR_TEXTO_PDF:** "PRESTADOR DE SERVIÇOS" → NfseGenericExtractor fix ✅
+
+**Casos Esperados após Reprocessamento:**
+| Documento | Fornecedor Esperado | Valor | Extrator |
+|-----------|---------------------|-------|----------|
+| ALARES aditivos (4x) | ALARES INTERNET S/A | R$ 2.518 cada | AditivoContratoExtractor |
+| Auto Posto | AUTO POSTO PORTAL DE MINAS | R$ 1.460 | OcrDanfeExtractor |
+| MOC Comunicação | (vazio - comprovante TED) | R$ 21.274 | N/A (saída) |
+
+**Decisões Tomadas:**
+- Aditivos de contrato não têm valor monetário próprio → usar dados do boleto/email, mas manter fornecedor do PDF
+- OCR corrompido precisa de extrator separado (não modificar DanfeExtractor genérico)
+- BatchProcessor deve priorizar PDF sobre email quando PDF tem fornecedor válido
+- Textos genéricos tipo "PRESTADOR DE SERVIÇOS" devem ser rejeitados
+
+**Para Reencontrar em Nova Sessão:**
+> ⚠️ **AVISO:** Batch IDs mudam a cada `clean_dev` + `run_ingestion`!
+
+```powershell
+# Buscar aditivos ALARES
+Get-Content data/output/relatorio_lotes.csv | Select-String "ALARES"
+
+# Buscar Auto Posto
+Get-Content data/output/relatorio_lotes.csv | Select-String "AUTO POSTO"
+
+# Validar extractores
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
+```
+
+---
+
+### Snapshot: 30/01/2026 - 11:00 - CORRECOES_MULTIPLAS_CONCLUIDAS
+
+**Tipo:** CORRECOES_MULTIPLAS_CONCLUIDAS
+
+**Contexto da Sessão:**
+- Sessão iniciada em: 30/01/2026 08:57
+- Foco: Resolver 80 casos NFSE_SEM_NUMERO (R$ 173K) + 14 fornecedores vazios (R$ 102K)
+- Tempo total: ~3 horas
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | Categoria |
+|---|------|--------|---------------------|-----------|
+| 1 | BoletoGoxExtractor | ✅ CONCLUÍDA | boleto_gox.py, processor.py | Extrator novo |
+| 2 | UtilityBillExtractor | ✅ CONCLUÍDA | utility_bill.py, processor.py, __init__.py | Refatoração |
+| 3 | Fornecedores Vazios | ✅ CONCLUÍDA | ufinet.py, danfe.py, nfse_custom_montes_claros.py, outros.py | Correções |
+
+**Correção #1: BoletoGoxExtractor** ✅ CONCLUÍDA
+- **Fornecedor:** GOX S.A.
+- **Tipo:** BOLETO (tipo_documento="BOLETO")
+- **Padrão de detecção:** CNPJ 07.543.400/0001-92 + "GOXINTERNET.COM.BR"
+- **Número do documento:** Extraído do nome do arquivo (padrão `receber_XXXXXXX`)
+- **Problema resolvido:** Boletos sem número e fornecedor corrompido pelo OCR
+- **Arquivos:** extractors/boleto_gox.py (novo), core/processor.py (contexto)
+
+**Correção #2: UtilityBillExtractor** ✅ CONCLUÍDA
+- **Problema:** EnergyBillExtractor retornava tipo não mapeado ("ENERGY_BILL")
+- **Solução:** Refatoração completa para UtilityBillExtractor
+- **Tipo:** UTILITY_BILL → mapeado para OtherDocumentData
+- **Subtipos:** "ENERGY" (energia), "WATER" (água/saneamento)
+- **Fornecedores cobertos:**
+  - ENERGY: CEMIG, EDP, NEOENERGIA, COPEL, CPFL, ENERGISA, ENEL, LIGHT
+  - WATER: COPASA, SABESP, SANEPAR
+- **Arquivos:** 
+  - extractors/utility_bill.py (novo)
+  - extractors/energy_bill.py (removido)
+  - extractors/__init__.py (atualizado)
+  - core/processor.py (mapeamento UTILITY_BILL)
+
+**Correção #3: Fornecedores Vazios** ✅ CONCLUÍDA
+- **Casos corrigidos:**
+  | Fornecedor | Valor | Causa | Solução |
+  |------------|-------|-------|---------|
+  | Ufinet | R$ 55K | Rejeitava "NOTA FISCAL" | Removida restrição |
+  | Mi Telecom | R$ 1,9K | NFCom não extraía fornecedor | Padrão NFCom telecom |
+  | TIM | R$ 52 | Não reconhecido | Mapeamento CNPJ/nome |
+  | Correios | R$ 120 | Não reconhecido | Mapeamento fornecedores |
+- **Arquivos:** ufinet.py, danfe.py, nfse_custom_montes_claros.py, outros.py
+
+**Estado do Sistema:**
+- **Extractors no Registry:** 17 total (2 novos: BoletoGoxExtractor, UtilityBillExtractor)
+- **Extrator removido:** EnergyBillExtractor
+- **Ordem do Registry:** ✅ ATUALIZADA
+  - BoletoGoxExtractor (prioridade 2)
+  - UtilityBillExtractor (prioridade 6)
+- **Código:** Validação basedpyright passando ✅
+
+**Estado dos Dados:**
+- **Casos NFSE_SEM_NUMERO:** Reduzidos de 80 para ~0 (validar no reprocessamento)
+- **Fornecedores vazios:** Reduzidos de 14 para ~0 (casos de saída/pagamento permanecem)
+- **Failed cases:** 0 novos confirmados
+
+**Decisões Tomadas:**
+- `tipo_documento` deve ser um dos valores mapeados no processor (BOLETO, DANFE, UTILITY_BILL, OUTRO, ou NFSE genérico)
+- Faturas de utilidade (energia, água) → OUTRO com subtipo (não NFSE)
+- Contexto (arquivo_origem) passado para extractores que precisam do nome do arquivo
+- Mapeamento por CNPJ mais confiável que regex para fornecedores conhecidos
+
+**Para Reencontrar em Nova Sessão:**
+> ⚠️ **AVISO:** Batch IDs mudam a cada `clean_dev` + `run_ingestion`!
+> Use fornecedor/tipo para reencontrar casos:
+
+```powershell
+# Buscar no CSV por fornecedor
+Get-Content data/output/relatorio_lotes.csv | Select-String "GOX|COPASA|CEMIG|UFINET|TIM|CORREIOS"
+
+# Validar extractores em todos os batches
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
+```
+
+**Referência completa:** Veja [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md)
+
+---
+
 ### Snapshot: 29/01/2026 - 12:30 - CORRECAO_CONCLUIDA
 
 **Tipo:** CORRECAO_CONCLUIDA
@@ -176,21 +354,26 @@ core/                # Núcleo do sistema
 extractors/          # Extratores especializados por tipo
   ├── acimoc_extractor.py         # Boletos ACIMOC específicos
   ├── admin_document.py           # Documentos administrativos
+  ├── aditivo_contrato.py         # Aditivos de contrato (ALARES, etc.)
   ├── boleto.py                   # Extrator genérico de boletos
+  ├── boleto_gox.py               # Boletos GOX S.A. específicos
   ├── boleto_repromaq.py          # Extrator específico REPROMAQ
   ├── danfe.py                    # Extrator de DANFE (NF-e)
   ├── email_body_extractor.py     # Extrator de corpo de e-mail (sem anexos)
   ├── emc_fatura.py               # Faturas EMC Tecnologia
-  ├── energy_bill.py              # Contas de energia (EDP, CEMIG, COPEL)
   ├── mugo_extractor.py           # Faturas MUGO Telecom
   ├── net_center.py               # NFSe específica Net Center
   ├── nfcom_telcables_extractor.py # NFCom/Telcables (faturas de telecom)
   ├── nfse_custom_montes_claros.py # NFSe Montes Claros-MG
   ├── nfse_custom_vila_velha.py   # NFSe Vila Velha-ES
   ├── nfse_generic.py             # Extrator genérico de NFSe
+  ├── ocr_danfe.py                # DANFEs com OCR corrompido
   ├── outros.py                   # Documentos diversos (faturas)
   ├── pro_painel_extractor.py     # Faturas PRÓ - PAINEL LTDA
   ├── sicoob.py                   # Boletos Sicoob específicos
+  ├── tunna_fatura.py             # Faturas FishTV/Tunna
+  ├── ufinet.py                   # Faturas Ufinet
+  ├── utility_bill.py             # Contas de utilidade (energia, água)
   ├── utils.py                    # Utilitários de extração
   └── xml_extractor.py            # Extração de XMLs fiscais
 
@@ -294,21 +477,26 @@ E-mails sem anexo (apenas links):
 A ordem de importação em `extractors/__init__.py` define a prioridade:
 
 1. **BoletoRepromaqExtractor** - Boletos REPROMAQ/Bradesco (evita catastrophic backtracking)
-2. **EmcFaturaExtractor** - Faturas EMC Tecnologia (multi-página)
-3. **NetCenterExtractor** - NFSe específica Net Center
-4. **NfseCustomMontesClarosExtractor** - NFSe Montes Claros-MG
-5. **NfseCustomVilaVelhaExtractor** - NFSe Vila Velha-ES
-6. **EnergyBillExtractor** - Contas de energia (EDP, CEMIG, COPEL)
-7. **NfcomTelcablesExtractor** - NFCom/Telcables (faturas de telecom)
-8. **AcimocExtractor** - Boletos ACIMOC específicos
-9. **MugoExtractor** - Faturas MUGO Telecom
-10. **ProPainelExtractor** - Faturas PRÓ - PAINEL LTDA
-11. **AdminDocumentExtractor** - Documentos administrativos (evita falsos positivos)
-12. **OutrosExtractor** - Documentos diversos (faturas, ordens de serviço)
-13. **NfseGenericExtractor** - NFSe genérico (fallback)
-14. **BoletoExtractor** - Boletos genéricos
-15. **SicoobExtractor** - Boletos Sicoob
-16. **DanfeExtractor** - DANFE/DF-e
+2. **BoletoGoxExtractor** - Boletos GOX S.A. específicos
+3. **EmcFaturaExtractor** - Faturas EMC Tecnologia (multi-página)
+4. **NetCenterExtractor** - NFSe específica Net Center
+5. **NfseCustomMontesClarosExtractor** - NFSe Montes Claros-MG
+6. **NfseCustomVilaVelhaExtractor** - NFSe Vila Velha-ES
+7. **UtilityBillExtractor** - Contas de utilidade (energia, água)
+8. **NfcomTelcablesExtractor** - NFCom/Telcables (faturas de telecom)
+9. **AcimocExtractor** - Boletos ACIMOC específicos
+10. **MugoExtractor** - Faturas MUGO Telecom
+11. **ProPainelExtractor** - Faturas PRÓ - PAINEL LTDA
+12. **TunnaFaturaExtractor** - Faturas FishTV/Tunna
+13. **UfinetExtractor** - Faturas Ufinet
+14. **AdminDocumentExtractor** - Documentos administrativos (evita falsos positivos)
+15. **OcrDanfeExtractor** - DANFEs com OCR corrompido (antes do DanfeExtractor)
+16. **DanfeExtractor** - DANFE/DF-e genérico
+17. **BoletoExtractor** - Boletos genéricos
+18. **SicoobExtractor** - Boletos Sicoob
+19. **AditivoContratoExtractor** - Aditivos de contrato (antes de OutrosExtractor)
+20. **OutrosExtractor** - Documentos diversos (faturas, ordens de serviço)
+21. **NfseGenericExtractor** - NFSe genérico (fallback)
 
 **Nota:** Além dos extratores acima, o sistema também inclui:
 
@@ -518,9 +706,13 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 1. **Prioridade XML:** XML só é usado se tiver TODOS os campos obrigatórios (`fornecedor_nome`, `vencimento`, `numero_nota`, `valor_total`). Se incompleto, processa PDFs.
 
-2. **EnergyBillExtractor:** Criado recentemente (26/01/2026) para resolver conflito entre Carrier Telecom (empresa) e faturas de energia. Detecta distribuidoras por múltiplos indicadores.
+2. **UtilityBillExtractor:** Refatoração de EnergyBillExtractor (30/01/2026) para resolver conflito entre Carrier Telecom (empresa) e faturas de energia. Unifica ENERGY e WATER em um único extrator.
 
 3. **AdminDocumentExtractor:** Extrator especializado para documentos administrativos com padrões negativos para evitar falsos positivos em documentos fiscais.
+
+4. **AditivoContratoExtractor:** Criado (30/01/2026) para extrair dados de aditivos contratuais (ALARES, contratos de locação). Detecta pelo padrão "ADITIVO AO CONTRATO" + CNPJs conhecidos.
+
+5. **OcrDanfeExtractor:** Criado (30/01/2026) para DANFEs com texto corrompido por OCR. Detecta padrões como "RECEHEMOS" (corrompido), "HINAT" e usa regex tolerantes.
 
 4. **Sistema de Avisos:** A coluna AVISOS pode conter:
     - `[CONCILIADO]` - NF e boleto pareados com sucesso

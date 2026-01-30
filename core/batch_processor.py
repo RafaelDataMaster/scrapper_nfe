@@ -230,7 +230,12 @@ class BatchProcessor:
 
         # 6. NOVO: Extrai dados do corpo do e-mail se não há NF anexada
         # Útil para e-mails onde a NF é um link (Omie, prefeituras)
-        if metadata and not self._has_nota_with_valor(final_docs):
+        # Mas só extrai se não há documento válido do PDF (com fornecedor ou valor)
+        has_valid_pdf_doc = any(
+            getattr(doc, 'fornecedor_nome', None) or getattr(doc, 'valor_total', 0) > 0
+            for doc in final_docs
+        )
+        if metadata and not has_valid_pdf_doc:
             email_body_doc = self._extract_from_email_body(metadata, batch_id)
             if email_body_doc:
                 result.add_document(email_body_doc)

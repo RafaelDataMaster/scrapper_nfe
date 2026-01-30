@@ -349,6 +349,32 @@ class DanfeExtractor(BaseExtractor):
                 # Evita capturar lixo muito longo
                 if 4 <= len(name) <= 120:
                     data["fornecedor_nome"] = name
+        
+        # 2b) 'DANFE X | DOCUMENTO...' (caso de OCR corrompido)
+        if not data.get("fornecedor_nome"):
+            m_danfe_pipe = re.search(r"(?is)\bDANFE\b\s+(.{3,60}?)\s*\|", text)
+            if m_danfe_pipe:
+                name = re.sub(r"\s+", " ", m_danfe_pipe.group(1)).strip()
+                if 4 <= len(name) <= 120:
+                    data["fornecedor_nome"] = name
+        
+        # 3) 'DOCUMENTO AUXILIAR DA NOTA FISCAL... X CNPJ' (NFCom - telecom)
+        if not data.get("fornecedor_nome"):
+            # Padrão: DOCUMENTO AUXILIAR DA NOTA FISCAL... FATURA DE SERVIÇOS... Empresa CNPJ
+            m_nfcom = re.search(r"(?is)DOCUMENTO\s+AUXILIAR\s+DA\s+NOTA\s+FISCAL.*?FATURA\s+DE\s+SERVI[CÇ]OS?\s+DE\s+COMUNICA[CÇ][AÃ]O\s+ELETR[ÔO]NICA\s+(.+?)\s+(?:CNPJ|IE:|C[NÑ]PJ)", text)
+            if m_nfcom:
+                name = re.sub(r"\s+", " ", m_nfcom.group(1)).strip()
+                if 4 <= len(name) <= 120:
+                    data["fornecedor_nome"] = name
+        
+        # 4) Fallback: após CNPJ emitente, próxima linha com nome fantasia/razão social
+        if not data.get("fornecedor_nome"):
+            # Procura CNPJ seguido de nome (padrão em muitas DANFEs)
+            m_cnpj_nome = re.search(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b\s+(.{5,80}?)(?=\s+IE:|\s+INSC|\s+AV\.|\s+RUA|\s+\d{5}-\d{3})", text, re.DOTALL)
+            if m_cnpj_nome:
+                name = re.sub(r"\s+", " ", m_cnpj_nome.group(1)).strip()
+                if 4 <= len(name) <= 120:
+                    data["fornecedor_nome"] = name
 
         # Extrai duplicatas/faturas
         duplicatas = _extract_duplicatas(text)

@@ -392,6 +392,9 @@ class NfseGenericExtractor(BaseExtractor):
             if match:
                 nome = match.group(1).strip()
                 nome = re.sub(r"\d+", "", nome).strip()
+                # Rejeitar textos genéricos como "PRESTADOR DE SERVIÇOS" sem nome real
+                if re.match(r"(?i)^(Prestador\s+de\s+Servi[çc]os|Nome)\s*$", nome):
+                    continue
                 if len(nome) >= 5 and not self._is_empresa_propria(nome):
                     return nome
 

@@ -124,6 +124,7 @@ class TunnaFaturaExtractor(BaseExtractor):
         data["numero_documento"] = numero_fatura
         data["valor_total"] = self._extract_valor(text)
         data["data_emissao"] = self._extract_data_emissao(text)
+        data["vencimento"] = self._extract_vencimento(text)
         data["cnpj_fornecedor"] = self._extract_cnpj(text)
         data["fornecedor_nome"] = "TUNNA ENTRETENIMENTO E AUDIOVISUAL LTDA"
         
@@ -198,6 +199,8 @@ class TunnaFaturaExtractor(BaseExtractor):
         - "VALOR TOTAL R$ X.XXX,XX"
         - "TOTAL R$ X.XXX,XX"
         - "VALOR R$ X.XXX,XX"
+        - "METODO DE PAGAMENTO VALOR\n300,00" (padrão específico Tunna)
+        - "R$: X.XXX,XX" (com dois pontos)
         - "R$ X.XXX,XX" (maior valor encontrado)
         
         Estratégia:
@@ -210,7 +213,35 @@ class TunnaFaturaExtractor(BaseExtractor):
         Returns:
             Valor como float ou 0.0 se não encontrado.
         """
-        # Padrões específicos de fatura
+        # Padrão específico Tunna: "METODO DE PAGAMENTO VALOR" seguido de valor na próxima linha
+        pattern_metodo = re.search(
+            r"METODO\s+DE\s+PAGAMENTO\s+VALOR\s*\n\s*([\d\.]*,\d{2})",
+            text,
+            re.IGNORECASE
+        )
+        if pattern_metodo:
+            return parse_br_money(pattern_metodo.group(1))
+        
+        # Padrão específico Tunna na tabela: "10731 / 1 15/02/26 R$: 300,00"
+        # Note o R$: (com dois pontos)
+        pattern_tabela = re.search(
+            r"FATURA\s+VENCIMENTO\s+VALOR.*?\n\s*\d+\s*/\s*\d+\s+[\d/]+\s+R\$:\s*([\d\.]+,\d{2})",
+            text,
+            re.IGNORECASE | re.DOTALL
+        )
+        if pattern_tabela:
+            return parse_br_money(pattern_tabela.group(1))
+        
+        # Padrão: valor após "VALOR DEMONSTRATIVO"
+        pattern_demonstrativo = re.search(
+            r"VALOR\s+DEMONSTRATIVO\s*\n\s*([\d\.]*,\d{2})",
+            text,
+            re.IGNORECASE
+        )
+        if pattern_demonstrativo:
+            return parse_br_money(pattern_demonstrativo.group(1))
+        
+        # Padrões genéricos de fatura
         specific_patterns = [
             r"(?i)VALOR\s+TOTAL\s*[:\s]+R\$\s*([\d\.]+,\d{2})",
             r"(?i)TOTAL\s*[:\s]+R\$\s*([\d\.]+,\d{2})",
@@ -225,11 +256,26 @@ class TunnaFaturaExtractor(BaseExtractor):
                 
         # Fallback: buscar todos os valores monetários e pegar o maior
         # (em faturas, o valor total geralmente é o maior valor listado)
-        money_pattern = re.findall(r"R\$\s*([\d\.]+,\d{2})", text)
+        money_pattern = re.findall(r"R\$[:\s]\s*([\d\.]+,\d{2})", text)
         if money_pattern:
             valores = [parse_br_money(v) for v in money_pattern]
             if valores:
                 return max(valores)  # Retorna o maior valor encontrado
+        
+        # Último fallback: qualquer número com formato de valor monetário
+        all_values = re.findall(r"\b([\d\.]*,\d{2})\b", text)
+        if all_values:
+            valores = []
+            for v in all_values:
+                try:
+                    # Ignorar valores muito pequenos (possivelmente quantidades)
+                    val = parse_br_money(v)
+                    if val >= 10.0:  # Filtro de valores relevantes
+                        valores.append(val)
+                except Exception:
+                    continue
+            if valores:
+                return max(valores)
                 
         return 0.0
 
@@ -258,6 +304,71 @@ class TunnaFaturaExtractor(BaseExtractor):
             match = re.search(pattern, text)
             if match:
                 return parse_date_br(match.group(1))
+                
+        return None
+    
+    def _extract_vencimento(self, text: str) -> Optional[str]:
+        """
+        Extrai data de vencimento da fatura.
+        
+        Padrões buscados:
+        - "VENCIMENTO DD/MM/YY" (após NÚMERO DA ORDEM)
+        - "10731 / 1 15/02/26" (padrão da tabela)
+        
+        Args:
+            text: Texto normalizado.
+            
+        Returns:
+            Data no formato ISO (YYYY-MM-DD) ou None.
+        """
+        # Padrão 1: Após "NÚMERO DA ORDEM VENCIMENTO"
+        # 000.010.731 15/02/26
+        pattern_ordem = re.search(
+            r"N[�º]?MERO\s+DA\s+ORDEM\s+VENCIMENTO\s*\n\s*\d{3}\.\d{3}\.\d{3}\s+(\d{2}/\d{2}/\d{2,4})",
+            text,
+            re.IGNORECASE
+        )
+        if pattern_ordem:
+            data_str = pattern_ordem.group(1)
+            # Converter ano de 2 para 4 dígitos se necessário
+            if len(data_str.split('/')[-1]) == 2:
+                dia, mes, ano = data_str.split('/')
+                ano_int = int(ano)
+                # Assumir que anos 00-29 são 2000-2029, 30-99 são 1930-1999
+                if ano_int < 30:
+                    ano = '20' + ano
+                else:
+                    ano = '19' + ano
+                data_str = f"{dia}/{mes}/{ano}"
+            return parse_date_br(data_str)
+        
+        # Padrão 2: Na tabela FATURA VENCIMENTO VALOR
+        # 10731 / 1 15/02/26 R$: 300,00
+        pattern_tabela = re.search(
+            r"FATURA\s+VENCIMENTO\s+VALOR.*?\n\s*\d+\s*/\s*\d+\s+(\d{2}/\d{2}/\d{2,4})",
+            text,
+            re.IGNORECASE | re.DOTALL
+        )
+        if pattern_tabela:
+            data_str = pattern_tabela.group(1)
+            # Converter ano de 2 para 4 dígitos se necessário
+            if len(data_str.split('/')[-1]) == 2:
+                dia, mes, ano = data_str.split('/')
+                ano_int = int(ano)
+                if ano_int < 30:
+                    ano = '20' + ano
+                else:
+                    ano = '19' + ano
+                data_str = f"{dia}/{mes}/{ano}"
+            return parse_date_br(data_str)
+        
+        # Padrão 3: Busca genérica por "VENCIMENTO" seguido de data
+        pattern_generic = re.search(
+            r"(?i)VENCIMENTO\s*[:\s]+(\d{2}/\d{2}/\d{4})",
+            text
+        )
+        if pattern_generic:
+            return parse_date_br(pattern_generic.group(1))
                 
         return None
 

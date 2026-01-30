@@ -178,8 +178,25 @@ class OutrosExtractor(BaseExtractor):
             data["subtipo"] = "FATURA"
 
         # Fornecedor (tentativas)
-        if "LOCAWEB" in t:
-            data["fornecedor_nome"] = "LOCAWEB"
+        # Mapeamento de fornecedores conhecidos por palavra-chave
+        KNOWN_SUPPLIERS = {
+            "LOCAWEB": "LOCAWEB",
+            "CORREIOS": "CORREIOS",
+            "EMPRESA BRASILEIRA DE CORREIOS": "CORREIOS",
+            "EXTRATO SINTETICO": "CORREIOS",
+            "EXTRATO SINTÉTICO": "CORREIOS",
+            "TIM": "TIM",
+            "FATURA TIM": "TIM",
+            "CONTATIM": "TIM",
+            "MITELECOM": "MI TELECOM",
+            "EXATA TELCO": "EXATA TELCO",
+            "LEVYCAM": "LEVYCAM CORRETORA DE CÂMBIO",
+        }
+        
+        for keyword, supplier in KNOWN_SUPPLIERS.items():
+            if keyword in t:
+                data["fornecedor_nome"] = supplier
+                break
 
         if not data.get("fornecedor_nome"):
             # Tentar padrão "Fornecedor: NOME LTDA"

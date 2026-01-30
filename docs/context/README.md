@@ -196,6 +196,7 @@ automation_orchestrator.md (engloba todos os outros)
 | OCR corrompendo caracteres | [`troubleshooting.md`](./troubleshooting.md) → "Problemas de OCR" |
 | Batch ID não encontrado | [`correction_tracking.md`](./correction_tracking.md) |
 | Extrator não funciona | [`logging_guide.md`](./logging_guide.md) → adicione logs |
+| Problemas da sessão 30/01 | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) |
 
 ### Padrões de Código
 
@@ -236,8 +237,10 @@ automation_orchestrator.md (engloba todos os outros)
 | 13 | [`project_status_template.md`](./project_status_template.md) | Snapshot | Template de snapshot |
 | 14 | [`review.md`](./review.md) | Fluxo | Análise aprofundada de caso |
 | 15 | [`troubleshooting.md`](./troubleshooting.md) | Referência | Resolver erros comuns |
-| 16 | [`validation.md`](./validation.md) | Fluxo | Validar correções |
-| 17 | [`logging_standards.md`](./logging_standards.md) | Referência | Evitar falsos positivos nos logs |
+| 16 | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) | Referência | Problemas específicos da sessão 30/01/2026 |
+| 17 | [`validation.md`](./validation.md) | Fluxo | Validar correções |
+| 18 | [`logging_standards.md`](./logging_standards.md) | Referência | Evitar falsos positivos nos logs |
+| 19 | [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md) | Snapshot | Sessão 30/01 - NFSE sem número |
 
 ---
 
