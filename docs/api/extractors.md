@@ -4,14 +4,51 @@ Os extratores são responsáveis por interpretar o texto bruto e extrair campos 
 
 ## Visão Geral
 
-Cada extrator implementa a interface `BaseExtractor` e é especializado em um tipo de documento:
-
-- **NfseGenericExtractor**: NFSe (fallback baseado em regex)
-- **BoletoExtractor**: Boletos bancários (linha digitável, vencimento, etc.)
+Cada extrator implementa a interface `BaseExtractor` e é especializado em um tipo de documento. O sistema utiliza um **registry** onde a **ordem de importação define a prioridade** de roteamento.
 
 > Nota: o antigo `GenericExtractor` foi renomeado para `NfseGenericExtractor`.
 
 **Padrão de Design:** Chain of Responsibility + Strategy
+
+---
+
+## Extratores Registrados (Ordem de Prioridade)
+
+A ordem de importação em `extractors/__init__.py` define a prioridade. **Extratores específicos devem vir ANTES dos genéricos** para evitar classificação incorreta.
+
+| #   | Extrator                            | Descrição                                                   | Tipo Documento |
+| --- | ----------------------------------- | ----------------------------------------------------------- | -------------- |
+| 1   | **BoletoRepromaqExtractor**         | Boletos REPROMAQ/Bradesco (evita catastrophic backtracking) | BOLETO         |
+| 2   | **BoletoGoxExtractor**              | Boletos GOX S.A. específicos                                | BOLETO         |
+| 3   | **EmcFaturaExtractor**              | Faturas EMC Tecnologia (multi-página)                       | OUTRO          |
+| 4   | **NetCenterExtractor**              | NFSe específica Net Center                                  | NFSE           |
+| 5   | **NfseCustomMontesClarosExtractor** | NFSe Montes Claros-MG                                       | NFSE           |
+| 6   | **NfseCustomVilaVelhaExtractor**    | NFSe Vila Velha-ES                                          | NFSE           |
+| 7   | **UtilityBillExtractor**            | Contas de utilidade (energia, água, gás)                    | OUTRO          |
+| 8   | **NfcomTelcablesExtractor**         | NFCom/Telcables (faturas de telecom)                        | OUTRO          |
+| 9   | **AcimocExtractor**                 | Boletos ACIMOC específicos                                  | BOLETO         |
+| 10  | **MugoExtractor**                   | Faturas MUGO Telecom                                        | OUTRO          |
+| 11  | **ProPainelExtractor**              | Faturas PRÓ - PAINEL LTDA                                   | OUTRO          |
+| 12  | **TunnaFaturaExtractor**            | Faturas FishTV/Tunna                                        | OUTRO          |
+| 13  | **UfinetExtractor**                 | Faturas Ufinet                                              | OUTRO          |
+| 14  | **SabespWaterBillExtractor**        | Faturas de água Sabesp (via email body)                     | OUTRO          |
+| 15  | **CscNotaDebitoExtractor**          | Nota Débito/Recibo Fatura CSC GESTÃO                        | OUTRO          |
+| 16  | **AdminDocumentExtractor**          | Documentos administrativos (evita falsos positivos)         | OUTRO          |
+| 17  | **ComprovanteBancarioExtractor**    | Comprovantes TED/PIX/DOC                                    | OUTRO          |
+| 18  | **OcrDanfeExtractor**               | DANFEs com OCR corrompido (antes do DanfeExtractor)         | DANFE          |
+| 19  | **DanfeExtractor**                  | DANFE/DF-e genérico                                         | DANFE          |
+| 20  | **BoletoExtractor**                 | Boletos genéricos                                           | BOLETO         |
+| 21  | **SicoobExtractor**                 | Boletos Sicoob                                              | BOLETO         |
+| 22  | **AditivoContratoExtractor**        | Aditivos de contrato                                        | OUTRO          |
+| 23  | **OutrosExtractor**                 | Documentos diversos (faturas, ordens de serviço)            | OUTRO          |
+| 24  | **NfseGenericExtractor**            | NFSe genérico (fallback final)                              | NFSE           |
+
+**Nota:** Além dos extratores acima, o sistema também inclui:
+
+- **EmailBodyExtractor** - Extração de corpo de e-mail (chamado diretamente, não via registry)
+- **XmlExtractor** - Extração de XMLs fiscais (chamado diretamente, não via registry)
+
+---
 
 ## NfseGenericExtractor
 
@@ -22,10 +59,10 @@ Extrator fallback para Notas Fiscais de Serviço Eletrônica usando expressões 
 - **Prefeituras suportadas**: Todas (fallback genérico)
 - **Método de extração**: Regex patterns
 - **Campos extraídos**:
-  - CNPJ do Prestador
-  - Número da Nota Fiscal
-  - Data de Emissão
-  - Valor Total
+    - CNPJ do Prestador
+    - Número da Nota Fiscal
+    - Data de Emissão
+    - Valor Total
 
 ### Lógica de Identificação
 
@@ -69,9 +106,9 @@ Antes da extração, o texto passa por limpeza:
 - Remove identificadores auxiliares (RPS, Lote, Protocolo, Série)
 
 ::: extractors.nfse_generic.NfseGenericExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
@@ -84,13 +121,13 @@ Extrator especializado em boletos bancários brasileiros.
 - **Tipo de documento**: Boletos bancários
 - **Método de extração**: Regex + Heurísticas avançadas (3 níveis de fallback)
 - **Campos extraídos**:
-  - CNPJ do Beneficiário
-  - Valor do Documento (com múltiplos fallbacks)
-  - Data de Vencimento
-  - Número do Documento
-  - Linha Digitável (código de barras)
-  - Nosso Número
-  - Referência à NFSe (se presente)
+    - CNPJ do Beneficiário
+    - Valor do Documento (com múltiplos fallbacks)
+    - Data de Vencimento
+    - Número do Documento
+    - Linha Digitável (código de barras)
+    - Nosso Número
+    - Referência à NFSe (se presente)
 
 ### Lógica de Identificação
 
@@ -134,8 +171,8 @@ Se padrões específicos falharem, busca todos os valores monetários no documen
 
 - Extrai valor dos últimos 14 dígitos da linha digitável
 - Formato: `XXXXX.XXXXX XXXXX.XXXXXX XXXXX.XXXXXX X [FFFF][VVVVVVVVVV]`
-  - `FFFF` = Fator de vencimento (4 dígitos)
-  - `VVVVVVVVVV` = Valor em centavos (10 dígitos)
+    - `FFFF` = Fator de vencimento (4 dígitos)
+    - `VVVVVVVVVV` = Valor em centavos (10 dígitos)
 
 **Exemplo:**
 
@@ -165,15 +202,13 @@ Convertido automaticamente para formato ISO (YYYY-MM-DD).
 **Padrões de extração (com fallback):**
 
 1. **Com label explícito:**
-
-   - `Vencimento: DD/MM/YYYY`
-   - `Data de Vencimento: DD/MM/YYYY`
+    - `Vencimento: DD/MM/YYYY`
+    - `Data de Vencimento: DD/MM/YYYY`
 
 2. **Fallback - sem label:**
-
-   - Busca primeira data no formato `DD/MM/YYYY`
-   - Valida se o ano está entre 2024-2030 (datas futuras razoáveis)
-   - Útil para PDFs com layout tabular onde label está distante
+    - Busca primeira data no formato `DD/MM/YYYY`
+    - Valida se o ano está entre 2024-2030 (datas futuras razoáveis)
+    - Útil para PDFs com layout tabular onde label está distante
 
 ```python
 # Exemplo de fallback
@@ -188,12 +223,12 @@ Campo desafiador devido à variedade de formatos e layouts.
 **9 padrões implementados (ordem de prioridade):**
 
 1. **⭐ Layout tabular com data:** `Nº Documento ... DD/MM/YYYY ... X/Y`
+    - Pula data completa e captura número após (ex: "2/1" não "08")
+    - Usa re.DOTALL para atravessar linhas
+      2-3. **Com label completo:** `Número do Documento: 12345` (variações de encoding `Nú`, `Nu`, `Nü`)
+      4-5. **Label abreviado:** `Nº Documento:`, `N. Documento:`, `Doc. Nº` (aceita `/` e `.`).
+      6-7. **Próximo a keywords:** Busca após "Vencimento" ou "Número"
 
-   - Pula data completa e captura número após (ex: "2/1" não "08")
-   - Usa re.DOTALL para atravessar linhas
-2-3. **Com label completo:** `Número do Documento: 12345` (variações de encoding `Nú`, `Nu`, `Nü`)
-4-5. **Label abreviado:** `Nº Documento:`, `N. Documento:`, `Doc. Nº` (aceita `/` e `.`).
-6-7. **Próximo a keywords:** Busca após "Vencimento" ou "Número"
 2. **Formato ano.número:** `2025.122`, `2024.900` (comum em alguns bancos)
 3. **Fallback inteligente:** Não captura datas (validação negativa)
 
@@ -232,20 +267,17 @@ Identificação interna do banco, formato variável por instituição.
 **Estratégia de extração em 3 níveis:**
 
 1. **Com label + re.DOTALL**: Atravessa múltiplas linhas
-
-   - `Nosso Número ... 109/00000507-1` (valor pode estar em linha diferente)
-   - Padrão bancário específico: 2-3 dígitos / 7+ dígitos - dígito
+    - `Nosso Número ... 109/00000507-1` (valor pode estar em linha diferente)
+    - Padrão bancário específico: 2-3 dígitos / 7+ dígitos - dígito
 
 2. **Com label (mesma linha)**: Formato simples
-
-   - `Nosso Número: 26859-7`
-   - Aceita qualquer formato com dígitos, hífens e barras
+    - `Nosso Número: 26859-7`
+    - Aceita qualquer formato com dígitos, hífens e barras
 
 3. **⭐ Fallback sem label**: Para casos onde label é imagem OCR
-
-   - Busca padrão `XXX/XXXXXXXX-X` isolado no texto
-   - Ex: `109/42150105-8` (3 dígitos / 8 dígitos - 1 dígito)
-   - **Evita falsos positivos**: Não captura Agência/Conta (4 dígitos) ou CNPJ (com pontos)
+    - Busca padrão `XXX/XXXXXXXX-X` isolado no texto
+    - Ex: `109/42150105-8` (3 dígitos / 8 dígitos - 1 dígito)
+    - **Evita falsos positivos**: Não captura Agência/Conta (4 dígitos) ou CNPJ (com pontos)
 
 **Exemplo - Fallback genérico:**
 
@@ -272,9 +304,9 @@ Alguns boletos contêm referência à nota fiscal que os originou. O extrator te
 - Padrão "Referente à NFS-e XXXXX"
 
 ::: extractors.boleto.BoletoExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
@@ -291,7 +323,7 @@ class MeuExtrator(BaseExtractor):
     def can_handle(cls, text: str) -> bool:
         # Lógica de identificação
         return "palavra-chave" in text.lower()
-    
+
     def extract(self, text: str) -> Dict[str, Any]:
         # Lógica de extração
         return {"campo": "valor"}
@@ -344,7 +376,7 @@ class ReciboExtractor(BaseExtractor):
     @classmethod
     def can_handle(cls, text: str) -> bool:
         return "RECIBO" in text.upper() and "recebemos de" in text.lower()
-    
+
     def extract(self, text: str) -> Dict[str, Any]:
         data = {}
         data['tipo_documento'] = 'RECIBO'
@@ -389,13 +421,13 @@ Extrator para Documento Auxiliar da Nota Fiscal Eletrônica (DANFE, NF-e modelo 
 
 - **Tipo de documento**: DANFE (NF-e de produto)
 - **Campos extraídos**:
-  - Chave de Acesso (44 dígitos)
-  - Número da Nota e Série
-  - Data de Emissão
-  - Valor Total da Nota
-  - CNPJ e Nome do Emitente
-  - Vencimento e Número da Fatura (extraído das duplicatas)
-  - Número do Pedido
+    - Chave de Acesso (44 dígitos)
+    - Número da Nota e Série
+    - Data de Emissão
+    - Valor Total da Nota
+    - CNPJ e Nome do Emitente
+    - Vencimento e Número da Fatura (extraído das duplicatas)
+    - Número do Pedido
 
 ### Lógica de Identificação
 
@@ -406,15 +438,133 @@ O `DanfeExtractor` é ativado se o texto contém:
 - Uma chave de acesso de 44 dígitos.
 
 ::: extractors.danfe.DanfeExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ---
 
 ## Extratores Customizados
 
 Esta seção cobre extratores "cirúrgicos" criados para lidar com layouts específicos de fornecedores ou municípios que não são bem cobertos pelos extratores genéricos.
+
+### BoletoRepromaqExtractor
+
+Extrator especializado para boletos da **REPROMAQ** (Bradesco).
+
+- **Problema Resolvido**: O extrator genérico de boletos tinha problemas de _catastrophic backtracking_ em regex com este layout.
+- **Lógica de Identificação**: Ativado pela presença de "REPROMAQ" ou CNPJ específico.
+- **Diferencial**: Regex otimizadas para evitar timeout em PDFs grandes.
+
+### BoletoGoxExtractor
+
+Extrator especializado para boletos da **GOX S.A.**
+
+- **Problema Resolvido**: Layout específico não capturado corretamente pelo extrator genérico.
+- **Lógica de Identificação**: Ativado pela presença de "GOX S.A." ou CNPJ específico.
+
+### UtilityBillExtractor
+
+Extrator unificado para **contas de utilidade** (energia, água, gás).
+
+- **Problema Resolvido**: Unifica extração de contas de concessionárias que antes eram classificadas incorretamente.
+- **Lógica de Identificação**: Detecta padrões de contas de luz (CEMIG, CPFL, etc.), água e gás.
+- **Subtipos**: `ENERGY`, `WATER`, `GAS`
+- **Campos Extraídos**: `valor_total`, `vencimento`, `fornecedor_nome`, `cnpj_fornecedor`, `numero_cliente`
+
+### NfcomTelcablesExtractor
+
+Extrator para **NFCom** (Nota Fiscal de Comunicação) da Telcables.
+
+- **Problema Resolvido**: Faturas de telecom com layout específico.
+- **Lógica de Identificação**: Ativado por "NFCOM" ou "TELCABLES".
+
+### AcimocExtractor
+
+Extrator para boletos da **ACIMOC**.
+
+- **Problema Resolvido**: Layout específico de boletos ACIMOC.
+- **Lógica de Identificação**: Ativado pela presença de "ACIMOC" no texto.
+
+### MugoExtractor
+
+Extrator para faturas da **MUGO Telecom**.
+
+- **Problema Resolvido**: Faturas de telecom com layout próprio.
+- **Lógica de Identificação**: Ativado por "MUGO" ou CNPJ específico.
+
+### ProPainelExtractor
+
+Extrator para faturas da **PRÓ - PAINEL LTDA**.
+
+- **Problema Resolvido**: Faturas com layout específico.
+- **Lógica de Identificação**: Ativado por "PRÓ" + "PAINEL" ou CNPJ.
+
+### TunnaFaturaExtractor
+
+Extrator para faturas da **Tunna/FishTV**.
+
+- **Problema Resolvido**: Faturas de serviço de TV que eram classificadas como NFSe sem número.
+- **Lógica de Identificação**: Ativado por "TUNNA" ou "FISHTV" ou CNPJ específico.
+- **Campos Extraídos**: `numero_documento` (formato FAT/XXXXX), `valor_total`, `vencimento`
+
+### UfinetExtractor
+
+Extrator para faturas da **Ufinet**.
+
+- **Problema Resolvido**: Faturas de infraestrutura de telecom.
+- **Lógica de Identificação**: Ativado por "UFINET" ou CNPJ específico.
+
+### SabespWaterBillExtractor
+
+Extrator especializado para **faturas de água da Sabesp** via email body.
+
+- **Problema Resolvido**: PDFs da Sabesp são protegidos por senha (CPF do titular). Este extrator extrai dados diretamente do corpo do e-mail HTML.
+- **Lógica de Identificação**: Ativado pelo sender `*@sabesp.com.br` e assunto contendo "Sabesp" ou "fatura".
+- **Campos Extraídos**: `valor_total`, `vencimento`, `numero_fornecimento`, `codigo_barras`, `unidade`
+- **Nota**: Chamado pelo `BatchProcessor` quando PDF está encriptado.
+
+### CscNotaDebitoExtractor
+
+Extrator para **Nota Débito/Recibo Fatura** da CSC GESTÃO INTEGRADA.
+
+- **Problema Resolvido**: Documentos CSC sendo classificados como "NFSe sem número".
+- **Lógica de Identificação**: Ativado por "NOTA DÉBITO / RECIBO FATURA" ou "CSC GESTAO" ou CNPJ `38.323.227/0001-40`.
+- **Campos Extraídos**: `numero_documento`, `valor_total`, `data_emissao`, `competencia`, `tomador`
+- **Suporta OCR**: Tolera variações como "N O T A D É B I T O" (espaços entre letras).
+
+### AdminDocumentExtractor
+
+Extrator para **documentos administrativos** (evita falsos positivos).
+
+- **Problema Resolvido**: Documentos internos como comunicados, avisos e circulares sendo classificados como NFSe.
+- **Lógica de Identificação**: Detecta padrões administrativos (comunicado, aviso, circular, etc.) SEM valores fiscais.
+- **Diferencial**: Marca documentos como `tipo_documento=OUTRO`, `subtipo=ADMINISTRATIVO`.
+
+### ComprovanteBancarioExtractor
+
+Extrator para **comprovantes bancários** (TED, PIX, DOC).
+
+- **Problema Resolvido**: Comprovantes de transferência de valores altos (R$ 1.6M+) sendo classificados como NFSe.
+- **Lógica de Identificação**: Detecta padrões de comprovante TED/PIX/DOC.
+- **Campos Extraídos**: `valor_total`, `data_operacao`, `tipo_operacao`, `banco_origem`, `banco_destino`
+- **CRÍTICO**: Deve vir antes dos genéricos para evitar classificação incorreta.
+
+### OcrDanfeExtractor
+
+Extrator para **DANFEs com OCR corrompido**.
+
+- **Problema Resolvido**: DANFEs onde o OCR corrompeu a chave de acesso ou outros campos.
+- **Lógica de Identificação**: Ativado quando detecta padrões de DANFE mas chave de acesso está corrompida.
+- **Diferencial**: Usa heurísticas mais tolerantes para OCR ruim. Vem ANTES do `DanfeExtractor`.
+
+### AditivoContratoExtractor
+
+Extrator para **aditivos de contrato**.
+
+- **Problema Resolvido**: Aditivos contratuais sendo classificados como documentos genéricos.
+- **Lógica de Identificação**: Detecta "ADITIVO" + "CONTRATO" ou padrões similares.
+- **Campos Extraídos**: `numero_contrato`, `numero_aditivo`, `valor_aditivo`, `vigencia`
 
 ### EmcFaturaExtractor
 
@@ -425,9 +575,9 @@ Extrator especializado para faturas de locação da **EMC Tecnologia**.
 - **Diferencial**: Procura especificamente pelo padrão "TOTAL R$ XX.XXX,XX" no final do documento para garantir a captura do valor correto.
 
 ::: extractors.emc_fatura.EmcFaturaExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ### NetCenterExtractor
 
@@ -438,9 +588,9 @@ Extrator otimizado para boletos do provedor **Net Center Unaí**.
 - **Diferencial**: É um extrator corretivo. Ele primeiro executa o `BoletoExtractor` genérico e depois **corrige** o campo `fornecedor_nome` para um valor fixo e aplica regex mais precisas para o layout específico da Net Center.
 
 ::: extractors.net_center.NetCenterExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ### SicoobExtractor
 
@@ -451,9 +601,9 @@ Extrator otimizado para boletos do banco **SICOOB/BANCOOB** (código 756).
 - **Diferencial**: Assim como o da NetCenter, ele executa o `BoletoExtractor` genérico e depois aplica uma lógica de correção para o `fornecedor_nome`, buscando o texto entre "Beneficiário" e "Agência".
 
 ::: extractors.sicoob.SicoobExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ### NfseCustomVilaVelhaExtractor
 
@@ -464,9 +614,9 @@ Extrator específico para NFS-e da prefeitura de **Vila Velha - ES**.
 - **Diferencial**: Usa regex customizadas para o número da nota e o valor, e então delega para o `NfseGenericExtractor` para preencher os campos restantes (CNPJ, data de emissão, etc.).
 
 ::: extractors.nfse_custom_vila_velha.NfseCustomVilaVelhaExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ### NfseCustomMontesClarosExtractor
 
@@ -477,9 +627,9 @@ Extrator específico para NFS-e da prefeitura de **Montes Claros - MG**.
 - **Diferencial**: Sua principal função é usar regex que priorizam a busca por este número de nota longo e canônico, garantindo a identificação correta do documento.
 
 ::: extractors.nfse_custom_montes_claros.NfseCustomMontesClarosExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
 
 ### OutrosExtractor
 
@@ -488,14 +638,16 @@ Extrator para documentos recorrentes que **não são** NFSe, Boleto ou DANFE.
 - **Problema Resolvido**: Evita que o `NfseGenericExtractor` classifique incorretamente documentos como faturas de locação ou demonstrativos.
 - **Lógica de Identificação**: Ativado pela presença de palavras-chave como "FATURA DE LOCAÇÃO", "DEMONSTRATIVO", "LOCAÇÃO DE EQUIPAMENTOS".
 - **Subtipos Suportados**:
-  - `LOCACAO`: Demonstrativos e contratos de locação de equipamentos
-  - `FATURA`: Faturas de serviços recorrentes (ex: Locaweb, provedores)
+    - `LOCACAO`: Demonstrativos e contratos de locação de equipamentos
+    - `FATURA`: Faturas de serviços recorrentes (ex: Locaweb, provedores)
 - **Campos Extraídos**: `fornecedor_nome`, `cnpj_fornecedor`, `valor_total`, `vencimento`, `data_emissao`
 
 ::: extractors.outros.OutrosExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false
+
+---
 
 ---
 
@@ -508,8 +660,8 @@ Extrator especializado para arquivos **XML** de NF-e e NFS-e.
 - **Tipo de arquivo**: XML (não PDF)
 - **Confiabilidade**: Muito superior ao PDF (dados estruturados)
 - **Formatos suportados**:
-  - NF-e (Nota Fiscal Eletrônica de Produto) - Modelo 55
-  - NFS-e (Nota Fiscal de Serviço Eletrônica) - Padrão ABRASF e variantes municipais
+    - NF-e (Nota Fiscal Eletrônica de Produto) - Modelo 55
+    - NFS-e (Nota Fiscal de Serviço Eletrônica) - Padrão ABRASF e variantes municipais
 
 ### Estrutura XML NF-e
 
@@ -554,15 +706,15 @@ Extrator especializado para arquivos **XML** de NF-e e NFS-e.
 
 Resultado da extração retornado pelo `XmlExtractor`:
 
-| Campo      | Tipo                    | Descrição                              |
-| :--------- | :---------------------- | :------------------------------------- |
-| `success`  | `bool`                  | Se a extração foi bem-sucedida         |
-| `document` | `Optional[DocumentData]`| Documento extraído (InvoiceData/DanfeData) |
-| `doc_type` | `str`                   | Tipo: `NFE` ou `NFSE`                  |
-| `error`    | `Optional[str]`         | Mensagem de erro, se houver            |
-| `raw_data` | `Optional[Dict]`        | Dados brutos do XML parseado           |
+| Campo      | Tipo                     | Descrição                                  |
+| :--------- | :----------------------- | :----------------------------------------- |
+| `success`  | `bool`                   | Se a extração foi bem-sucedida             |
+| `document` | `Optional[DocumentData]` | Documento extraído (InvoiceData/DanfeData) |
+| `doc_type` | `str`                    | Tipo: `NFE` ou `NFSE`                      |
+| `error`    | `Optional[str]`          | Mensagem de erro, se houver                |
+| `raw_data` | `Optional[Dict]`         | Dados brutos do XML parseado               |
 
 ::: extractors.xml_extractor.XmlExtractor
-    options:
-      show_root_heading: true
-      show_source: false
+options:
+show_root_heading: true
+show_source: false

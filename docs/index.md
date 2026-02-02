@@ -161,13 +161,14 @@ Dados enriquecidos e validados prontos para integração:
 
 O sistema inclui uma suite completa de scripts para debugging e diagnóstico de problemas de extração:
 
-| Problema                    | Scripts Recomendados                                        | Descrição                                           |
-| --------------------------- | ----------------------------------------------------------- | --------------------------------------------------- |
-| **Debug de PDF individual** | `inspect_pdf.py`, `test_extractor_routing.py`               | Inspeção rápida de campos extraídos e texto bruto   |
-| **Lotes problemáticos**     | `simple_list.py`, `list_problematic.py`                     | Identificação de lotes com "outros > 0 e valor = 0" |
-| **Problemas OCR**           | `inspect_pdf.py --raw`, `validate_extraction_rules.py`      | Análise de texto e validação após correções         |
-| **Validação de extratores** | `validate_extraction_rules.py`, `test_extractor_routing.py` | Teste após modificar extratores                     |
-| **Análise de e-mails**      | `diagnose_inbox_patterns.py`                                | Identificação de padrões úteis                      |
+| Problema                    | Scripts Recomendados                                     | Descrição                                           |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| **Debug de PDF individual** | `inspect_pdf.py`, `test_extractor_routing.py`            | Inspeção rápida de campos extraídos e texto bruto   |
+| **Lotes problemáticos**     | `simple_list.py`, `list_problematic.py`                  | Identificação de lotes com "outros > 0 e valor = 0" |
+| **Problemas OCR**           | `inspect_pdf.py --raw`, `validate_extraction_rules.py`   | Análise de texto e validação após correções         |
+| **Validação de extratores** | `validate_extraction_rules.py --batch-mode --temp-email` | Teste após modificar extratores                     |
+| **Análise de logs**         | `analyze_logs.py`, `analyze_batch_health.py`             | Análise de logs e saúde dos batches                 |
+| **Análise de e-mails**      | `diagnose_inbox_patterns.py`                             | Identificação de padrões úteis                      |
 
 **Documentação completa**: Consulte o [Guia de Debug](development/debugging_guide.md) para workflows detalhados e a [Referência Rápida](debug/scripts_quick_reference.md) para comandos essenciais.
 
@@ -207,19 +208,35 @@ scrapper/
 │   ├── __init__.py
 │   └── ingestion_service.py    # Serviço de ingestão com lotes
 │
-├── extractors/                 # Extratores especializados
-│   ├── __init__.py
-│   ├── boleto.py
-│   ├── danfe.py
-│   ├── emc_fatura.py
-│   ├── net_center.py
+├── extractors/                 # Extratores especializados (24+ extratores)
+│   ├── __init__.py             # Registry com ordem de prioridade
+│   ├── acimoc_extractor.py     # Boletos ACIMOC
+│   ├── aditivo_contrato.py     # Aditivos de contrato
+│   ├── admin_document.py       # Documentos administrativos
+│   ├── boleto.py               # Boletos genéricos
+│   ├── boleto_gox.py           # Boletos GOX S.A.
+│   ├── boleto_repromaq.py      # Boletos REPROMAQ
+│   ├── comprovante_bancario.py # Comprovantes TED/PIX/DOC
+│   ├── csc_nota_debito.py      # Nota Débito CSC GESTÃO
+│   ├── danfe.py                # DANFE genérico
+│   ├── email_body_extractor.py # Extração de corpo de e-mail
+│   ├── emc_fatura.py           # Faturas EMC Tecnologia
+│   ├── mugo_extractor.py       # Faturas MUGO Telecom
+│   ├── net_center.py           # NFSe Net Center
+│   ├── nfcom_telcables_extractor.py # NFCom Telcables
 │   ├── nfse_custom_montes_claros.py
 │   ├── nfse_custom_vila_velha.py
-│   ├── nfse_generic.py
-│   ├── outros.py
-│   ├── sicoob.py
-│   ├── utils.py
-│   └── xml_extractor.py
+│   ├── nfse_generic.py         # NFSe genérico (fallback)
+│   ├── ocr_danfe.py            # DANFE com OCR corrompido
+│   ├── outros.py               # Documentos diversos
+│   ├── pro_painel_extractor.py # Faturas PRÓ-PAINEL
+│   ├── sabesp.py               # Faturas Sabesp (email body)
+│   ├── sicoob.py               # Boletos Sicoob
+│   ├── tunna_fatura.py         # Faturas Tunna/FishTV
+│   ├── ufinet.py               # Faturas Ufinet
+│   ├── utility_bill.py         # Contas de utilidade
+│   ├── utils.py                # Funções utilitárias
+│   └── xml_extractor.py        # Extração de XMLs fiscais
 │
 ├── strategies/                 # Estratégias de extração de texto
 │   ├── __init__.py
@@ -254,12 +271,17 @@ scrapper/
 │
 ├── scripts/                    # Scripts utilitários e de diagnóstico (debug, análise, validação)
 │   ├── _init_env.py
+│   ├── analyze_batch_health.py        # Análise de saúde dos batches
+│   ├── analyze_logs.py                # Análise de logs do sistema
+│   ├── analyze_report.py              # Análise de relatórios gerados
 │   ├── check_problematic_pdfs.py      # Análise de PDFs problemáticos
 │   ├── clean_dev.py                   # Limpeza de arquivos temporários
 │   ├── consolidate_batches.py         # Consolidação de resultados
 │   ├── diagnose_inbox_patterns.py     # Análise de padrões de inbox
 │   ├── example_batch_processing.py    # Exemplo de processamento
 │   ├── export_to_sheets.py            # Exportação Google Sheets (v0.3.x)
+│   ├── extract_case_simple.py         # Extração simples de casos
+│   ├── extract_cases.py               # Extração de casos para análise
 │   ├── generate_report.py             # Relatório pyright JSON→Markdown
 │   ├── ingest_emails_no_attachment.py # Ingestão de e-mails sem anexo
 │   ├── inspect_pdf.py                 # Inspeção rápida de PDFs
@@ -269,7 +291,7 @@ scrapper/
 │   ├── test_admin_detection.py        # Teste de detecção administrativa
 │   ├── test_docker_setup.py           # Teste de configuração Docker
 │   ├── test_extractor_routing.py      # Teste de roteamento de extratores
-│   └── validate_extraction_rules.py   # Validação de regras de extração
+│   └── validate_extraction_rules.py   # Validação de regras (--temp-email, --batches)
 │
 ├── tests/                      # Testes Unitários e de Integração
 ├── run_ingestion.py            # CLI para ingestão de e-mail (atualizado v0.2.x)

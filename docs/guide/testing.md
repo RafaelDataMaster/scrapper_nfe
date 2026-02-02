@@ -24,12 +24,28 @@ python scripts/validate_extraction_rules.py
 # Modo batch (lotes com metadata.json)
 python scripts/validate_extraction_rules.py --batch-mode
 
+# Modo batch com temp_email (RECOMENDADO para dados reais)
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
+
+# Validar apenas batches específicos (mais rápido)
+python scripts/validate_extraction_rules.py --batch-mode --temp-email --batches batch1,batch2,batch3
+
 # Validação completa com correlação
 python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 
 # Gerar relatório detalhado
 python scripts/validate_extraction_rules.py --report
 ```
+
+### Flags Importantes do `validate_extraction_rules.py`
+
+| Flag                  | Descrição                                              |
+| --------------------- | ------------------------------------------------------ |
+| `--batch-mode`        | Processa lotes com metadata.json em vez de PDFs soltos |
+| `--temp-email`        | Usa pasta `temp_email/` em vez de `failed_cases_pdf/`  |
+| `--batches`           | Lista de batch IDs específicos (separados por vírgula) |
+| `--apply-correlation` | Aplica correlação entre documentos do mesmo lote       |
+| `--report`            | Gera relatório detalhado em formato Markdown           |
 
 ### Outputs Gerados
 
@@ -64,8 +80,11 @@ python scripts/test_extractor_routing.py data/test/boletos/exemplo.pdf
 # Testar com texto OCR
 python scripts/test_extractor_routing.py --texto caminho/do/pdf.pdf
 
-# Testar múltiplos PDFs
+# Testar múltiplos PDFs (Linux/Mac)
 find data/test/boletos -name "*.pdf" | xargs -I {} python scripts/test_extractor_routing.py {}
+
+# Testar múltiplos PDFs (Windows PowerShell)
+Get-ChildItem data/test/boletos -Filter "*.pdf" | ForEach-Object { python scripts/test_extractor_routing.py $_.FullName }
 ```
 
 ### Criar Novos Casos de Teste
@@ -89,6 +108,12 @@ python scripts/list_problematic.py
 
 # Lista simples de problemas
 python scripts/simple_list.py
+
+# Analisar saúde dos batches
+python scripts/analyze_batch_health.py
+
+# Analisar logs do dia
+python scripts/analyze_logs.py --today
 ```
 
 ### Validação de Correlação
@@ -120,6 +145,9 @@ python scripts/validate_extraction_rules.py --timeout 10
 # Testar com diferentes estratégias de OCR
 python scripts/validate_extraction_rules.py --strategy ocr
 python scripts/validate_extraction_rules.py --strategy native
+
+# Validar apenas batches afetados (mais rápido para CI)
+python scripts/validate_extraction_rules.py --batch-mode --temp-email --batches batch_modificado
 ```
 
 ### Métricas de Performance
@@ -163,10 +191,16 @@ python scripts/check_problematic_pdfs.py
 
 # Monitorar qualidade de OCR
 python scripts/inspect_pdf.py arquivo.pdf --raw
-python scripts/validate_extraction_rules.py --batch-mode
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
 
 # Analisar padrões de e-mail
 python scripts/diagnose_inbox_patterns.py --limit 100
+
+# Analisar logs em busca de erros
+python scripts/analyze_logs.py --errors-only
+
+# Analisar relatórios gerados
+python scripts/analyze_report.py
 ```
 
 ### Métricas de Qualidade
@@ -293,5 +327,5 @@ Mantenha um arquivo `data/baseline/performance_baseline.json` com:
 
 ---
 
-**Última atualização:** 2025-01-21  
+**Última atualização:** 2026-02-02  
 **Versão:** v0.3.x (Google Sheets Export)

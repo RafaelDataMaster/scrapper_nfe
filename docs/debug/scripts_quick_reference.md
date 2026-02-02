@@ -35,12 +35,12 @@ python run_ingestion.py --timeout 600            # Timeout customizado (10 min)
 
 Os scripts estão organizados em quatro categorias principais:
 
-| Categoria                 | Scripts Principais                                                                                | Propósito                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 📊 **Análise de Dados**   | `list_problematic.py`, `simple_list.py`, `check_problematic_pdfs.py`, `generate_report.py`        | Análise de lotes problemáticos, relatórios, identificação de padrões |
-| 🔍 **Debug Específico**   | `inspect_pdf.py`, `diagnose_inbox_patterns.py`, `repro_extraction_failure.py`                     | Diagnóstico de problemas individuais, análise de texto               |
-| 🧪 **Testes e Validação** | `test_extractor_routing.py`, `validate_extraction_rules.py`, `test_admin_detection.py`            | Teste de extratores, validação de regras, detecção administrativa    |
-| 🔧 **Utilitários**        | `export_to_sheets.py`, `ingest_emails_no_attachment.py`, `consolidate_batches.py`, `clean_dev.py` | Exportação, ingestão, consolidação, limpeza                          |
+| Categoria                 | Scripts Principais                                                                                                                              | Propósito                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 📊 **Análise de Dados**   | `list_problematic.py`, `simple_list.py`, `check_problematic_pdfs.py`, `generate_report.py`, `analyze_batch_health.py`, `analyze_report.py`      | Análise de lotes problemáticos, relatórios, identificação de padrões |
+| 🔍 **Debug Específico**   | `inspect_pdf.py`, `diagnose_inbox_patterns.py`, `analyze_logs.py`                                                                               | Diagnóstico de problemas individuais, análise de texto e logs        |
+| 🧪 **Testes e Validação** | `test_extractor_routing.py`, `validate_extraction_rules.py`, `test_admin_detection.py`                                                          | Teste de extratores, validação de regras, detecção administrativa    |
+| 🔧 **Utilitários**        | `export_to_sheets.py`, `ingest_emails_no_attachment.py`, `consolidate_batches.py`, `clean_dev.py`, `extract_cases.py`, `extract_case_simple.py` | Exportação, ingestão, consolidação, limpeza, extração de casos       |
 
 ## Comandos Essenciais
 
@@ -55,6 +55,9 @@ python scripts/inspect_pdf.py arquivo.pdf --raw
 
 # Testar qual extrator seria usado
 python scripts/test_extractor_routing.py caminho/completo/arquivo.pdf
+
+# Analisar logs do dia
+python scripts/analyze_logs.py --today
 ```
 
 ### 2. **Identificar Lotes Problemáticos**
@@ -66,11 +69,11 @@ python scripts/simple_list.py
 # Análise detalhada com classificação de problemas
 python scripts/list_problematic.py
 
-# Foco em NFSEs mal classificadas como administrativas
-python scripts/analyze_admin_nfse.py
-
 # Análise dos PDFs problemáticos
 python scripts/check_problematic_pdfs.py
+
+# Analisar saúde dos batches
+python scripts/analyze_batch_health.py
 ```
 
 ### 3. **Reprocessar Lotes**
@@ -110,6 +113,10 @@ python scripts/diagnose_inbox_patterns.py --limit 200
 
 # Ingestão de e-mails sem anexo (cria avisos)
 python scripts/ingest_emails_no_attachment.py --limit 50
+
+# Extrair casos para análise
+python scripts/extract_cases.py
+python scripts/extract_case_simple.py
 ```
 
 ### 6. **Manutenção e Limpeza**
@@ -132,7 +139,7 @@ python run_ingestion.py --status
 | **Campo não extraído de PDF**            | `inspect_pdf.py`               | `test_extractor_routing.py`             | Use `--raw` para ver texto completo            |
 | **NFSE classificada como "outros"**      | `check_problematic_pdfs.py`    | `list_problematic.py`                   | Analisa casos específicos de valor zero        |
 | **Lote com status DIVERGENTE**           | `list_problematic.py`          | `simple_list.py`                        | Lista completa com comandos de reprocessamento |
-| **Texto com caracteres estranhos (OCR)** | `debug_pdf_text.py`            | `validate_extraction_rules.py`          | Use validação após ajustar regex               |
+| **Texto com caracteres estranhos (OCR)** | `inspect_pdf.py --raw`         | `validate_extraction_rules.py`          | Use validação após ajustar regex               |
 | **Extrator não selecionado**             | `test_extractor_routing.py`    | `inspect_pdf.py`                        | Testa roteamento de extratores                 |
 | **Reprocessar após erro**                | `run_ingestion.py --reprocess` | `run_ingestion.py --reprocess-timeouts` | Resume automaticamente do checkpoint           |
 | **Exportação para Google Sheets**        | `export_to_sheets.py`          | -                                       | Exporta relatórios para planilha               |
@@ -231,22 +238,34 @@ python scripts/generate_report.py
 python scripts/clean_dev.py
 ```
 
-## Scripts Removidos (Funcionalidade Migrada)
+## Scripts Disponíveis (Lista Completa)
 
-Os seguintes scripts foram consolidados ou substituídos:
+Lista atualizada de todos os scripts na pasta `scripts/`:
 
-| Script Removido                   | Substituído Por                                         | Motivo                          |
-| --------------------------------- | ------------------------------------------------------- | ------------------------------- |
-| `analyze_admin_nfse.py`           | `check_problematic_pdfs.py`                             | Funcionalidade consolidada      |
-| `analyze_all_batches.py`          | `list_problematic.py` + `simple_list.py`                | Funcionalidade consolidada      |
-| `analyze_emails_no_attachment.py` | `diagnose_inbox_patterns.py`                            | Funcionalidade consolidada      |
-| `debug_pdf_text.py`               | `inspect_pdf.py --raw`                                  | Funcionalidade unificada        |
-| `debug_batch.py`                  | `run_ingestion.py --batch-folder`                       | Funcionalidade migrada          |
-| `diagnose_failures.py`            | `validate_extraction_rules.py`                          | Funcionalidade consolidada      |
-| `diagnose_ocr_issue.py`           | `validate_extraction_rules.py` + `inspect_pdf.py --raw` | Funcionalidade duplicada        |
-| `diagnose_import_issues.py`       | Validação automática no startup                         | Problemas de import resolvidos  |
-| `demo_pairing.py`                 | Documentação e exemplos                                 | Apenas demonstrativo            |
-| `repro_extraction_failure.py`     | `validate_extraction_rules.py`                          | Coberto pela validação completa |
+| Script                           | Descrição                                                             |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `_init_env.py`                   | Configuração de paths para importação de módulos                      |
+| `analyze_batch_health.py`        | Análise de saúde dos batches processados                              |
+| `analyze_logs.py`                | Análise de logs do sistema                                            |
+| `analyze_report.py`              | Análise de relatórios gerados                                         |
+| `check_problematic_pdfs.py`      | Análise de PDFs problemáticos                                         |
+| `clean_dev.py`                   | Limpeza de arquivos temporários de desenvolvimento                    |
+| `consolidate_batches.py`         | Consolidação de resultados de múltiplos batches                       |
+| `diagnose_inbox_patterns.py`     | Análise de padrões de e-mail na caixa de entrada                      |
+| `example_batch_processing.py`    | Exemplo de processamento de lote completo                             |
+| `export_to_sheets.py`            | Exportação para Google Sheets                                         |
+| `extract_case_simple.py`         | Extração simples de casos para análise                                |
+| `extract_cases.py`               | Extração de casos para análise                                        |
+| `generate_report.py`             | Geração de relatório pyright JSON→Markdown                            |
+| `ingest_emails_no_attachment.py` | Ingestão de e-mails sem anexos                                        |
+| `inspect_pdf.py`                 | Inspeção rápida de PDFs (campos, texto bruto)                         |
+| `list_problematic.py`            | Lista detalhada de lotes problemáticos                                |
+| `repro_extraction_failure.py`    | Reprodução de falhas de extração                                      |
+| `simple_list.py`                 | Lista simples de lotes problemáticos                                  |
+| `test_admin_detection.py`        | Teste de detecção de documentos administrativos                       |
+| `test_docker_setup.py`           | Teste de configuração Docker                                          |
+| `test_extractor_routing.py`      | Teste de roteamento de extratores                                     |
+| `validate_extraction_rules.py`   | Validação de regras de extração (suporta `--temp-email`, `--batches`) |
 
 ## Referência de Comandos do `run_ingestion.py`
 
@@ -270,5 +289,5 @@ Os seguintes scripts foram consolidados ou substituídos:
 
 **Nota**: A maioria dos scripts aceita argumentos `--help` para ver opções específicas.
 
-**Última atualização**: 2026-01-27  
+**Última atualização**: 2026-02-02  
 **Localização**: `scrapper/scripts/`

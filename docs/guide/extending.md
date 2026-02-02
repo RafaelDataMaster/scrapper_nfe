@@ -7,6 +7,9 @@ Este guia cobre:
 1. Como adicionar novos extratores de NFS-e
 2. Como trabalhar com boletos
 3. Como integrar com o batch processing (v0.2.x)
+4. Padrões de código SOLID e boas práticas
+5. Logging adequado para debug
+6. Tolerância a OCR corrompido
 
 ## Visão Geral
 
@@ -25,47 +28,143 @@ Crie um novo arquivo em `extractors/`, por exemplo: `extractors/curitiba.py`.
 Use o modelo abaixo como base. É fundamental decorar a classe com `@register_extractor` para que ela seja reconhecida pelo sistema.
 
 ```python
+"""
+Extrator de NFSe da Prefeitura de Curitiba - PR.
+
+Este módulo implementa a extração de dados específicos do layout de Curitiba.
+
+Campos extraídos:
+    - numero_nota: Número da NFS-e
+    - valor_total: Valor total da nota
+    - cnpj_prestador: CNPJ do prestador de serviços
+    - data_emissao: Data de emissão
+
+Identificação:
+    - Termos: "PREFEITURA MUNICIPAL DE CURITIBA"
+"""
+import logging
 import re
-from typing import Dict, Any
+from typing import Any, Dict, Optional
+
 from core.extractors import BaseExtractor, register_extractor
+from extractors.utils import normalize_text_for_extraction, parse_br_money, parse_date_br
+
+# Obter logger para este módulo
+logger = logging.getLogger(__name__)
+
 
 @register_extractor
 class CuritibaExtractor(BaseExtractor):
     """
     Extrator para Notas Fiscais de Serviço de Curitiba - PR.
+
+    Identifica documentos pela presença de "PREFEITURA MUNICIPAL DE CURITIBA".
+    Extrai número da nota, valor total, CNPJ e data de emissão.
     """
+
+    # Padrões de regex (OCR-tolerantes)
+    # Use [^\w\s]? para tolerar caracteres corrompidos pelo OCR
+    PATTERN_NUMERO = r"N[^\w\s]?\s*(?:da\s+)?Nota[:\s]*(\d+)"
+    PATTERN_VALOR = r"Valor\s+Total[:\s]*R?\$?\s*([\d\.,]+)"
 
     @classmethod
     def can_handle(cls, text: str) -> bool:
         """
-        Retorna True se este extrator deve ser usado para o texto fornecido.
-        Geralmente busca por palavras-chave no cabeçalho.
+        Identifica se este é o extrator correto.
+
+        Args:
+            text: Texto extraído do PDF.
+
+        Returns:
+            True se o documento é de Curitiba.
         """
-        return "PREFEITURA MUNICIPAL DE CURITIBA" in text.upper()
+        if not text:
+            logger.debug(f"{cls.__name__}: texto vazio, recusando")
+            return False
+
+        text_upper = text.upper()
+        result = "PREFEITURA MUNICIPAL DE CURITIBA" in text_upper
+
+        if result:
+            logger.info(f"{cls.__name__} aceitou documento")
+        else:
+            logger.debug(f"{cls.__name__} recusou: padrão não encontrado")
+
+        return result
 
     def extract(self, text: str) -> Dict[str, Any]:
         """
         Extrai os dados específicos do layout.
+
+        Args:
+            text: Texto extraído do PDF.
+
+        Returns:
+            Dicionário com dados extraídos.
         """
-        data = {}
+        logger.info(f"{self.__class__.__name__}.extract iniciado")
 
-        # Exemplo de extração de Número da Nota
-        # Procura por "Número da Nota: 12345"
-        match_numero = re.search(r'Número da Nota:\s*(\d+)', text)
-        data['numero_nota'] = match_numero.group(1) if match_numero else None
+        text = normalize_text_for_extraction(text or "")
 
-        # Exemplo de extração de Valor
-        # Procura por "Valor Total: R$ 1.234,56"
-        match_valor = re.search(r'Valor Total:\s*R\$\s?([\d.,]+)', text)
-        if match_valor:
-            valor_str = match_valor.group(1).replace('.', '').replace(',', '.')
-            data['valor_total'] = float(valor_str)
-        else:
-            data['valor_total'] = 0.0
+        data: Dict[str, Any] = {
+            "tipo_documento": "NFSE",
+        }
 
-        # Adicione outros campos conforme necessário (CNPJ, Data, etc.)
+        # Extração de Número da Nota
+        data["numero_nota"] = self._extract_numero(text)
 
+        # Extração de Valor
+        data["valor_total"] = self._extract_valor(text)
+
+        # Extração de CNPJ
+        data["cnpj_prestador"] = self._extract_cnpj(text)
+
+        # Extração de Data
+        data["data_emissao"] = self._extract_data(text)
+
+        logger.info(f"Extração concluída com {len([v for v in data.values() if v])} campos preenchidos")
         return data
+
+    def _extract_numero(self, text: str) -> Optional[str]:
+        """Extrai número da nota com logging."""
+        match = re.search(self.PATTERN_NUMERO, text, re.IGNORECASE)
+        if match:
+            numero = match.group(1)
+            logger.info(f"Número extraído: {numero}")
+            return numero
+        logger.warning("Número da nota não encontrado")
+        return None
+
+    def _extract_valor(self, text: str) -> float:
+        """Extrai valor total usando utils."""
+        match = re.search(self.PATTERN_VALOR, text, re.IGNORECASE)
+        if match:
+            valor = parse_br_money(match.group(1))
+            logger.info(f"Valor extraído: R$ {valor:.2f}")
+            return valor
+        logger.warning("Valor não encontrado")
+        return 0.0
+
+    def _extract_cnpj(self, text: str) -> Optional[str]:
+        """Extrai CNPJ do prestador."""
+        # Padrão: XX.XXX.XXX/XXXX-XX
+        match = re.search(r"(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})", text)
+        if match:
+            cnpj = match.group(1)
+            logger.info(f"CNPJ extraído: {cnpj}")
+            return cnpj
+        logger.debug("CNPJ não encontrado")
+        return None
+
+    def _extract_data(self, text: str) -> Optional[str]:
+        """Extrai data de emissão."""
+        match = re.search(r"Data\s+(?:de\s+)?Emiss[ãa]o[:\s]*(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
+        if match:
+            data = parse_date_br(match.group(1))
+            logger.info(f"Data extraída: {data}")
+            return data
+        logger.debug("Data de emissão não encontrada")
+        return None
 ```
 
 ### 3. Teste o Novo Extrator
@@ -79,13 +178,58 @@ Basta colocar um PDF correspondente na pasta `nfs/` e rodar o `main.py`. O siste
 
 ## Dicas para Expressões Regulares (Regex)
 
+### Básico
+
 - Use `(?i)` no início da regex para ignorar maiúsculas/minúsculas.
 - Use `\s*` para lidar com espaços variáveis entre o rótulo e o valor.
 - Teste suas regex em sites como [regex101.com](https://regex101.com/).
 
-## Prioridade de Execução
+### Tolerância a OCR
 
-O sistema verifica os extratores na ordem em que são importados. O `NfseGenericExtractor` é geralmente o último recurso para NFS-e. Se você tiver conflitos (duas cidades com cabeçalhos muito parecidos), torne sua verificação no `can_handle` mais específica.
+PDFs processados com OCR podem ter caracteres corrompidos. Use padrões tolerantes:
+
+```python
+# ❌ Regex rígido (falha com OCR)
+pattern = r"Nº\s*:\s*(\d+)"
+
+# ✅ Regex tolerante (funciona com OCR)
+pattern = r"N[^\w\s]?\s*[:\.]\s*(\d+)"  # Aceita Nº, N., N�, etc.
+```
+
+**Padrões comuns de corrupção OCR:**
+
+| Original | OCR pode gerar     | Solução              |
+| -------- | ------------------ | -------------------- | --------- |
+| `Nº`     | `N�`, `N.`, `N `   | `N[^\w\s]?`          |
+| `R$`     | `R5`, `RS`, `R `   | `R[\$5S]?`           |
+| `1`      | `l`, `I`, `        | `                    | `[1lI\|]` |
+| `0`      | `O`, `o`           | `[0Oo]`              |
+| espaço   | `Ê`, caractere 160 | `.replace('Ê', ' ')` |
+
+## Prioridade de Execução (Registry)
+
+O sistema verifica os extratores na ordem em que são importados em `extractors/__init__.py`.
+
+**Regra fundamental:** Extratores específicos devem vir ANTES dos genéricos.
+
+```python
+# Em extractors/__init__.py
+# ✅ Correto - Específico antes
+from .curitiba import CuritibaExtractor          # Específico
+from .nfse_generic import NfseGenericExtractor   # Genérico (fallback)
+
+# ❌ Incorreto - Genérico primeiro
+from .nfse_generic import NfseGenericExtractor   # Pega tudo!
+from .curitiba import CuritibaExtractor          # Nunca chega aqui
+```
+
+### Onde Inserir Novo Extrator
+
+1. **Extrator de fornecedor específico** (CNPJ único): No início, junto com outros específicos
+2. **Extrator de tipo de documento**: Antes dos genéricos do mesmo tipo
+3. **Extrator genérico/fallback**: No final
+
+Consulte a [lista completa de extratores](../api/extractors.md) para ver a ordem atual.
 
 ---
 
@@ -256,8 +400,48 @@ python scripts/validate_extraction_rules.py --batch-mode --apply-correlation
 
 ---
 
+---
+
+## Checklist para Novo Extrator
+
+Antes de finalizar, verifique:
+
+### Funcional
+
+- [ ] `can_handle()` identifica corretamente o documento
+- [ ] `can_handle()` NÃO aceita documentos de outros tipos
+- [ ] `extract()` retorna todos os campos esperados
+- [ ] Campos obrigatórios preenchidos (`tipo_documento`, `valor_total`)
+- [ ] Regex são OCR-tolerantes
+- [ ] Testado com PDFs reais do fornecedor
+
+### Código (basedpyright)
+
+- [ ] Type hints em todos os métodos públicos
+- [ ] Docstrings em módulo, classe e métodos públicos
+- [ ] Sem imports não usados
+- [ ] Sem erros do basedpyright
+
+### Logging
+
+- [ ] Logger obtido no topo: `logger = logging.getLogger(__name__)`
+- [ ] `can_handle()` loga decisão (DEBUG quando recusa, INFO quando aceita)
+- [ ] `extract()` loga início e fim (INFO)
+- [ ] Campos extraídos logados (INFO)
+- [ ] Campos ausentes logados (WARNING)
+
+### Integração
+
+- [ ] Extrator registrado em `extractors/__init__.py`
+- [ ] Ordem correta no registry (específico antes de genérico)
+- [ ] Adicionado ao `__all__` do módulo
+- [ ] Validação executada: `python scripts/validate_extraction_rules.py --batch-mode --temp-email`
+
+---
+
 ## Próximos Passos
 
 - [Guia de Debug](../development/debugging_guide.md) - Técnicas avançadas de debug de PDFs
 - [Migração Batch](../development/MIGRATION_BATCH_PROCESSING.md) - Detalhes da migração v0.1.x → v0.2.x
 - [API Reference](../api/overview.md) - Documentação técnica completa
+- [Lista de Extratores](../api/extractors.md) - Todos os extratores disponíveis

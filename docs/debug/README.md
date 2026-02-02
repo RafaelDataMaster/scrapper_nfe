@@ -55,6 +55,9 @@ Scripts para análise de lotes problemáticos, geração de relatórios e identi
 - `list_problematic.py` - Versão mais completa com classificação de tipos de problemas
 - `check_problematic_pdfs.py` - Analisa PDFs de casos problemáticos onde "outros" têm valor zero
 - `generate_report.py` - Converte relatório pyright JSON para markdown formatado
+- `analyze_batch_health.py` - Análise de saúde dos batches processados
+- `analyze_report.py` - Análise de relatórios gerados
+- `analyze_logs.py` - Análise de logs do sistema
 
 ### 🔍 Diagnóstico e Debug Específico
 
@@ -62,15 +65,15 @@ Scripts para diagnóstico de problemas individuais, análise de texto e qualidad
 
 - `inspect_pdf.py` - Inspeção rápida de PDFs (busca automática em `failed_cases_pdf/` e `temp_email/`)
 - `diagnose_inbox_patterns.py` - Analisa padrões de e-mail na caixa de entrada
-- `repro_extraction_failure.py` - Reproduz falhas de extração para análise
 
 ### 🧪 Testes e Validação
 
 Scripts para teste de extratores, validação de regras e detecção de documentos.
 
 - `test_extractor_routing.py` - Testa qual extrator seria usado para um PDF específico
-- `validate_extraction_rules.py` - Valida regras de extração contra casos conhecidos (substitui scripts de diagnóstico específicos)
+- `validate_extraction_rules.py` - Valida regras de extração (suporta `--temp-email`, `--batches`)
 - `test_admin_detection.py` - Testa padrões de detecção de documentos administrativos
+- `repro_extraction_failure.py` - Reproduz falhas de extração para análise
 
 ### 🔧 Utilitários e Operações
 
@@ -80,6 +83,8 @@ Scripts para exportação, ingestão, consolidação e outras operações.
 - `ingest_emails_no_attachment.py` - Ingestão de e-mails sem anexos para criação de avisos
 - `consolidate_batches.py` - Consolida resultados de múltiplos batches
 - `clean_dev.py` - Limpeza de arquivos temporários de desenvolvimento
+- `extract_cases.py` - Extração de casos para análise
+- `extract_case_simple.py` - Extração simples de casos para análise
 - `_init_env.py` - Configuração de paths para importação de módulos
 - `example_batch_processing.py` - Exemplo de processamento de lote completo
 
@@ -89,7 +94,7 @@ Scripts para exportação, ingestão, consolidação e outras operações.
 
 1. `python scripts/inspect_pdf.py arquivo.pdf --raw`
 2. Analise o texto bruto e ajuste regex no extrator correspondente
-3. `python scripts/validate_extraction_rules.py --batch-mode` para validar
+3. `python scripts/validate_extraction_rules.py --batch-mode --temp-email` para validar
 
 ### Para múltiplos lotes com problemas no CSV final:
 
@@ -102,7 +107,7 @@ Scripts para exportação, ingestão, consolidação e outras operações.
 
 1. `python scripts/inspect_pdf.py arquivo.pdf --raw` para análise do texto extraído
 2. Considere normalizar texto nos extratores (ex: `text.replace('Ê', ' ')`)
-3. Use `python scripts/validate_extraction_rules.py` para validar correções
+3. Use `python scripts/validate_extraction_rules.py --batch-mode --temp-email` para validar correções
 
 ### Para reprocessar após interrupção:
 
@@ -124,10 +129,20 @@ Para manter a saúde do sistema:
 
 ```bash
 # Validação completa das regras
-python scripts/validate_extraction_rules.py --batch-mode
+python scripts/validate_extraction_rules.py --batch-mode --temp-email
+
+# Validar apenas batches específicos (mais rápido)
+python scripts/validate_extraction_rules.py --batch-mode --temp-email --batches batch1,batch2
 
 # Análise de padrões de inbox (ajustar filtros)
 python scripts/diagnose_inbox_patterns.py --all --resume
+
+# Análise de logs
+python scripts/analyze_logs.py --today
+python scripts/analyze_logs.py --errors-only
+
+# Análise de saúde dos batches
+python scripts/analyze_batch_health.py
 
 # Limpeza de desenvolvimento
 python scripts/clean_dev.py
@@ -136,22 +151,34 @@ python scripts/clean_dev.py
 python scripts/generate_report.py
 ```
 
-## Scripts Removidos (Funcionalidade Migrada)
+## Scripts Disponíveis (Lista Completa)
 
-Os seguintes scripts foram removidos por terem funcionalidades cobertas por outros scripts:
+Lista atualizada de todos os scripts na pasta `scripts/`:
 
-| Script Removido                   | Substituído Por                                         |
-| --------------------------------- | ------------------------------------------------------- |
-| `analyze_admin_nfse.py`           | `check_problematic_pdfs.py`                             |
-| `analyze_all_batches.py`          | `list_problematic.py` + `simple_list.py`                |
-| `analyze_emails_no_attachment.py` | `diagnose_inbox_patterns.py`                            |
-| `debug_pdf_text.py`               | `inspect_pdf.py --raw`                                  |
-| `debug_batch.py`                  | `run_ingestion.py --batch-folder`                       |
-| `diagnose_failures.py`            | `validate_extraction_rules.py`                          |
-| `diagnose_ocr_issue.py`           | `validate_extraction_rules.py` + `inspect_pdf.py --raw` |
-| `diagnose_import_issues.py`       | Validação automática no `run_ingestion.py`              |
-| `demo_pairing.py`                 | Documentação em `run_ingestion.py` e exemplos           |
-| `repro_extraction_failure.py`     | `validate_extraction_rules.py` com casos de teste       |
+| Script                           | Descrição                                                             |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `_init_env.py`                   | Configuração de paths para importação de módulos                      |
+| `analyze_batch_health.py`        | Análise de saúde dos batches processados                              |
+| `analyze_logs.py`                | Análise de logs do sistema                                            |
+| `analyze_report.py`              | Análise de relatórios gerados                                         |
+| `check_problematic_pdfs.py`      | Análise de PDFs problemáticos                                         |
+| `clean_dev.py`                   | Limpeza de arquivos temporários de desenvolvimento                    |
+| `consolidate_batches.py`         | Consolidação de resultados de múltiplos batches                       |
+| `diagnose_inbox_patterns.py`     | Análise de padrões de e-mail na caixa de entrada                      |
+| `example_batch_processing.py`    | Exemplo de processamento de lote completo                             |
+| `export_to_sheets.py`            | Exportação para Google Sheets                                         |
+| `extract_case_simple.py`         | Extração simples de casos para análise                                |
+| `extract_cases.py`               | Extração de casos para análise                                        |
+| `generate_report.py`             | Geração de relatório pyright JSON→Markdown                            |
+| `ingest_emails_no_attachment.py` | Ingestão de e-mails sem anexos                                        |
+| `inspect_pdf.py`                 | Inspeção rápida de PDFs (campos, texto bruto)                         |
+| `list_problematic.py`            | Lista detalhada de lotes problemáticos                                |
+| `repro_extraction_failure.py`    | Reprodução de falhas de extração                                      |
+| `simple_list.py`                 | Lista simples de lotes problemáticos                                  |
+| `test_admin_detection.py`        | Teste de detecção de documentos administrativos                       |
+| `test_docker_setup.py`           | Teste de configuração Docker                                          |
+| `test_extractor_routing.py`      | Teste de roteamento de extratores                                     |
+| `validate_extraction_rules.py`   | Validação de regras de extração (suporta `--temp-email`, `--batches`) |
 
 ## Contribuindo com Novos Scripts
 
@@ -179,5 +206,5 @@ scrapper/
 
 ---
 
-**Última atualização**: 2026-01-27  
+**Última atualização**: 2026-02-02  
 **Localização**: `scrapper/scripts/` e `scrapper/docs/debug/`
