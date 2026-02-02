@@ -9,81 +9,81 @@
 
 ### Busca e Filtro
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `grep "termo" arquivo.txt` | `Select-String "termo" arquivo.txt` | Busca texto em arquivo | `Select-String "FISHTV" data/output/relatorio_lotes.csv` |
-| `grep -i "termo" arquivo.txt` | `Select-String "termo" arquivo.txt -CaseSensitive:$false` | Busca case-insensitive | `Select-String "fishtv" arquivo.csv -CaseSensitive:$false` |
-| `grep -r "termo" pasta/` | `Get-ChildItem -Re pasta/ \| Select-String "termo"` | Busca recursiva | `Get-ChildItem -Re temp_email/ \| Select-String "TUNNA"` |
+| Unix                          | PowerShell                                                            | Descrição              | Exemplo                                                               |
+| ----------------------------- | --------------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------- |
+| `grep "termo" arquivo.txt`    | `Select-String "termo" arquivo.txt`                                   | Busca texto em arquivo | `Select-String "FISHTV" data/output/relatorio_lotes.csv`              |
+| `grep -i "termo" arquivo.txt` | `Select-String "termo" arquivo.txt -CaseSensitive:$false`             | Busca case-insensitive | `Select-String "fishtv" arquivo.csv -CaseSensitive:$false`            |
+| `grep -r "termo" pasta/`      | `Get-ChildItem -Re pasta/ \| Select-String "termo"`                   | Busca recursiva        | `Get-ChildItem -Re temp_email/ \| Select-String "TUNNA"`              |
 | `grep -n "termo" arquivo.txt` | `Select-String "termo" arquivo.txt \| Select-Object LineNumber, Line` | Mostra número da linha | `Select-String "valor" arquivo.csv \| Select-Object LineNumber, Line` |
 
 ---
 
 ### Visualização de Arquivos
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `cat arquivo.txt` | `Get-Content arquivo.txt` | Mostra conteúdo completo | `Get-Content data/output/relatorio_lotes.csv` |
-| `cat arquivo.txt` | `type arquivo.txt` | Alternativa curta | `type arquivo.txt` |
-| `head -n 10 arquivo.txt` | `Get-Content arquivo.txt \| Select-Object -First 10` | Primeiras 10 linhas | `Get-Content arquivo.csv \| Select-Object -First 10` |
-| `tail -n 10 arquivo.txt` | `Get-Content arquivo.txt \| Select-Object -Last 10` | Últimas 10 linhas | `Get-Content arquivo.csv \| Select-Object -Last 10` |
-| `head -n 5 arquivo.txt` | `Get-Content arquivo.txt -TotalCount 5` | Alternativa direta | `Get-Content arquivo.txt -TotalCount 5` |
-| `less arquivo.txt` | `Get-Content arquivo.txt \| Out-Host -Paging` | Paginação | `Get-Content arquivo.txt \| Out-Host -Paging` |
-| `more arquivo.txt` | `Get-Content arquivo.txt \| Out-Host -Paging` | Paginação | `Get-Content arquivo.txt \| Out-Host -Paging` |
+| Unix                     | PowerShell                                           | Descrição                | Exemplo                                              |
+| ------------------------ | ---------------------------------------------------- | ------------------------ | ---------------------------------------------------- |
+| `cat arquivo.txt`        | `Get-Content arquivo.txt`                            | Mostra conteúdo completo | `Get-Content data/output/relatorio_lotes.csv`        |
+| `cat arquivo.txt`        | `type arquivo.txt`                                   | Alternativa curta        | `type arquivo.txt`                                   |
+| `head -n 10 arquivo.txt` | `Get-Content arquivo.txt \| Select-Object -First 10` | Primeiras 10 linhas      | `Get-Content arquivo.csv \| Select-Object -First 10` |
+| `tail -n 10 arquivo.txt` | `Get-Content arquivo.txt \| Select-Object -Last 10`  | Últimas 10 linhas        | `Get-Content arquivo.csv \| Select-Object -Last 10`  |
+| `head -n 5 arquivo.txt`  | `Get-Content arquivo.txt -TotalCount 5`              | Alternativa direta       | `Get-Content arquivo.txt -TotalCount 5`              |
+| `less arquivo.txt`       | `Get-Content arquivo.txt \| Out-Host -Paging`        | Paginação                | `Get-Content arquivo.txt \| Out-Host -Paging`        |
+| `more arquivo.txt`       | `Get-Content arquivo.txt \| Out-Host -Paging`        | Paginação                | `Get-Content arquivo.txt \| Out-Host -Paging`        |
 
 ---
 
 ### Manipulação de Arquivos e Pastas
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `ls` | `Get-ChildItem` ou `dir` ou `gci` | Lista arquivos | `Get-ChildItem temp_email/` |
-| `ls -la` | `Get-ChildItem` | Lista detalhada (já é padrão) | `Get-ChildItem` |
-| `ls *.pdf` | `Get-ChildItem *.pdf` | Lista com filtro | `Get-ChildItem temp_email/*.pdf` |
-| `pwd` | `Get-Location` ou `pwd` | Mostra diretório atual | `Get-Location` |
-| `cd pasta/` | `cd pasta/` ou `Set-Location pasta/` | Muda diretório | `cd temp_email/` |
-| `cp arquivo destino/` | `Copy-Item arquivo destino/` | Copia arquivo | `Copy-Item arquivo.txt backup/` |
-| `cp -r pasta/ destino/` | `Copy-Item pasta/ destino/ -Recurse` | Copia recursivo | `Copy-Item temp_email/ backup/ -Recurse` |
-| `mv arquivo destino/` | `Move-Item arquivo destino/` | Move arquivo | `Move-Item arquivo.txt pasta/` |
-| `rm arquivo.txt` | `Remove-Item arquivo.txt` | Remove arquivo | `Remove-Item arquivo.txt` |
-| `rm -r pasta/` | `Remove-Item pasta/ -Recurse` | Remove pasta | `Remove-Item temp_email/old/ -Recurse` |
-| `mkdir pasta/` | `New-Item pasta/ -ItemType Directory` | Cria pasta | `New-Item nova_pasta/ -ItemType Directory` |
-| `mkdir pasta/` | `mkdir pasta/` | Alternativa curta | `mkdir nova_pasta` |
-| `touch arquivo.txt` | `New-Item arquivo.txt -ItemType File` | Cria arquivo vazio | `New-Item arquivo.txt -ItemType File` |
+| Unix                    | PowerShell                            | Descrição                     | Exemplo                                    |
+| ----------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------ |
+| `ls`                    | `Get-ChildItem` ou `dir` ou `gci`     | Lista arquivos                | `Get-ChildItem temp_email/`                |
+| `ls -la`                | `Get-ChildItem`                       | Lista detalhada (já é padrão) | `Get-ChildItem`                            |
+| `ls *.pdf`              | `Get-ChildItem *.pdf`                 | Lista com filtro              | `Get-ChildItem temp_email/*.pdf`           |
+| `pwd`                   | `Get-Location` ou `pwd`               | Mostra diretório atual        | `Get-Location`                             |
+| `cd pasta/`             | `cd pasta/` ou `Set-Location pasta/`  | Muda diretório                | `cd temp_email/`                           |
+| `cp arquivo destino/`   | `Copy-Item arquivo destino/`          | Copia arquivo                 | `Copy-Item arquivo.txt backup/`            |
+| `cp -r pasta/ destino/` | `Copy-Item pasta/ destino/ -Recurse`  | Copia recursivo               | `Copy-Item temp_email/ backup/ -Recurse`   |
+| `mv arquivo destino/`   | `Move-Item arquivo destino/`          | Move arquivo                  | `Move-Item arquivo.txt pasta/`             |
+| `rm arquivo.txt`        | `Remove-Item arquivo.txt`             | Remove arquivo                | `Remove-Item arquivo.txt`                  |
+| `rm -r pasta/`          | `Remove-Item pasta/ -Recurse`         | Remove pasta                  | `Remove-Item temp_email/old/ -Recurse`     |
+| `mkdir pasta/`          | `New-Item pasta/ -ItemType Directory` | Cria pasta                    | `New-Item nova_pasta/ -ItemType Directory` |
+| `mkdir pasta/`          | `mkdir pasta/`                        | Alternativa curta             | `mkdir nova_pasta`                         |
+| `touch arquivo.txt`     | `New-Item arquivo.txt -ItemType File` | Cria arquivo vazio            | `New-Item arquivo.txt -ItemType File`      |
 
 ---
 
 ### Contagem e Estatísticas
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `wc -l arquivo.txt` | `(Get-Content arquivo.txt).Count` | Conta linhas | `(Get-Content arquivo.csv).Count` |
-| `wc -l arquivo.txt` | `Get-Content arquivo.txt \| Measure-Object -Line` | Conta linhas (alternativa) | `Get-Content arquivo.csv \| Measure-Object -Line` |
-| `wc -w arquivo.txt` | `Get-Content arquivo.txt \| Measure-Object -Word` | Conta palavras | `Get-Content arquivo.txt \| Measure-Object -Word` |
-| `ls \| wc -l` | `(Get-ChildItem).Count` | Conta arquivos na pasta | `(Get-ChildItem temp_email/).Count` |
-| `grep -c "termo" arquivo.txt` | `(Select-String "termo" arquivo.txt).Count` | Conta ocorrências | `(Select-String "CONFERIR" arquivo.csv).Count` |
+| Unix                          | PowerShell                                        | Descrição                  | Exemplo                                           |
+| ----------------------------- | ------------------------------------------------- | -------------------------- | ------------------------------------------------- |
+| `wc -l arquivo.txt`           | `(Get-Content arquivo.txt).Count`                 | Conta linhas               | `(Get-Content arquivo.csv).Count`                 |
+| `wc -l arquivo.txt`           | `Get-Content arquivo.txt \| Measure-Object -Line` | Conta linhas (alternativa) | `Get-Content arquivo.csv \| Measure-Object -Line` |
+| `wc -w arquivo.txt`           | `Get-Content arquivo.txt \| Measure-Object -Word` | Conta palavras             | `Get-Content arquivo.txt \| Measure-Object -Word` |
+| `ls \| wc -l`                 | `(Get-ChildItem).Count`                           | Conta arquivos na pasta    | `(Get-ChildItem temp_email/).Count`               |
+| `grep -c "termo" arquivo.txt` | `(Select-String "termo" arquivo.txt).Count`       | Conta ocorrências          | `(Select-String "CONFERIR" arquivo.csv).Count`    |
 
 ---
 
 ### Comparação e Diff
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `diff arquivo1.txt arquivo2.txt` | `Compare-Object (Get-Content arquivo1.txt) (Get-Content arquivo2.txt)` | Compara arquivos | `Compare-Object (Get-Content a.csv) (Get-Content b.csv)` |
-| `diff -u arquivo1 arquivo2` | `Compare-Object (gc arquivo1) (gc arquivo2) -PassThru` | Mostra diferenças | `Compare-Object (gc a.csv) (gc b.csv) -PassThru` |
+| Unix                             | PowerShell                                                             | Descrição         | Exemplo                                                  |
+| -------------------------------- | ---------------------------------------------------------------------- | ----------------- | -------------------------------------------------------- |
+| `diff arquivo1.txt arquivo2.txt` | `Compare-Object (Get-Content arquivo1.txt) (Get-Content arquivo2.txt)` | Compara arquivos  | `Compare-Object (Get-Content a.csv) (Get-Content b.csv)` |
+| `diff -u arquivo1 arquivo2`      | `Compare-Object (gc arquivo1) (gc arquivo2) -PassThru`                 | Mostra diferenças | `Compare-Object (gc a.csv) (gc b.csv) -PassThru`         |
 
 ---
 
 ### Processamento de Texto
 
-| Unix | PowerShell | Descrição | Exemplo |
-|------|------------|-----------|---------|
-| `awk -F';' '{print $1}' arquivo.csv` | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` | Extrai coluna CSV | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` |
-| `cut -d';' -f1 arquivo.csv` | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` | Extrai coluna | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` |
-| `sort arquivo.txt` | `Get-Content arquivo.txt \| Sort-Object` | Ordena linhas | `Get-Content arquivo.txt \| Sort-Object` |
-| `sort -r arquivo.txt` | `Get-Content arquivo.txt \| Sort-Object -Descending` | Ordena reversa | `Get-Content arquivo.txt \| Sort-Object -Descending` |
-| `uniq arquivo.txt` | `Get-Content arquivo.txt \| Sort-Object -Unique` | Remove duplicatas | `Get-Content arquivo.txt \| Sort-Object -Unique` |
-| `sed 's/antigo/novo/g' arquivo.txt` | `(Get-Content arquivo.txt) -replace 'antigo','novo'` | Substituição | `(Get-Content arquivo.txt) -replace 'antigo','novo'` |
-| `sed -i 's/antigo/novo/g' arquivo.txt` | `(Get-Content arquivo.txt) -replace 'antigo','novo' \| Set-Content arquivo.txt` | Substitui in-place | `(gc arquivo.txt) -replace 'a','b' \| sc arquivo.txt` |
+| Unix                                   | PowerShell                                                                      | Descrição          | Exemplo                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------- |
+| `awk -F';' '{print $1}' arquivo.csv`   | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }`                | Extrai coluna CSV  | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` |
+| `cut -d';' -f1 arquivo.csv`            | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }`                | Extrai coluna      | `Get-Content arquivo.csv \| ForEach-Object { $_.Split(';')[0] }` |
+| `sort arquivo.txt`                     | `Get-Content arquivo.txt \| Sort-Object`                                        | Ordena linhas      | `Get-Content arquivo.txt \| Sort-Object`                         |
+| `sort -r arquivo.txt`                  | `Get-Content arquivo.txt \| Sort-Object -Descending`                            | Ordena reversa     | `Get-Content arquivo.txt \| Sort-Object -Descending`             |
+| `uniq arquivo.txt`                     | `Get-Content arquivo.txt \| Sort-Object -Unique`                                | Remove duplicatas  | `Get-Content arquivo.txt \| Sort-Object -Unique`                 |
+| `sed 's/antigo/novo/g' arquivo.txt`    | `(Get-Content arquivo.txt) -replace 'antigo','novo'`                            | Substituição       | `(Get-Content arquivo.txt) -replace 'antigo','novo'`             |
+| `sed -i 's/antigo/novo/g' arquivo.txt` | `(Get-Content arquivo.txt) -replace 'antigo','novo' \| Set-Content arquivo.txt` | Substitui in-place | `(gc arquivo.txt) -replace 'a','b' \| sc arquivo.txt`            |
 
 ---
 
@@ -240,6 +240,51 @@ function grep-csv($termo) {
 
 ## ⚠️ Armadilhas Comuns
 
+### 0. Para o Agente IA (Claude/Assistente)
+
+**Problema com `list_directory` e `find_path`:**
+
+```powershell
+# ❌ ERRADO - Se você já está no diretório scrapper, não repita o nome
+list_directory("scrapper/temp_email")  # Vai procurar scrapper/scrapper/temp_email
+
+# ✅ CORRETO - Use apenas o caminho relativo ao diretório atual
+list_directory("temp_email")
+```
+
+**Problema com PowerShell complexo via terminal:**
+
+```powershell
+# ❌ EVITE - Comandos PowerShell complexos dão erro frequente
+powershell -Command "Get-ChildItem temp_email -Directory | Where-Object { ... }"
+
+# ✅ PREFIRA - Use Python para listagens complexas
+python -c "import os; dirs = [d for d in os.listdir('temp_email') if os.path.isdir(f'temp_email/{d}') and os.listdir(f'temp_email/{d}')]; print('\n'.join(dirs[:20]))"
+
+# ✅ ALTERNATIVA - Comandos simples funcionam
+dir temp_email
+ls temp_email
+```
+
+**Listagem de pastas não-vazias (comando confiável):**
+
+```powershell
+# ✅ FUNCIONA - Listar batches com arquivos
+python -c "
+import os
+batches = []
+for d in os.listdir('temp_email'):
+    path = f'temp_email/{d}'
+    if os.path.isdir(path) and os.listdir(path):
+        batches.append(d)
+print(f'Batches com arquivos: {len(batches)}')
+for b in batches[:20]:
+    print(b)
+"
+```
+
+---
+
 ### 1. Aspas e Escape
 
 ```powershell
@@ -282,6 +327,44 @@ cd "Minha Pasta/"
 
 ---
 
+## 🤖 Dicas para Sessões de IA (Claude/Assistentes)
+
+### Paths Relativos vs Absolutos
+
+1. **Ao usar ferramentas `list_directory`, `read_file`, `find_path`:**
+    - O path deve começar com o nome do diretório raiz do projeto (ex: `scrapper/`)
+    - MAS se o terminal já está dentro de `scrapper/`, não repita o nome
+
+2. **Ao usar comandos no terminal:**
+    - Use paths relativos ao diretório de trabalho atual (`cd` do terminal)
+    - Verifique o `cd` do comando antes de montar o path
+
+### Comandos Problemáticos (Evitar)
+
+| Comando                                                    | Problema                   | Alternativa        |
+| ---------------------------------------------------------- | -------------------------- | ------------------ |
+| `powershell -Command "Get-ChildItem ... Where-Object { }"` | Erro de sintaxe frequente  | Usar Python        |
+| `Get-ChildItem $_.FullName`                                | Expansão de variável falha | Usar loop Python   |
+| `Select-String` com regex complexo                         | Escape problemático        | Usar Python + `re` |
+
+### Comandos Confiáveis
+
+```powershell
+# Listar diretórios simples
+dir temp_email
+
+# Buscar em CSV
+python -c "import pandas as pd; df = pd.read_csv('arquivo.csv', sep=';'); print(df.head())"
+
+# Contar arquivos
+python -c "import os; print(len(os.listdir('temp_email')))"
+
+# Inspecionar batch
+python scripts/inspect_pdf.py --batch BATCH_ID
+```
+
+---
+
 ## 📚 Referências Externas
 
 - [Documentação Microsoft - PowerShell](https://docs.microsoft.com/powershell/)
@@ -290,4 +373,4 @@ cd "Minha Pasta/"
 
 ---
 
-*Atualizado: 2026-01-29 - Após problemas identificados na Orquestração #1*
+_Atualizado: 2026-02-02 - Adicionadas dicas para agentes IA sobre comandos problemáticos_

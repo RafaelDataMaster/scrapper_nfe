@@ -221,10 +221,25 @@ class AdminDocumentExtractor(BaseExtractor):
                 "Notificação automática",
             ),
             (r"DOCUMENTO\s*:\s*\d{6,9}", "Notificação automática"),
-            # 6. Guias jurídicas/fiscais
+            # 6. Guias jurídicas/fiscais e GRU
             (r"GUIA\s*[\|\-–]\s*PROCESSO", "Guia jurídica/fiscal"),
             (r"GUIA\s*[\|\-–]\s*EXECU[ÇC][AÃ]O", "Guia jurídica/fiscal"),
             (r"GUIAS?\s*[-–]?\s*(CSC|PROCESSO|EXECU[ÇC][AÃ]O)", "Guia jurídica/fiscal"),
+            # GRU - Guia de Recolhimento da União
+            (
+                r"GUIA\s+DE\s+RECOLHIMENTO\s+DA\s+UNI[ÃA]O",
+                "GRU - Guia de Recolhimento da União",
+            ),
+            (r"\bGRU\b.*TESOURO", "GRU - Guia de Recolhimento da União"),
+            (r"PAGTESOURO", "GRU - Guia de Recolhimento da União"),
+            (
+                r"C[ÓO]DIGO\s+DE\s+RECOLHIMENTO\s+\d+",
+                "GRU - Guia de Recolhimento da União",
+            ),
+            # Guias de custas judiciais
+            (r"GUIA\s+CUSTAS", "Guia de custas judiciais"),
+            (r"CUSTAS\s+JUDICIAIS", "Guia de custas judiciais"),
+            (r"CUSTAS\s+PROCESSUAIS", "Guia de custas judiciais"),
             # 7. Contratos (documentação)
             (
                 r"CONTRATO(_|\s+)(SITE|MASTER|RENOVA[ÇC][AÃ]O|ADITIVO)",
@@ -258,15 +273,23 @@ class AdminDocumentExtractor(BaseExtractor):
             (r"ANUIDADE\s+(CREA|OAB|CRM|CFM|COREN)", "Taxa/anuidade de órgão"),
             # 13. Reembolsos internos
             (r"REEMBOLSO\s+DE\s+TARIFAS", "Reembolso interno"),
+            (r"REEMBOLSO\s+DAS\s+TARIFAS", "Reembolso interno"),
             # 14. Tarifas internas
             (r"TARIFAS\s+CSC", "Documento de tarifas internas"),
-            # 15. Condomínio (Alvim Nogueira)
+            (r"TARIFAS\s+APURADAS", "Documento de tarifas internas"),
+            (r"BOLETOS\s+RECEBIDOS\s+NO\s+CSC", "Documento de tarifas internas"),
+            # 15. Recibos genéricos (não são NFSe)
+            (r"RECIBO\s+N[ÚU]MERO\s*[:\-]?\s*\d+", "Recibo de pagamento"),
+            (r"RECEBI\s*\(?EMOS\)?\s+DE\s*:", "Recibo de pagamento"),
+            (r"A\s+IMPORT[ÂA]NCIA\s+DE\s*:", "Recibo de pagamento"),
+            (r"REFERENTE\s+A\s*:\s*CR[ÉE]DITO", "Recibo de pagamento"),
+            # 16. Condomínio (Alvim Nogueira)
             (r"ALVIM\s+NOGUEIRA", "Documento de condomínio"),
-            # 16. Cobranças indevidas (reclamações)
+            # 17. Cobranças indevidas (reclamações)
             (r"COBRAN[ÇC]A\s+INDEVIDA", "Reclamação de cobrança"),
-            # 17. Comprovantes administrativos
+            # 18. Comprovantes administrativos
             (r"COMPROVANTE\s+DE\s+SOLICITA[ÇC][AÃ]O", "Comprovante administrativo"),
-            # 18. Documentos informativos de serviços públicos
+            # 19. Documentos informativos de serviços públicos
             (r"INFORMATIVO\s+IMPORTANTE", "Documento informativo de serviço público"),
             (r"COPASA", "Documento informativo de serviço público (água/esgoto)"),
             (

@@ -26,6 +26,7 @@ Princípios SOLID aplicados:
 - DIP: Depende de abstrações, não de implementações concretas
 - LSP: BatchResult pode ser substituído por subclasses sem quebrar código
 """
+
 import logging
 from pathlib import Path
 from typing import List, Optional, Set, Tuple, Union
@@ -34,7 +35,7 @@ from core.batch_result import BatchResult
 from core.correlation_service import CorrelationService
 from core.empresa_matcher import find_empresa_no_texto
 from core.metadata import EmailMetadata
-from core.models import DanfeData, DocumentData, InvoiceData
+from core.models import DanfeData, DocumentData, InvoiceData, OtherDocumentData
 from core.processor import BaseInvoiceProcessor
 from extractors.xml_extractor import XmlExtractor
 
@@ -65,13 +66,18 @@ class BatchProcessor:
     """
 
     # Extensões de arquivo suportadas
-    SUPPORTED_EXTENSIONS = {'.pdf', '.xml'}
+    SUPPORTED_EXTENSIONS = {".pdf", ".xml"}
 
     # Arquivos a ignorar no processamento
-    IGNORED_FILES = {'metadata.json', '.gitkeep', 'thumbs.db', 'desktop.ini'}
+    IGNORED_FILES = {"metadata.json", ".gitkeep", "thumbs.db", "desktop.ini"}
 
     # Campos obrigatórios para considerar XML completo
-    CAMPOS_OBRIGATORIOS_XML = {'fornecedor_nome', 'vencimento', 'numero_nota', 'valor_total'}
+    CAMPOS_OBRIGATORIOS_XML = {
+        "fornecedor_nome",
+        "vencimento",
+        "numero_nota",
+        "valor_total",
+    }
 
     def _parse_email_date(self, date_str: Optional[str]) -> Optional[str]:
         """
@@ -96,36 +102,40 @@ class BatchProcessor:
         # Tenta formato RFC 2822 (padrão de e-mail)
         try:
             from email.utils import parsedate_to_datetime
+
             dt = parsedate_to_datetime(date_str)
-            return dt.strftime('%Y-%m-%d')
+            return dt.strftime("%Y-%m-%d")
         except Exception:
             pass
 
         # Tenta formato ISO com timezone
         try:
             from datetime import datetime
+
             # Remove timezone info se presente
-            if '+' in date_str:
-                date_str = date_str.split('+')[0].strip()
-            if 'T' in date_str:
-                dt = datetime.fromisoformat(date_str.replace('Z', ''))
-                return dt.strftime('%Y-%m-%d')
+            if "+" in date_str:
+                date_str = date_str.split("+")[0].strip()
+            if "T" in date_str:
+                dt = datetime.fromisoformat(date_str.replace("Z", ""))
+                return dt.strftime("%Y-%m-%d")
         except Exception:
             pass
 
         # Tenta formato brasileiro (DD/MM/YYYY)
         try:
             from datetime import datetime
-            dt = datetime.strptime(date_str[:10], '%d/%m/%Y')
-            return dt.strftime('%Y-%m-%d')
+
+            dt = datetime.strptime(date_str[:10], "%d/%m/%Y")
+            return dt.strftime("%Y-%m-%d")
         except Exception:
             pass
 
         # Tenta formato ISO simples (YYYY-MM-DD)
         try:
             from datetime import datetime
-            dt = datetime.strptime(date_str[:10], '%Y-%m-%d')
-            return dt.strftime('%Y-%m-%d')
+
+            dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+            return dt.strftime("%Y-%m-%d")
         except Exception:
             pass
 
@@ -148,9 +158,7 @@ class BatchProcessor:
         self.correlation_service = correlation_service or CorrelationService()
 
     def process_batch(
-        self,
-        folder_path: Union[str, Path],
-        apply_correlation: bool = True
+        self, folder_path: Union[str, Path], apply_correlation: bool = True
     ) -> BatchResult:
         """
         Processa uma pasta (lote) de documentos.
@@ -173,10 +181,7 @@ class BatchProcessor:
         # Gera batch_id a partir do nome da pasta
         batch_id = folder_path.name
 
-        result = BatchResult(
-            batch_id=batch_id,
-            source_folder=str(folder_path)
-        )
+        result = BatchResult(batch_id=batch_id, source_folder=str(folder_path))
 
         # 1. Carrega metadados (se existir)
         metadata = EmailMetadata.load(folder_path)
@@ -184,7 +189,9 @@ class BatchProcessor:
             result.metadata_path = str(folder_path / "metadata.json")
             result.email_subject = metadata.email_subject
             # Usa email_sender_name, com fallback para email_sender_address se vazio
-            result.email_sender = metadata.email_sender_name or metadata.email_sender_address
+            result.email_sender = (
+                metadata.email_sender_name or metadata.email_sender_address
+            )
             # Extrai data do email do metadata (received_date)
             result.email_date = self._parse_email_date(metadata.received_date)
 
@@ -205,7 +212,7 @@ class BatchProcessor:
                     xml_docs.append(doc)
                     # Verifica se XML está completo
                     if self._is_xml_complete(doc):
-                        numero_nota = getattr(doc, 'numero_nota', None)
+                        numero_nota = getattr(doc, "numero_nota", None)
                         if numero_nota:
                             xml_notas_completas.add(str(numero_nota).strip())
             except Exception as e:
@@ -232,14 +239,16 @@ class BatchProcessor:
         # Útil para e-mails onde a NF é um link (Omie, prefeituras)
         # Mas só extrai se não há documento válido do PDF (com fornecedor ou valor)
         has_valid_pdf_doc = any(
-            getattr(doc, 'fornecedor_nome', None) or getattr(doc, 'valor_total', 0) > 0
+            getattr(doc, "fornecedor_nome", None) or getattr(doc, "valor_total", 0) > 0
             for doc in final_docs
         )
         if metadata and not has_valid_pdf_doc:
             email_body_doc = self._extract_from_email_body(metadata, batch_id)
             if email_body_doc:
                 result.add_document(email_body_doc)
-                logger.info(f"📧 Dados extraídos do corpo do e-mail: valor={getattr(email_body_doc, 'valor_total', 0)}")
+                logger.info(
+                    f"📧 Dados extraídos do corpo do e-mail: valor={getattr(email_body_doc, 'valor_total', 0)}"
+                )
 
         # 7. Aplica correlação entre documentos (se habilitado)
         if apply_correlation and result.total_documents > 0:
@@ -266,55 +275,96 @@ class BatchProcessor:
                 continue
 
             # Verifica se tem valor
-            valor = getattr(doc, 'valor_total', 0) or 0
+            valor = getattr(doc, "valor_total", 0) or 0
             if valor > 0:
                 return True
 
         return False
 
     def _extract_from_email_body(
-        self,
-        metadata: 'EmailMetadata',
-        batch_id: str
+        self, metadata: "EmailMetadata", batch_id: str
     ) -> Optional[DocumentData]:
         """
         Extrai dados do corpo do e-mail quando não há NF anexada.
 
         Cria um InvoiceData sintético com os dados extraídos do corpo.
-        Útil para e-mails da Omie, prefeituras, etc.
+        Útil para e-mails da Omie, prefeituras, Sabesp (PDF protegido), etc.
 
         Args:
             metadata: Metadados do e-mail
             batch_id: ID do lote
 
         Returns:
-            InvoiceData com dados extraídos ou None
+            DocumentData com dados extraídos ou None
         """
         try:
-            from extractors.email_body_extractor import EmailBodyExtractor
-
             # Verifica se tem corpo de e-mail
             if not metadata.email_body_text:
                 return None
 
-            # Extrai dados do corpo
+            from datetime import datetime
+
+            # NOVO: Verifica se é email da Sabesp (PDF protegido por senha)
+            # Usa extrator especializado que retorna UTILITY_BILL/WATER
+            from extractors.sabesp import SabespWaterBillExtractor
+
+            if SabespWaterBillExtractor.can_handle_email(
+                email_subject=metadata.email_subject,
+                email_sender=metadata.email_sender_address,
+                email_body=metadata.email_body_text,
+            ):
+                logger.info(
+                    "📧 Detectado email Sabesp - usando SabespWaterBillExtractor"
+                )
+                extractor = SabespWaterBillExtractor()
+                data = extractor.extract(
+                    email_body=metadata.email_body_text,
+                    email_subject=metadata.email_subject,
+                    email_sender=metadata.email_sender_address,
+                )
+
+                # Cria OtherDocumentData para contas de utilidade
+                doc = OtherDocumentData(
+                    arquivo_origem=f"{batch_id}_email_body",
+                    texto_bruto=f"[Extraído do corpo do e-mail Sabesp] {(metadata.email_body_text or '')[:300]}",
+                    data_processamento=datetime.now().strftime("%Y-%m-%d"),
+                    # Campos extraídos
+                    valor_total=float(data.get("valor_total") or 0.0),
+                    vencimento=data.get("vencimento"),
+                    fornecedor_nome=data.get("fornecedor_nome", "SABESP"),
+                    cnpj_fornecedor=data.get("cnpj_fornecedor"),
+                    numero_documento=data.get("numero_documento"),
+                    subtipo=data.get("subtipo", "WATER"),
+                    observacoes=data.get("observacoes"),
+                )
+
+                logger.info(
+                    f"📧 Sabesp extraction: valor={data.get('valor_total')}, "
+                    f"venc={data.get('vencimento')}, fornec={data.get('numero_documento')}"
+                )
+                return doc
+
+            # Extrator genérico para outros tipos de email
+            from extractors.email_body_extractor import EmailBodyExtractor
+
             extractor = EmailBodyExtractor()
             result = extractor.extract(
-                body_text=metadata.email_body_text,
-                subject=metadata.email_subject
+                body_text=metadata.email_body_text, subject=metadata.email_subject
             )
 
             # Só cria documento se encontrou algo útil
-            if not result.has_valor() and not result.numero_nota and not result.link_nfe:
+            if (
+                not result.has_valor()
+                and not result.numero_nota
+                and not result.link_nfe
+            ):
                 return None
 
             # Cria InvoiceData sintético
-            from datetime import datetime
-
             doc = InvoiceData(
                 arquivo_origem=f"{batch_id}_email_body",
                 texto_bruto=f"[Extraído do corpo do e-mail] {(metadata.email_body_text or '')[:300]}",
-                data_processamento=datetime.now().strftime('%Y-%m-%d'),
+                data_processamento=datetime.now().strftime("%Y-%m-%d"),
                 # Campos extraídos
                 valor_total=result.valor_total,
                 numero_nota=result.numero_nota,
@@ -322,9 +372,12 @@ class BatchProcessor:
                 fornecedor_nome=result.fornecedor_nome or metadata.email_sender_name,
                 # Metadados
                 source_email_subject=metadata.email_subject,
-                source_email_sender=metadata.email_sender_name or metadata.email_sender_address,
+                source_email_sender=metadata.email_sender_name
+                or metadata.email_sender_address,
                 # Campos extras
-                observacoes=f"[EXTRAÍDO DO E-MAIL] Link: {result.link_nfe or 'N/A'}" if result.link_nfe else None,
+                observacoes=f"[EXTRAÍDO DO E-MAIL] Link: {result.link_nfe or 'N/A'}"
+                if result.link_nfe
+                else None,
             )
 
             logger.debug(
@@ -335,7 +388,7 @@ class BatchProcessor:
             return doc
 
         except ImportError as e:
-            logger.warning(f"EmailBodyExtractor não disponível: {e}")
+            logger.warning(f"Extrator de email body não disponível: {e}")
             return None
         except Exception as e:
             logger.warning(f"Erro ao extrair do corpo do e-mail: {e}")
@@ -357,17 +410,19 @@ class BatchProcessor:
         if not isinstance(doc, (DanfeData, InvoiceData)):
             return False
 
-        fornecedor = getattr(doc, 'fornecedor_nome', None)
-        vencimento = getattr(doc, 'vencimento', None)
-        numero_nota = getattr(doc, 'numero_nota', None)
-        valor_total = getattr(doc, 'valor_total', None)
+        fornecedor = getattr(doc, "fornecedor_nome", None)
+        vencimento = getattr(doc, "vencimento", None)
+        numero_nota = getattr(doc, "numero_nota", None)
+        valor_total = getattr(doc, "valor_total", None)
 
-        return all([
-            fornecedor and str(fornecedor).strip(),
-            vencimento and str(vencimento).strip(),
-            numero_nota and str(numero_nota).strip(),
-            valor_total and float(valor_total) > 0
-        ])
+        return all(
+            [
+                fornecedor and str(fornecedor).strip(),
+                vencimento and str(vencimento).strip(),
+                numero_nota and str(numero_nota).strip(),
+                valor_total and float(valor_total) > 0,
+            ]
+        )
 
     def _get_campos_faltantes(self, doc: DocumentData) -> List[str]:
         """
@@ -381,21 +436,21 @@ class BatchProcessor:
         """
         faltantes = []
 
-        fornecedor = getattr(doc, 'fornecedor_nome', None)
+        fornecedor = getattr(doc, "fornecedor_nome", None)
         if not (fornecedor and str(fornecedor).strip()):
-            faltantes.append('fornecedor_nome')
+            faltantes.append("fornecedor_nome")
 
-        vencimento = getattr(doc, 'vencimento', None)
+        vencimento = getattr(doc, "vencimento", None)
         if not (vencimento and str(vencimento).strip()):
-            faltantes.append('vencimento')
+            faltantes.append("vencimento")
 
-        numero_nota = getattr(doc, 'numero_nota', None)
+        numero_nota = getattr(doc, "numero_nota", None)
         if not (numero_nota and str(numero_nota).strip()):
-            faltantes.append('numero_nota')
+            faltantes.append("numero_nota")
 
-        valor_total = getattr(doc, 'valor_total', None)
+        valor_total = getattr(doc, "valor_total", None)
         if not (valor_total and float(valor_total) > 0):
-            faltantes.append('valor_total')
+            faltantes.append("valor_total")
 
         return faltantes
 
@@ -403,7 +458,7 @@ class BatchProcessor:
         self,
         xml_docs: List[DocumentData],
         pdf_docs: List[DocumentData],
-        xml_notas_completas: Set[str]
+        xml_notas_completas: Set[str],
     ) -> List[DocumentData]:
         """
         Mescla documentos XML e PDF priorizando XMLs completos.
@@ -426,7 +481,7 @@ class BatchProcessor:
 
         # Adiciona todos os XMLs
         for xml_doc in xml_docs:
-            numero_nota = getattr(xml_doc, 'numero_nota', None)
+            numero_nota = getattr(xml_doc, "numero_nota", None)
             numero_str = str(numero_nota).strip() if numero_nota else ""
 
             if numero_str in xml_notas_completas:
@@ -438,10 +493,12 @@ class BatchProcessor:
                 pdf_complementar = self._find_pdf_for_xml(xml_doc, pdf_docs)
                 if pdf_complementar:
                     # Complementa campos faltantes do XML com dados do PDF
-                    doc_mesclado = self._complementar_xml_com_pdf(xml_doc, pdf_complementar)
+                    doc_mesclado = self._complementar_xml_com_pdf(
+                        xml_doc, pdf_complementar
+                    )
                     final_docs.append(doc_mesclado)
                     # Marca número da nota do PDF como usado
-                    pdf_nota = getattr(pdf_complementar, 'numero_nota', None)
+                    pdf_nota = getattr(pdf_complementar, "numero_nota", None)
                     if pdf_nota:
                         pdf_notas_usadas.add(str(pdf_nota).strip())
                 else:
@@ -450,11 +507,12 @@ class BatchProcessor:
 
         # Adiciona PDFs que não foram usados para complementar XMLs
         for pdf_doc in pdf_docs:
-            numero_nota = getattr(pdf_doc, 'numero_nota', None)
+            numero_nota = getattr(pdf_doc, "numero_nota", None)
             numero_str = str(numero_nota).strip() if numero_nota else ""
 
             # Boletos não têm numero_nota no mesmo sentido, inclui sempre
             from core.models import BoletoData
+
             if isinstance(pdf_doc, BoletoData):
                 final_docs.append(pdf_doc)
                 continue
@@ -473,9 +531,7 @@ class BatchProcessor:
         return final_docs
 
     def _find_pdf_for_xml(
-        self,
-        xml_doc: DocumentData,
-        pdf_docs: List[DocumentData]
+        self, xml_doc: DocumentData, pdf_docs: List[DocumentData]
     ) -> Optional[DocumentData]:
         """
         Encontra PDF correspondente a um XML para complementação.
@@ -491,9 +547,9 @@ class BatchProcessor:
         Returns:
             Documento PDF correspondente ou None
         """
-        xml_nota = getattr(xml_doc, 'numero_nota', None)
-        xml_fornecedor = getattr(xml_doc, 'fornecedor_nome', None)
-        xml_valor = getattr(xml_doc, 'valor_total', None)
+        xml_nota = getattr(xml_doc, "numero_nota", None)
+        xml_fornecedor = getattr(xml_doc, "fornecedor_nome", None)
+        xml_valor = getattr(xml_doc, "valor_total", None)
 
         for pdf_doc in pdf_docs:
             # Só compara notas (não boletos)
@@ -501,17 +557,19 @@ class BatchProcessor:
                 continue
 
             # Match por numero_nota
-            pdf_nota = getattr(pdf_doc, 'numero_nota', None)
+            pdf_nota = getattr(pdf_doc, "numero_nota", None)
             if xml_nota and pdf_nota:
                 if str(xml_nota).strip() == str(pdf_nota).strip():
                     return pdf_doc
 
             # Match por fornecedor + valor
-            pdf_fornecedor = getattr(pdf_doc, 'fornecedor_nome', None)
-            pdf_valor = getattr(pdf_doc, 'valor_total', None)
+            pdf_fornecedor = getattr(pdf_doc, "fornecedor_nome", None)
+            pdf_valor = getattr(pdf_doc, "valor_total", None)
 
             if xml_fornecedor and pdf_fornecedor and xml_valor and pdf_valor:
-                fornecedor_match = self._normalize_fornecedor(xml_fornecedor) == self._normalize_fornecedor(pdf_fornecedor)
+                fornecedor_match = self._normalize_fornecedor(
+                    xml_fornecedor
+                ) == self._normalize_fornecedor(pdf_fornecedor)
                 valor_match = abs(float(xml_valor) - float(pdf_valor)) < 0.01
 
                 if fornecedor_match and valor_match:
@@ -520,9 +578,7 @@ class BatchProcessor:
         return None
 
     def _complementar_xml_com_pdf(
-        self,
-        xml_doc: DocumentData,
-        pdf_doc: DocumentData
+        self, xml_doc: DocumentData, pdf_doc: DocumentData
     ) -> DocumentData:
         """
         Complementa campos faltantes do XML com dados do PDF.
@@ -538,13 +594,13 @@ class BatchProcessor:
         """
         # Campos a complementar se vazios no XML
         campos_complementar = [
-            'fornecedor_nome',
-            'vencimento',
-            'numero_nota',
-            'valor_total',
-            'numero_pedido',
-            'numero_fatura',
-            'data_emissao',
+            "fornecedor_nome",
+            "vencimento",
+            "numero_nota",
+            "valor_total",
+            "numero_pedido",
+            "numero_fatura",
+            "data_emissao",
         ]
 
         for campo in campos_complementar:
@@ -582,7 +638,7 @@ class BatchProcessor:
         prefixos_remover = ["CNPJ", "CPF", "RAZÃO SOCIAL", "RAZAO SOCIAL"]
         for prefixo in prefixos_remover:
             if normalized.upper().startswith(prefixo):
-                normalized = normalized[len(prefixo):].strip()
+                normalized = normalized[len(prefixo) :].strip()
                 # Remove possível separador após prefixo
                 if normalized.startswith(":") or normalized.startswith("-"):
                     normalized = normalized[1:].strip()
@@ -607,9 +663,9 @@ class BatchProcessor:
 
         for item in sorted(folder_path.iterdir()):
             if item.is_file() and self._is_processable(item):
-                if item.suffix.lower() == '.xml':
+                if item.suffix.lower() == ".xml":
                     xml_files.append(item)
-                elif item.suffix.lower() == '.pdf':
+                elif item.suffix.lower() == ".pdf":
                     pdf_files.append(item)
 
         return xml_files, pdf_files
@@ -621,7 +677,7 @@ class BatchProcessor:
         self,
         root_folder: Union[str, Path],
         apply_correlation: bool = True,
-        timeout_seconds: Optional[int] = None
+        timeout_seconds: Optional[int] = None,
     ) -> List[BatchResult]:
         """
         Processa múltiplas pastas (lotes) de uma vez com timeout por lote.
@@ -643,6 +699,7 @@ class BatchProcessor:
 
         logger = logging.getLogger(__name__)
         from config import settings
+
         timeout = timeout_seconds or settings.BATCH_TIMEOUT_SECONDS
 
         root_folder = Path(root_folder)
@@ -653,11 +710,16 @@ class BatchProcessor:
             return results
 
         # Lista lotes para processar
-        batch_folders = [item for item in sorted(root_folder.iterdir())
-                         if item.is_dir() and not item.name.startswith('.')]
+        batch_folders = [
+            item
+            for item in sorted(root_folder.iterdir())
+            if item.is_dir() and not item.name.startswith(".")
+        ]
         total_batches = len(batch_folders)
 
-        logger.info(f"⏳ Iniciando processamento de {total_batches} lotes (timeout: {timeout}s)...")
+        logger.info(
+            f"⏳ Iniciando processamento de {total_batches} lotes (timeout: {timeout}s)..."
+        )
         overall_start = time.time()
 
         # Processa cada subpasta como um lote com timeout
@@ -668,7 +730,9 @@ class BatchProcessor:
             try:
                 # Executa com timeout usando ThreadPoolExecutor
                 with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(self.process_batch, item, apply_correlation)
+                    future = executor.submit(
+                        self.process_batch, item, apply_correlation
+                    )
                     batch_result = future.result(timeout=timeout)
                     batch_result.processing_time = time.time() - batch_start
                     batch_result.status = "OK"
@@ -676,24 +740,28 @@ class BatchProcessor:
             except FuturesTimeoutError:
                 # Timeout! Cria resultado vazio com status TIMEOUT
                 batch_elapsed = time.time() - batch_start
-                logger.error(f"⏱️ [{idx}/{total_batches}] TIMEOUT: {item.name} excedeu {timeout}s!")
+                logger.error(
+                    f"⏱️ [{idx}/{total_batches}] TIMEOUT: {item.name} excedeu {timeout}s!"
+                )
 
                 batch_result = BatchResult(
                     batch_id=item.name,
                     source_folder=str(item),
                     status="TIMEOUT",
                     processing_time=batch_elapsed,
-                    timeout_error=f"Processamento excedeu {timeout}s"
+                    timeout_error=f"Processamento excedeu {timeout}s",
                 )
                 batch_result.add_error(str(item), f"TIMEOUT após {batch_elapsed:.1f}s")
 
                 # Registra para log de timeouts
-                timeouts.append({
-                    "batch_id": item.name,
-                    "folder": str(item),
-                    "timeout_seconds": timeout,
-                    "timestamp": datetime.now().isoformat()
-                })
+                timeouts.append(
+                    {
+                        "batch_id": item.name,
+                        "folder": str(item),
+                        "timeout_seconds": timeout,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
 
             except Exception as e:
                 # Erro genérico
@@ -705,7 +773,7 @@ class BatchProcessor:
                     source_folder=str(item),
                     status="ERROR",
                     processing_time=batch_elapsed,
-                    timeout_error=str(e)
+                    timeout_error=str(e),
                 )
                 batch_result.add_error(str(item), str(e))
 
@@ -718,12 +786,18 @@ class BatchProcessor:
             elif batch_result.status == "ERROR":
                 pass  # Já logou acima
             elif batch_elapsed > 5:
-                logger.warning(f"🐢 [{idx}/{total_batches}] {item.name}: {batch_elapsed:.1f}s (LENTO!)")
+                logger.warning(
+                    f"🐢 [{idx}/{total_batches}] {item.name}: {batch_elapsed:.1f}s (LENTO!)"
+                )
             else:
-                logger.debug(f"✅ [{idx}/{total_batches}] {item.name}: {batch_elapsed:.1f}s")
+                logger.debug(
+                    f"✅ [{idx}/{total_batches}] {item.name}: {batch_elapsed:.1f}s"
+                )
 
         overall_elapsed = time.time() - overall_start
-        logger.info(f"⏱️ Tempo total de processamento: {overall_elapsed:.1f}s ({overall_elapsed/60:.1f} min)")
+        logger.info(
+            f"⏱️ Tempo total de processamento: {overall_elapsed:.1f}s ({overall_elapsed / 60:.1f} min)"
+        )
 
         # Salva log de timeouts para reprocessamento posterior
         if timeouts:
@@ -732,24 +806,26 @@ class BatchProcessor:
                 # Carrega timeouts anteriores (se existir)
                 existing_timeouts = []
                 if timeout_log_path.exists():
-                    existing_timeouts = json.loads(timeout_log_path.read_text(encoding='utf-8'))
+                    existing_timeouts = json.loads(
+                        timeout_log_path.read_text(encoding="utf-8")
+                    )
 
                 # Adiciona novos timeouts
                 all_timeouts = existing_timeouts + timeouts
                 timeout_log_path.write_text(
                     json.dumps(all_timeouts, indent=2, ensure_ascii=False),
-                    encoding='utf-8'
+                    encoding="utf-8",
                 )
-                logger.warning(f"⚠️ {len(timeouts)} timeout(s) registrado(s) em {timeout_log_path}")
+                logger.warning(
+                    f"⚠️ {len(timeouts)} timeout(s) registrado(s) em {timeout_log_path}"
+                )
             except Exception as e:
                 logger.error(f"Erro ao salvar log de timeouts: {e}")
 
         return results
 
     def process_legacy_files(
-        self,
-        folder_path: Union[str, Path],
-        recursive: bool = True
+        self, folder_path: Union[str, Path], recursive: bool = True
     ) -> BatchResult:
         """
         Processa arquivos legados (sem estrutura de lote/metadata).
@@ -767,10 +843,7 @@ class BatchProcessor:
         folder_path = Path(folder_path)
         batch_id = f"legacy_{folder_path.name}"
 
-        result = BatchResult(
-            batch_id=batch_id,
-            source_folder=str(folder_path)
-        )
+        result = BatchResult(batch_id=batch_id, source_folder=str(folder_path))
 
         # Busca arquivos (recursiva ou não)
         if recursive:
@@ -822,7 +895,9 @@ class BatchProcessor:
                     return doc
                 except FuturesTimeoutError:
                     elapsed = time.time() - start_time
-                    logger.error(f"⏱️ TIMEOUT ARQUIVO: {file_path.name} excedeu {settings.FILE_TIMEOUT_SECONDS}s (elapsed: {elapsed:.1f}s)")
+                    logger.error(
+                        f"⏱️ TIMEOUT ARQUIVO: {file_path.name} excedeu {settings.FILE_TIMEOUT_SECONDS}s (elapsed: {elapsed:.1f}s)"
+                    )
                     # Retorna None para indicar que falhou, mas não quebra o lote
                     return None
                 except Exception as e:
@@ -834,11 +909,11 @@ class BatchProcessor:
             raise e
 
         # Processa PDF
-        if file_path.suffix.lower() == '.pdf':
+        if file_path.suffix.lower() == ".pdf":
             return self.processor.process(str(file_path))
 
         # Processa XML (NF-e / NFS-e)
-        if file_path.suffix.lower() == '.xml':
+        if file_path.suffix.lower() == ".xml":
             return self._process_xml(file_path)
 
         return None
@@ -863,7 +938,7 @@ class BatchProcessor:
                 # Detecta empresa no conteúdo do XML
                 # Tenta múltiplos encodings pois alguns XMLs usam Latin-1
                 xml_content = None
-                for encoding in ('utf-8', 'latin-1', 'cp1252'):
+                for encoding in ("utf-8", "latin-1", "cp1252"):
                     try:
                         xml_content = file_path.read_text(encoding=encoding)
                         break
@@ -873,7 +948,7 @@ class BatchProcessor:
                 if xml_content:
                     try:
                         empresa_match = find_empresa_no_texto(xml_content)
-                        if empresa_match and not getattr(doc, 'empresa', None):
+                        if empresa_match and not getattr(doc, "empresa", None):
                             doc.empresa = empresa_match.codigo
                     except Exception:
                         pass  # Ignora erros de detecção
@@ -942,11 +1017,11 @@ class BatchProcessor:
             return False
 
         # Ignora arquivos ocultos
-        if file_path.name.startswith('.'):
+        if file_path.name.startswith("."):
             return False
 
         # Ignora pasta 'ignored' (lixo segregado)
-        if 'ignored' in file_path.parts:
+        if "ignored" in file_path.parts:
             return False
 
         # Verifica extensão
@@ -954,8 +1029,7 @@ class BatchProcessor:
 
 
 def process_email_batch(
-    folder_path: Union[str, Path],
-    apply_correlation: bool = True
+    folder_path: Union[str, Path], apply_correlation: bool = True
 ) -> BatchResult:
     """
     Função utilitária para processar um lote.
@@ -974,8 +1048,7 @@ def process_email_batch(
 
 
 def process_legacy_folder(
-    folder_path: Union[str, Path],
-    recursive: bool = True
+    folder_path: Union[str, Path], recursive: bool = True
 ) -> BatchResult:
     """
     Função utilitária para processar pasta legada.

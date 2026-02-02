@@ -20,13 +20,13 @@ Get-Content docs/context/project_overview.md | Select-Object -First 100
 
 ### Fluxo Rápido por Objetivo
 
-| Seu Objetivo | Documento | Tempo Est. |
-|--------------|-----------|------------|
-| **Corrigir um caso específico** | [`diagnosis.md`](./diagnosis.md) → [`validation.md`](./validation.md) | 15-30 min |
-| **Criar novo extrator** | [`creation.md`](./creation.md) + [`coding_standards.md`](./coding_standards.md) | 1-2 horas |
-| **Correções em massa (automático)** | [`automation_orchestrator.md`](./automation_orchestrator.md) | Variável |
-| **Problema estranho/erro inesperado** | [`troubleshooting.md`](./troubleshooting.md) | 5-10 min |
-| **Comando falhou no Windows** | [`commands_reference.md`](./commands_reference.md) | 1 min |
+| Seu Objetivo                          | Documento                                                                       | Tempo Est. |
+| ------------------------------------- | ------------------------------------------------------------------------------- | ---------- |
+| **Corrigir um caso específico**       | [`diagnosis.md`](./diagnosis.md) → [`validation.md`](./validation.md)           | 15-30 min  |
+| **Criar novo extrator**               | [`creation.md`](./creation.md) + [`coding_standards.md`](./coding_standards.md) | 1-2 horas  |
+| **Correções em massa (automático)**   | [`automation_orchestrator.md`](./automation_orchestrator.md)                    | Variável   |
+| **Problema estranho/erro inesperado** | [`troubleshooting.md`](./troubleshooting.md)                                    | 5-10 min   |
+| **Comando falhou no Windows**         | [`commands_reference.md`](./commands_reference.md)                              | 1 min      |
 
 ---
 
@@ -37,6 +37,7 @@ Get-Content docs/context/project_overview.md | Select-Object -First 100
 Este projeto é desenvolvido em **Windows** com **PowerShell**. Comandos Unix (`grep`, `head`, `awk`) **não funcionam**.
 
 **Conversão rápida:**
+
 ```bash
 # ❌ Unix (não funciona)
 grep "termo" arquivo.txt | head -5
@@ -60,6 +61,7 @@ python run_ingestion.py          # IDs novos!
 ```
 
 **Use identificadores estáveis:**
+
 - ✅ **Fornecedor**: "TUNNA ENTRETENIMENTO"
 - ✅ **Tipo**: "FATURA", "NFSE"
 - ✅ **CNPJ**: "12.345.678/9012-34"
@@ -92,6 +94,7 @@ scrapper/
 ### O Que É Um Snapshot?
 
 Registro do estado do projeto ao final de cada sessão, incluindo:
+
 - Correções concluídas e pendentes
 - Decisões tomadas
 - Comandos úteis para retomada
@@ -129,14 +132,15 @@ Para quando há um problema identificado no CSV:
 diagnosis.md → creation.md (se novo extrator) → validation.md
 ```
 
-| # | Documento | Propósito | Quando Usar |
-|---|-----------|-----------|-------------|
-| 1.1 | [`diagnosis.md`](./diagnosis.md) | Identificar causa raiz | Valor zero, campo vazio, classificação errada |
-| 1.2 | [`review.md`](./review.md) | Análise aprofundada | Caso complexo, decisão entre ajustar/criar novo |
-| 1.3 | [`creation.md`](./creation.md) | Criar novo extrator | Layout único não coberto |
-| 1.4 | [`validation.md`](./validation.md) | Validar correção | Após implementar, antes de commitar |
+| #   | Documento                          | Propósito              | Quando Usar                                     |
+| --- | ---------------------------------- | ---------------------- | ----------------------------------------------- |
+| 1.1 | [`diagnosis.md`](./diagnosis.md)   | Identificar causa raiz | Valor zero, campo vazio, classificação errada   |
+| 1.2 | [`review.md`](./review.md)         | Análise aprofundada    | Caso complexo, decisão entre ajustar/criar novo |
+| 1.3 | [`creation.md`](./creation.md)     | Criar novo extrator    | Layout único não coberto                        |
+| 1.4 | [`validation.md`](./validation.md) | Validar correção       | Após implementar, antes de commitar             |
 
 **Ferramentas usadas:**
+
 ```bash
 python scripts/inspect_pdf.py --batch <batch_id>
 python scripts/validate_extraction_rules.py --batch-mode --temp-email
@@ -152,13 +156,14 @@ Para quando há muitos erros e precisa priorizar:
 prioritization.md → log_correlation.md → [correções]
 ```
 
-| # | Documento | Propósito | Quando Usar |
-|---|-----------|-----------|-------------|
-| 2.1 | [`prioritization.md`](./prioritization.md) | Priorizar por recorrência | Muitos erros, decidir o que atacar primeiro |
-| 2.2 | [`log_correlation.md`](./log_correlation.md) | Analisar logs vs CSV | Erros no log causam problemas no CSV? |
-| 2.3 | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md) | Exemplo real | Ver análise real como referência |
+| #   | Documento                                                                    | Propósito                 | Quando Usar                                 |
+| --- | ---------------------------------------------------------------------------- | ------------------------- | ------------------------------------------- |
+| 2.1 | [`prioritization.md`](./prioritization.md)                                   | Priorizar por recorrência | Muitos erros, decidir o que atacar primeiro |
+| 2.2 | [`log_correlation.md`](./log_correlation.md)                                 | Analisar logs vs CSV      | Erros no log causam problemas no CSV?       |
+| 2.3 | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md) | Exemplo real              | Ver análise real como referência            |
 
 **Ferramentas usadas:**
+
 ```bash
 python scripts/analyze_logs.py --output report.md
 python scripts/check_problematic_pdfs.py
@@ -174,11 +179,12 @@ Para quando quer processar muitas correções de uma vez:
 automation_orchestrator.md (engloba todos os outros)
 ```
 
-| Documento | Propósito | Quando Usar |
-|-----------|-----------|-------------|
+| Documento                                                    | Propósito                    | Quando Usar                               |
+| ------------------------------------------------------------ | ---------------------------- | ----------------------------------------- |
 | [`automation_orchestrator.md`](./automation_orchestrator.md) | Orquestrar correções em lote | Já tem lista priorizada, quer automatizar |
 
 **Como funciona:**
+
 1. Verifica snapshot anterior (retoma se necessário)
 2. Executa diagnóstico → review → creation → validation
 3. Registra snapshot ao final
@@ -189,58 +195,61 @@ automation_orchestrator.md (engloba todos os outros)
 
 ### Resolução de Problemas
 
-| Problema | Solução |
-|----------|---------|
-| Comando falhou no Windows | [`commands_reference.md`](./commands_reference.md) |
-| Erro específico do projeto | [`troubleshooting.md`](./troubleshooting.md) |
-| OCR corrompendo caracteres | [`troubleshooting.md`](./troubleshooting.md) → "Problemas de OCR" |
-| Batch ID não encontrado | [`correction_tracking.md`](./correction_tracking.md) |
-| Extrator não funciona | [`logging_guide.md`](./logging_guide.md) → adicione logs |
-| Problemas da sessão 30/01 | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) |
+| Problema                   | Solução                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| Comando falhou no Windows  | [`commands_reference.md`](./commands_reference.md)                               |
+| Erro específico do projeto | [`troubleshooting.md`](./troubleshooting.md)                                     |
+| OCR corrompendo caracteres | [`troubleshooting.md`](./troubleshooting.md) → "Problemas de OCR"                |
+| Batch ID não encontrado    | [`correction_tracking.md`](./correction_tracking.md)                             |
+| Extrator não funciona      | [`logging_guide.md`](./logging_guide.md) → adicione logs                         |
+| PDF protegido por senha    | [`pdf_password_handling.md`](./pdf_password_handling.md)                         |
+| Problemas da sessão 30/01  | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) |
 
 ### Padrões de Código
 
-| Situação | Documento |
-|----------|-----------|
-| Criar novo extrator | [`coding_standards.md`](./coding_standards.md) + [`logging_guide.md`](./logging_guide.md) |
-| Type hints / basedpyright | [`coding_standards.md`](./coding_standards.md) → "Type Checking" |
-| SOLID / DRY | [`coding_standards.md`](./coding_standards.md) → "Princípios SOLID" |
-| Adicionar logs | [`logging_guide.md`](./logging_guide.md) |
+| Situação                  | Documento                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| Criar novo extrator       | [`coding_standards.md`](./coding_standards.md) + [`logging_guide.md`](./logging_guide.md) |
+| Type hints / basedpyright | [`coding_standards.md`](./coding_standards.md) → "Type Checking"                          |
+| SOLID / DRY               | [`coding_standards.md`](./coding_standards.md) → "Princípios SOLID"                       |
+| Adicionar logs            | [`logging_guide.md`](./logging_guide.md)                                                  |
 
 ### Conhecimento do Sistema
 
-| Tópico | Documento |
-|--------|-----------|
-| Arquitetura geral | [`project_overview.md`](./project_overview.md) |
-| Modelos de dados | [`project_overview.md`](./project_overview.md) → "Modelos de Dados" |
+| Tópico                | Documento                                                                 |
+| --------------------- | ------------------------------------------------------------------------- |
+| Arquitetura geral     | [`project_overview.md`](./project_overview.md)                            |
+| Modelos de dados      | [`project_overview.md`](./project_overview.md) → "Modelos de Dados"       |
 | Registry e prioridade | [`project_overview.md`](./project_overview.md) → "Extratores Registrados" |
-| Lições aprendidas | [`improvements_analysis.md`](./improvements_analysis.md) |
+| Lições aprendidas     | [`improvements_analysis.md`](./improvements_analysis.md)                  |
 
 ---
 
 ## 🗂️ Índice Completo (Alfabético)
 
-| # | Documento | Categoria | Descrição |
-|---|-----------|-----------|-----------|
-| 1 | [`automation_orchestrator.md`](./automation_orchestrator.md) | Fluxo | Orquestrar correções em lote |
-| 2 | [`coding_standards.md`](./coding_standards.md) | Referência | Type hints, SOLID, DRY |
-| 3 | [`commands_reference.md`](./commands_reference.md) | Referência | Unix vs PowerShell |
-| 4 | [`correction_tracking.md`](./correction_tracking.md) | Snapshot | Rastrear correções entre sessões |
-| 5 | [`creation.md`](./creation.md) | Fluxo | Criar novo extrator |
-| 6 | [`diagnosis.md`](./diagnosis.md) | Fluxo | Diagnóstico rápido de caso |
-| 7 | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md) | Exemplo | Análise real de priorização |
-| 8 | [`improvements_analysis.md`](./improvements_analysis.md) | Conhecimento | Lições da primeira orquestração |
-| 9 | [`log_correlation.md`](./log_correlation.md) | Fluxo | Analisar logs vs CSV |
-| 10 | [`logging_guide.md`](./logging_guide.md) | Referência | Como adicionar logs |
-| 11 | [`prioritization.md`](./prioritization.md) | Fluxo | Priorizar erros por recorrência |
-| 12 | [`project_overview.md`](./project_overview.md) | Conhecimento | Arquitetura e estrutura |
-| 13 | [`project_status_template.md`](./project_status_template.md) | Snapshot | Template de snapshot |
-| 14 | [`review.md`](./review.md) | Fluxo | Análise aprofundada de caso |
-| 15 | [`troubleshooting.md`](./troubleshooting.md) | Referência | Resolver erros comuns |
-| 16 | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) | Referência | Problemas específicos da sessão 30/01/2026 |
-| 17 | [`validation.md`](./validation.md) | Fluxo | Validar correções |
-| 18 | [`logging_standards.md`](./logging_standards.md) | Referência | Evitar falsos positivos nos logs |
-| 19 | [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md) | Snapshot | Sessão 30/01 - NFSE sem número |
+| #   | Documento                                                                        | Categoria    | Descrição                                  |
+| --- | -------------------------------------------------------------------------------- | ------------ | ------------------------------------------ |
+| 1   | [`automation_orchestrator.md`](./automation_orchestrator.md)                     | Fluxo        | Orquestrar correções em lote               |
+| 2   | [`coding_standards.md`](./coding_standards.md)                                   | Referência   | Type hints, SOLID, DRY                     |
+| 3   | [`commands_reference.md`](./commands_reference.md)                               | Referência   | Unix vs PowerShell                         |
+| 4   | [`correction_tracking.md`](./correction_tracking.md)                             | Snapshot     | Rastrear correções entre sessões           |
+| 5   | [`creation.md`](./creation.md)                                                   | Fluxo        | Criar novo extrator                        |
+| 6   | [`diagnosis.md`](./diagnosis.md)                                                 | Fluxo        | Diagnóstico rápido de caso                 |
+| 7   | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md)     | Exemplo      | Análise real de priorização                |
+| 8   | [`improvements_analysis.md`](./improvements_analysis.md)                         | Conhecimento | Lições da primeira orquestração            |
+| 9   | [`log_correlation.md`](./log_correlation.md)                                     | Fluxo        | Analisar logs vs CSV                       |
+| 10  | [`logging_guide.md`](./logging_guide.md)                                         | Referência   | Como adicionar logs                        |
+| 11  | [`prioritization.md`](./prioritization.md)                                       | Fluxo        | Priorizar erros por recorrência            |
+| 12  | [`project_overview.md`](./project_overview.md)                                   | Conhecimento | Arquitetura e estrutura                    |
+| 13  | [`project_status_template.md`](./project_status_template.md)                     | Snapshot     | Template de snapshot                       |
+| 14  | [`review.md`](./review.md)                                                       | Fluxo        | Análise aprofundada de caso                |
+| 15  | [`troubleshooting.md`](./troubleshooting.md)                                     | Referência   | Resolver erros comuns                      |
+| 16  | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) | Referência   | Problemas específicos da sessão 30/01/2026 |
+| 17  | [`validation.md`](./validation.md)                                               | Fluxo        | Validar correções                          |
+| 18  | [`logging_standards.md`](./logging_standards.md)                                 | Referência   | Evitar falsos positivos nos logs           |
+| 19  | [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md) | Snapshot     | Sessão 30/01 - NFSE sem número             |
+| 20  | [`ANALISE_ERROS_REAL_2026_01_30.md`](./ANALISE_ERROS_REAL_2026_01_30.md)         | Análise      | Análise de erros reais vs falsos positivos |
+| 21  | [`analise_2026_01_29.md`](./analise_2026_01_29.md)                               | Análise      | Primeira análise de saúde detalhada        |
 
 ---
 
@@ -248,21 +257,21 @@ automation_orchestrator.md (engloba todos os outros)
 
 ### Arquivos de Dados
 
-| Arquivo | Propósito | Formato |
-|---------|-----------|---------|
-| `data/output/relatorio_lotes.csv` | **Principal** - Resumo por lote | CSV (; delimitado) |
-| `data/output/relatorio_consolidado.csv` | Detalhado por documento | CSV (; delimitado) |
-| `data/output/analise_pdfs_detalhada.txt` | Análise de problemas | Texto |
-| `logs/scrapper.log` | Logs de processamento | Texto |
+| Arquivo                                  | Propósito                       | Formato            |
+| ---------------------------------------- | ------------------------------- | ------------------ |
+| `data/output/relatorio_lotes.csv`        | **Principal** - Resumo por lote | CSV (; delimitado) |
+| `data/output/relatorio_consolidado.csv`  | Detalhado por documento         | CSV (; delimitado) |
+| `data/output/analise_pdfs_detalhada.txt` | Análise de problemas            | Texto              |
+| `logs/scrapper.log`                      | Logs de processamento           | Texto              |
 
 ### Scripts Essenciais
 
-| Script | Função | Uso |
-|--------|--------|-----|
-| `inspect_pdf.py` | Inspeção de PDF | `python scripts/inspect_pdf.py <pdf> --raw` |
-| `analyze_logs.py` | Análise de logs | `python scripts/analyze_logs.py --today` |
+| Script                         | Função             | Uso                                                                     |
+| ------------------------------ | ------------------ | ----------------------------------------------------------------------- |
+| `inspect_pdf.py`               | Inspeção de PDF    | `python scripts/inspect_pdf.py <pdf> --raw`                             |
+| `analyze_logs.py`              | Análise de logs    | `python scripts/analyze_logs.py --today`                                |
 | `validate_extraction_rules.py` | Teste de regressão | `python scripts/validate_extraction_rules.py --batch-mode --temp-email` |
-| `run_ingestion.py` | Reprocessar | `python run_ingestion.py --batch-folder <id>` |
+| `run_ingestion.py`             | Reprocessar        | `python run_ingestion.py --batch-folder <id>`                           |
 
 ---
 
@@ -271,6 +280,7 @@ automation_orchestrator.md (engloba todos os outros)
 ### Prioridade de Extratores
 
 A ordem em `extractors/__init__.py` define a prioridade:
+
 - **0-3:** Extratores muito específicos (CNPJ único)
 - **4-7:** Extratores por tipo/empresa
 - **8-11:** Extratores administrativos
@@ -279,12 +289,12 @@ A ordem em `extractors/__init__.py` define a prioridade:
 
 ### Formatos de Dados
 
-| Campo | Formato | Exemplo |
-|-------|---------|---------|
-| Valor | float | `700.00` |
-| Data | ISO (YYYY-MM-DD) | `2026-01-15` |
-| CNPJ | Formatado | `12.345.678/9012-34` |
-| Vazio | None | `None` (nunca `""`) |
+| Campo | Formato          | Exemplo              |
+| ----- | ---------------- | -------------------- |
+| Valor | float            | `700.00`             |
+| Data  | ISO (YYYY-MM-DD) | `2026-01-15`         |
+| CNPJ  | Formatado        | `12.345.678/9012-34` |
+| Vazio | None             | `None` (nunca `""`)  |
 
 ---
 
@@ -293,19 +303,78 @@ A ordem em `extractors/__init__.py` define a prioridade:
 Ao criar novos prompts ou modificar existentes:
 
 1. **Atualize este README.md**:
-   - Adicione ao "Índice Completo"
-   - Inclua no fluxo apropriado (se aplicável)
-   - Atualize "Fluxo Rápido" se for documento primário
+    - Adicione ao "Índice Completo"
+    - Inclua no fluxo apropriado (se aplicável)
+    - Atualize "Fluxo Rápido" se for documento primário
 
 2. **Siga o padrão**:
-   - Header com descrição breve
-   - Seção "Quando usar"
-   - Ferramentas/comandos
-   - Output esperado
+    - Header com descrição breve
+    - Seção "Quando usar"
+    - Ferramentas/comandos
+    - Output esperado
 
 3. **Após correções**:
-   - Atualize snapshot em `project_overview.md`
-   - Use template `project_status_template.md`
+    - Atualize snapshot em `project_overview.md`
+    - Use template `project_status_template.md`
+
+---
+
+---
+
+## 🆕 Extratores Especiais e Novos
+
+### Extratores Fora do Registry
+
+Alguns extratores não estão no registry padrão pois processam dados de forma diferente:
+
+| Extrator                   | Arquivo                              | Propósito                      | Chamado Por    |
+| -------------------------- | ------------------------------------ | ------------------------------ | -------------- |
+| `EmailBodyExtractor`       | `extractors/email_body_extractor.py` | Extrai dados do corpo do email | BatchProcessor |
+| `SabespWaterBillExtractor` | `extractors/sabesp.py`               | Faturas Sabesp (PDF protegido) | BatchProcessor |
+| `XmlExtractor`             | `extractors/xml_extractor.py`        | Processa XMLs fiscais          | BatchProcessor |
+
+### Extratores Recentes no Registry
+
+| Extrator                 | Arquivo                         | Propósito                            | Data       |
+| ------------------------ | ------------------------------- | ------------------------------------ | ---------- |
+| `CscNotaDebitoExtractor` | `extractors/csc_nota_debito.py` | Nota Débito/Recibo Fatura CSC GESTAO | 02/02/2026 |
+
+### SabespWaterBillExtractor (02/02/2026)
+
+PDFs da Sabesp são protegidos por senha (CPF do titular). Este extrator:
+
+- Detecta emails pelo sender (`sabesp.com.br`) ou subject
+- Extrai dados do corpo HTML: valor, vencimento, fornecimento, código de barras
+- Retorna `tipo_documento="UTILITY_BILL"` com `subtipo="WATER"`
+
+```python
+# Uso automático pelo BatchProcessor quando detecta email Sabesp
+from extractors.sabesp import SabespWaterBillExtractor
+
+if SabespWaterBillExtractor.can_handle_email(email_subject, email_sender, email_body):
+    data = SabespWaterBillExtractor().extract(email_body)
+```
+
+### CscNotaDebitoExtractor (02/02/2026)
+
+Processa documentos "NOTA DÉBITO / RECIBO FATURA" da CSC GESTAO INTEGRADA S/A (CNPJ: 38.323.227/0001-40).
+Estes documentos são usados para cobrança de tarifas bancárias e enviados por Linnia Barreto.
+
+- Detecta por texto "NOTA DÉBITO / RECIBO FATURA" + CNPJ/nome da CSC
+- Suporta variações de OCR (espaços entre letras)
+- Extrai: número, valor, data emissão, competência, tomador, CNPJ tomador
+- Retorna `tipo_documento="OUTRO"` com `subtipo="NOTA_DEBITO"`
+
+```python
+# Uso automático via EXTRACTOR_REGISTRY (posição 13)
+from extractors.csc_nota_debito import CscNotaDebitoExtractor
+
+if CscNotaDebitoExtractor.can_handle(texto):
+    data = CscNotaDebitoExtractor().extract(texto)
+    # data["numero_documento"] = "347"
+    # data["valor_total"] = 2163.60
+    # data["subtipo"] = "NOTA_DEBITO"
+```
 
 ---
 

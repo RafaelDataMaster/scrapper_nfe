@@ -68,6 +68,8 @@ class NfseGenericExtractor(BaseExtractor):
         other_keywords = [
             "DEMONSTRATIVO",
             "LOCAWEB",
+            "EXTRATO DE LOCAÇÃO",
+            "EXTRATO DE LOCACAO",
         ]
         # FATURA só bloqueia se NÃO tiver indicadores de NFS-e
         if "FATURA" in text_upper and not is_strong_nfse:
@@ -235,7 +237,11 @@ class NfseGenericExtractor(BaseExtractor):
         texto_limpo = text
         # Remove datas no formato DD/MM/YYYY para não confundir com números
         texto_limpo = re.sub(r"\d{2}/\d{2}/\d{4}", " ", texto_limpo)
-        padroes_lixo = r"(?i)\b(RPS|Lote|Protocolo|Recibo|S[eé]rie)\b\D{0,10}?\d+"
+        # Remove padrões que confundem a extração, mas preserva "Recibo número:" que é útil
+        # Usa negative lookahead para não remover "Recibo número:"
+        padroes_lixo = (
+            r"(?i)\b(RPS|Lote|Protocolo|Recibo(?!\s+n[úu]mero)|S[eé]rie)\b\D{0,10}?\d+"
+        )
         texto_limpo = re.sub(padroes_lixo, " ", texto_limpo)
 
         # Padrões que capturam números compostos (ex: 2025/44, 2025-44)
@@ -244,6 +250,8 @@ class NfseGenericExtractor(BaseExtractor):
             r"(?i)N[º°o]\.?\s*[:.-]?\s*(\d{4}[/\-]\d{1,6})\b",
             # "NFS-e ... Nº: 2025/44"
             r"(?i)NFS-?e\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*(\d{4}[/\-]\d{1,6})\b",
+            # "Recibo número: 59/2026" - recibos com formato sequencial/ano
+            r"(?i)Recibo\s+n[úu]mero\s*:\s*(\d{1,6}[/\-]\d{4})\b",
         ]
 
         # Primeiro tenta padrões compostos (mais específicos)
@@ -261,6 +269,19 @@ class NfseGenericExtractor(BaseExtractor):
             r"(?i)Nota\s*Fiscal\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*(\d{1,15})",
             r"(?i)Nota\s*Fiscal\s*Fatura\s*[:\-]?\s*(\d{1,15})",
             r"(?i)(?<!RPS\s)(?<!Lote\s)(?<!S[eé]rie\s)(?:Número|N[º°o])\s*[:.-]?\s*(\d{1,15})",
+            # Padrão para "Nº NFS-e PREFEITURA MUNICIPAL DE 25454" (número após nome da cidade/prefeitura)
+            r"(?i)N[º°o]\s+NFS-?e\s+(?:PREFEITURA\s+(?:MUNICIPAL\s+)?(?:DE|DO)\s+)?(\d{4,15})\b",
+            # Padrão para "Nº NFS-e ... <número>" com texto intermediário (até 50 chars)
+            r"(?i)N[º°o]\s+NFS-?e\b.{0,50}?\b(\d{4,8})\b(?=\s+[A-Z])",
+            # Padrão para NFSe com Nº em linha separada do número (TCF Services, prefeituras)
+            # Ex: "Nº\nEmitida em: ...\n202600000000068 05/01/2026"
+            r"(?i)N[º°o]\s*\n\s*(?:Emitida|Compet|Data).*?\n\s*(\d{10,15})",
+            # Padrão para número longo no início de linha seguido de data (formato comum em NFSe)
+            r"(?m)^\s*(\d{10,15})\s+\d{2}/\d{2}/\d{4}",
+            # Padrão para "Numero: 347" - notas de débito/recibo com números curtos (3+ dígitos)
+            r"(?i)(?:Numero|Número)\s*:\s*(\d{3,15})\b",
+            # Padrão para "Nº documento: 71039" - faturas com números de 4-5 dígitos
+            r"(?i)N[º°o]\s*documento\s*:\s*(\d{4,15})\b",
         ]
 
         for regex in padroes:

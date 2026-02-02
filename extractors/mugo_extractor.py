@@ -40,6 +40,7 @@ from extractors.utils import (
     parse_date_br,
 )
 
+
 @register_extractor
 class MugoExtractor(BaseExtractor):
     """
@@ -272,13 +273,14 @@ class MugoExtractor(BaseExtractor):
             Número do documento ou None
         """
         # Padrões prioritários com contexto específico
+        # Ajustado mínimo de 6 para 4 dígitos para capturar números como 71039 (5 dígitos)
         priority_patterns = [
-            r"N[º°O]\s+(?:DOCUMENTO)?\s*[:]?\s*(\d{6,12})",
-            r"N[ÚU]MERO\s+(?:DO\s+)?(?:DOCUMENTO|FATURA)?\s*[:]?\s*(\d{6,12})",
-            r"FATURA\s+N[º°O]\s*[:]?\s*(\d{6,12})",
-            r"DOCUMENTO\s+N[º°O]?\s*[:]?\s*(\d{6,12})",
-            r"N[º°O]\s*\.?\s*(\d{6,12})",
-            r"NOTA\s+FISCAL\s+N[º°O]?\s*[:]?\s*(\d{6,12})",
+            r"N[º°O]\s+(?:DOCUMENTO)?\s*[:]?\s*(\d{4,15})",
+            r"N[ÚU]MERO\s+(?:DO\s+)?(?:DOCUMENTO|FATURA)?\s*[:]?\s*(\d{4,15})",
+            r"FATURA\s+N[º°O]\s*[:]?\s*(\d{4,15})",
+            r"DOCUMENTO\s+N[º°O]?\s*[:]?\s*(\d{4,15})",
+            r"N[º°O]\s*\.?\s*(\d{4,15})",
+            r"NOTA\s+FISCAL\s+N[º°O]?\s*[:]?\s*(\d{4,15})",
         ]
 
         for pattern in priority_patterns:
@@ -304,8 +306,8 @@ class MugoExtractor(BaseExtractor):
             ]
 
             if any(ind in line_upper for ind in indicators):
-                # Procurar sequência de dígitos nesta linha
-                match = re.search(r"(\d{6,12})", line)
+                # Procurar sequência de dígitos nesta linha (mínimo 4 dígitos)
+                match = re.search(r"(\d{4,15})", line)
                 if match:
                     # Verificar linha seguinte também (às vezes o número está na próxima linha)
                     next_line_match = None
@@ -320,14 +322,14 @@ class MugoExtractor(BaseExtractor):
                     else:
                         return match.group(1)
 
-        # Buscar por qualquer sequência de 8-12 dígitos que possa ser número de documento
+        # Buscar por qualquer sequência de 5-15 dígitos que possa ser número de documento
         # (evita capturar CNPJ, IE, etc. que têm padrões específicos)
-        all_matches = re.findall(r"\b(\d{8,12})\b", text)
+        all_matches = re.findall(r"\b(\d{5,15})\b", text)
         for match in all_matches:
             # Filtrar números que são CNPJ (14 dígitos) ou IE (com pontos/hífens)
-            # Mas 8-12 dígitos podem ser números de documento
+            # Mas 5-15 dígitos podem ser números de documento
             # Verificar se não é data (começa com 20, 19, etc.)
-            if not match.startswith(("20", "19", "00")) and len(match) >= 6:
+            if not match.startswith(("20", "19", "00")) and len(match) >= 4:
                 # Verificar contexto ao redor
                 return match
 

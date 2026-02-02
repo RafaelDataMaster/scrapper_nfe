@@ -10,6 +10,7 @@
 ### 1. Batch IDs Não Encontrados ("Batch não existe")
 
 **Sintoma:** Você tenta usar um batch ID de uma sessão anterior e recebe erro:
+
 ```
 Batch email_20260129_084433_c5c04540 não encontrado
 ```
@@ -17,6 +18,7 @@ Batch email_20260129_084433_c5c04540 não encontrado
 **Causa:** Batch IDs são voláteis! Eles mudam a cada `clean_dev` + `run_ingestion`.
 
 **Cenário típico:**
+
 ```
 Sessão 1 (ontem):
   - Identifica erro no batch email_20260129_084433_c5c04540
@@ -36,11 +38,11 @@ Sessão 2 (hoje):
 ```markdown
 1. NUNCA use batch IDs de sessões anteriores
 2. Use identificadores estáveis:
-   - ✅ Fornecedor: "TUNNA ENTRETENIMENTO"
-   - ✅ CNPJ: "12.345.678/9012-34"
-   - ✅ Tipo: "FATURA"
-   - ✅ Número do documento: "000.010.731"
-   - ❌ Batch ID: "email_20260129_084433_c5c04540"
+    - ✅ Fornecedor: "TUNNA ENTRETENIMENTO"
+    - ✅ CNPJ: "12.345.678/9012-34"
+    - ✅ Tipo: "FATURA"
+    - ✅ Número do documento: "000.010.731"
+    - ❌ Batch ID: "email_20260129_084433_c5c04540"
 
 3. Para reencontrar casos em nova sessão:
 ```
@@ -64,12 +66,14 @@ python scripts/validate_extraction_rules.py --batch-mode --temp-email
 **Sintoma:** Caracteres especiais aparecem como `�` ou símbolos estranhos
 
 **Exemplo real:**
+
 ```
 Esperado:  "Nº.: 000.010.731"
 OCR gerou: "N�.: 000.010.731"
 ```
 
 **Solução:**
+
 ```python
 # ❌ Regex rígido (falha com OCR)
 pattern = r"Nº\s*:\s*(\d+)"
@@ -89,17 +93,156 @@ pattern = r"N[^\w\s]?\s*[:\.]\s*(\d+)"  # Aceita qualquer coisa após N
 **Contexto:** Em chaves de acesso DANFE (44 dígitos), OCR pode trocar dígitos
 
 **Solução:**
+
 ```python
 # ❌ Verificação estrita (pode falhar)
 if re.search(r"\b\d{44}\b", text):
-    
+
 # ✅ Verificação tolerante (melhor para OCR)
 digits = re.sub(r"\D", "", text)  # Remove não-dígitos
 if len(digits) >= 40:  # Tolerância a até 4 erros
     # Possível chave DANFE
 ```
 
+---
+
+## 🔒 PDFs Protegidos por Senha
+
+### 1. PDF da Sabesp (Senha = CPF do Titular)
+
+**Sintoma:** Erro ao processar PDF da Sabesp:
+
+```
+PDF 01_fatura.pdf: senha desconhecida (pypdfium2)
+❌ [OCR] Não foi possível abrir PDF: 01_fatura.pdf
+Nenhuma estratégia conseguiu extrair texto de ... 01_fatura.pdf
+```
+
+**Causa:** PDFs de fatura da Sabesp são protegidos com os 3 primeiros dígitos do CPF do titular.
+
+**Solução implementada (02/02/2026):**
+
+O sistema agora detecta emails da Sabesp e extrai os dados diretamente do corpo do email HTML:
+
+```python
+# BatchProcessor detecta automaticamente emails Sabesp
+from extractors.sabesp import SabespWaterBillExtractor
+
+if SabespWaterBillExtractor.can_handle_email(
+    email_subject=metadata.email_subject,
+    email_sender=metadata.email_sender_address,
+    email_body=metadata.email_body_text,
+):
+    # Usa extrator especializado que lê do email body
+    data = SabespWaterBillExtractor().extract(email_body)
+    # Retorna: tipo_documento="UTILITY_BILL", subtipo="WATER"
+```
+
+**Dados extraídos do email body:**
+
+- Valor (R$ XXX,XX)
+- Vencimento (DD/MM/YYYY)
+- Número de fornecimento (14 dígitos)
+- Código de barras
+- Unidade/localidade
+
+**Identificação:**
+
+- Sender: `*@sabesp.com.br`
+- Subject: contém "Sabesp" ou "fatura por e-mail"
+- Body: contém "Fornecimento" + "Unidade" + "Vencimento" + "Valor"
+
+**Resultado:**
+
+```
+tipo_documento: UTILITY_BILL (mapeia para OtherDocumentData)
+subtipo: WATER
+fornecedor_nome: SABESP
+cnpj_fornecedor: 43.776.517/0001-80
+```
+
+**Nota:** O erro do PDF ainda é registrado em `total_errors`, mas os dados são extraídos corretamente do email body.
+
+---
+
+### 2. Outros PDFs Protegidos (Genérico)
+
+**Sintoma:** PDF não abre, erro de senha desconhecida
+
+**Possíveis soluções:**
+
+1. **Tentar senhas conhecidas:**
+   O sistema já tenta CNPJs do cadastro como senha. Verifique se o CNPJ está no arquivo de configuração.
+
+2. **Dados no email body:**
+   Se os dados estão no corpo do email, o `EmailBodyExtractor` pode extrair automaticamente.
+
+3. **Contatar remetente:**
+   Para casos recorrentes, considere pedir ao fornecedor que envie PDFs sem senha.
+
+4. **Criar extrator específico:**
+   Similar ao `SabespWaterBillExtractor`, crie um extrator que detecte o fornecedor pelo email e extraia do body.
+
 **Decisão arquitetural:** Se precisar identificar DANFE por chave de acesso, considere usar outros indicadores também (como fizemos movendo DanfeExtractor no registry).
+
+---
+
+## 📄 Documentos CSC/Linnia (Nota Débito/Recibo Fatura)
+
+### Documentos "NOTA DÉBITO / RECIBO FATURA" da CSC GESTAO
+
+**Sintoma:** Documentos CSC GESTAO INTEGRADA sendo classificados como "NFSe sem número":
+
+```
+tipo_documento: NFSE
+numero_nota: (vazio)
+fornecedor: CSC GESTAO INTEGRADA S/A
+```
+
+**Causa:** Não existia extrator específico para documentos "NOTA DÉBITO / RECIBO FATURA" da CSC.
+
+**Solução implementada (02/02/2026):**
+
+Criado `CscNotaDebitoExtractor` em `extractors/csc_nota_debito.py`:
+
+```python
+from extractors.csc_nota_debito import CscNotaDebitoExtractor
+
+if CscNotaDebitoExtractor.can_handle(texto):
+    data = CscNotaDebitoExtractor().extract(texto)
+    # data["tipo_documento"] = "OUTRO"
+    # data["subtipo"] = "NOTA_DEBITO"
+    # data["numero_documento"] = "347"
+    # data["valor_total"] = 2163.60
+```
+
+**Identificação:**
+
+- Texto contém "NOTA DÉBITO / RECIBO FATURA" (ou variantes com espaços OCR)
+- CNPJ da CSC: 38.323.227/0001-40
+- Nome "CSC GESTAO" no texto
+
+**Dados extraídos:**
+
+- Número do documento (ex: 347, 348)
+- Valor total
+- Data de emissão
+- Competência (mês/ano)
+- Tomador (nome e CNPJ)
+- Itens/observações
+
+**Resultado:**
+
+```
+tipo_documento: OUTRO
+subtipo: NOTA_DEBITO
+fornecedor_nome: CSC GESTAO INTEGRADA S/A
+cnpj_fornecedor: 38.323.227/0001-40
+numero_documento: 347
+valor_total: 2163.60
+```
+
+**Nota:** O extrator suporta variações de OCR onde letras estão separadas por espaços ("N O T A D É B I T O").
 
 ---
 
@@ -108,6 +251,7 @@ if len(digits) >= 40:  # Tolerância a até 4 erros
 ### 3. Não Encontra PDF para Inspeção
 
 **Sintoma:**
+
 ```
 ERRO: Arquivo não encontrado: email_20260129_084433_c5c04540
 Buscado em:
@@ -118,6 +262,7 @@ Buscado em:
 **Causa:** Passando apenas o batch_id sem o caminho completo
 
 **Solução:**
+
 ```bash
 # ❌ Incorreto
 python scripts/inspect_pdf.py email_20260129_084433_c5c04540
@@ -133,6 +278,7 @@ python scripts/inspect_pdf.py --batch email_20260129_084433_c5c04540
 ```
 
 **Estrutura correta:**
+
 ```
 temp_email/
 └── email_YYYYMMDD_HHMMSS_hash/
@@ -147,6 +293,7 @@ temp_email/
 **Sintoma:** Script processa `failed_cases_pdf/` mas queremos validar `temp_email/`
 
 **Solução:**
+
 ```bash
 # ❌ Modo legado (pasta antiga)
 python scripts/validate_extraction_rules.py
@@ -170,6 +317,7 @@ python scripts/validate_extraction_rules.py --batch-mode --temp-email \
 **Causa:** Sistema só aceita tipos: `NFSE`, `BOLETO`, `DANFE`, `OUTRO`
 
 **Solução:**
+
 ```python
 # ❌ Não funciona
 data: Dict[str, Any] = {"tipo_documento": "FATURA"}
@@ -199,6 +347,7 @@ data: Dict[str, Any] = {
 **Causa:** Sistema espera campo específico por tipo
 
 **Solução por tipo:**
+
 ```python
 # Para NFSE: usar numero_nota
 data["numero_nota"] = numero_extraido
@@ -229,12 +378,14 @@ if numero_extraido:
 **Causa:** Ordem no `extractors/__init__.py` - extratores são testados em ordem
 
 **Diagnóstico:**
+
 ```bash
 python scripts/inspect_pdf.py <arquivo.pdf>
 # Verificar saída "TESTE DE EXTRATORES" para ver ordem
 ```
 
 **Solução:**
+
 ```python
 # Em extractors/__init__.py
 # Extratores específicos DEVEM vir antes dos genéricos
@@ -260,6 +411,7 @@ from .tunna_fatura import TunnaFaturaExtractor      # Nunca chega aqui
 **Sintoma:** Tratando documento como tipo errado (ex: DANFE quando é FATURA)
 
 **Exemplo real:**
+
 ```
 Nome arquivo: 01_DANFEFAT0000010731.pdf  ← Contém "DANFE"
 Assunto: Nota Fiscal FAT/10731           ← Contém "Nota Fiscal"
@@ -267,6 +419,7 @@ Conteúdo: Demonstrativo/Fatura comercial ← É uma fatura!
 ```
 
 **Checklist de inspeção obrigatória:**
+
 ```bash
 # 1. Verificar nome do arquivo
 ls temp_email/<batch_id>/
@@ -295,6 +448,7 @@ python scripts/inspect_pdf.py <arquivo.pdf> --raw
 ### 9. Comandos Unix Falham no PowerShell
 
 **Erros comuns:**
+
 ```powershell
 # ❌ Falha
 grep "termo" arquivo.txt
@@ -305,6 +459,7 @@ wc -l arquivo.txt
 ```
 
 **Soluções PowerShell:**
+
 ```powershell
 # ✅ Alternativas
 # grep → Select-String (ou sls)
@@ -342,6 +497,7 @@ Copy-Item origem destino
 **Sintoma:** `validate_extraction_rules.py --batch-mode` processa todos os batches (centenas)
 
 **Solução:** Use batches específicos
+
 ```bash
 # ❌ Lento - todos os batches
 python scripts/validate_extraction_rules.py --batch-mode --temp-email
@@ -352,6 +508,7 @@ python scripts/validate_extraction_rules.py --batch-mode --temp-email \
 ```
 
 **Estratégia de seleção:**
+
 - Sempre incluir batches que foram modificados
 - Incluir 1-2 batches de cada tipo (NFSe, Boleto, DANFE, OUTRO)
 - Priorizar batches de fornecedores similares
@@ -367,6 +524,7 @@ python scripts/validate_extraction_rules.py --batch-mode --temp-email \
 **Causa:** CSV é append-only, não sobrescreve automaticamente
 
 **Solução:**
+
 ```bash
 # Backup antes de reprocessar
 cp data/output/relatorio_lotes.csv data/output/relatorio_lotes.csv.bak
@@ -388,16 +546,19 @@ Select-String "<batch_id>" data/output/relatorio_lotes.csv
 ### 12. ImportError ao Carregar Extrator
 
 **Sintoma:**
+
 ```
 ImportError: cannot import name 'TunnaFaturaExtractor' from 'extractors'
 ```
 
 **Causas:**
+
 1. Extrator não registrado em `extractors/__init__.py`
 2. Erro de sintaxe no arquivo do extrator
 3. Nome da classe diferente do import
 
 **Checklist:**
+
 ```python
 # 1. Verificar nome do arquivo
 # extractors/tunna_fatura.py
@@ -423,7 +584,7 @@ Quando algo não funciona, verifique:
 
 - [ ] **Caminho do arquivo está correto?** (temp_email/ vs failed_cases_pdf/)
 - [ ] **Comando é compatível com Windows?** (PowerShell vs Unix)
-- [ ] **Extrator está registrado?** (__init__.py e __all__)
+- [ ] **Extrator está registrado?** (**init**.py e **all**)
 - [ ] **Ordem no registry está correta?** (específico antes do genérico)
 - [ ] **Tipo do documento é válido?** (NFSE/BOLETO/DANFE/OUTRO)
 - [ ] **Campos do modelo estão preenchidos?** (numero_nota vs numero_documento)
@@ -434,15 +595,15 @@ Quando algo não funciona, verifique:
 
 ## 🔗 Referências Rápidas
 
-| Problema | Comando/Solução |
-|----------|-----------------|
-| Buscar no CSV | `Select-String "termo" data/output/relatorio_lotes.csv` |
-| Listar batches | `Get-ChildItem temp_email/` |
-| Inspecionar PDF | `python scripts/inspect_pdf.py --batch <batch_id>` |
+| Problema          | Comando/Solução                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| Buscar no CSV     | `Select-String "termo" data/output/relatorio_lotes.csv`                                   |
+| Listar batches    | `Get-ChildItem temp_email/`                                                               |
+| Inspecionar PDF   | `python scripts/inspect_pdf.py --batch <batch_id>`                                        |
 | Validar regressão | `python scripts/validate_extraction_rules.py --batch-mode --temp-email --batches <lista>` |
-| Reprocessar batch | `python run_ingestion.py --batch-folder temp_email/<batch_id>` |
-| Ver logs | `python scripts/analyze_logs.py --today` |
+| Reprocessar batch | `python run_ingestion.py --batch-folder temp_email/<batch_id>`                            |
+| Ver logs          | `python scripts/analyze_logs.py --today`                                                  |
 
 ---
 
-*Última atualização: 2026-01-29 - Após Orquestração #1 (TunnaFaturaExtractor)*
+_Última atualização: 2026-02-02 - Adicionado CscNotaDebitoExtractor_

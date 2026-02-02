@@ -107,9 +107,16 @@ class OutrosExtractor(BaseExtractor):
             return False
 
         # Verificar padrões de impostos que indicam documento fiscal
+        # EXCEÇÃO: Faturas de locação podem ter campos de impostos sem serem NF-e
+        is_fatura_locacao = (
+            "FATURA DE LOCAÇÃO" in t
+            or "FATURA DE LOCACAO" in t
+            or "EXTRATO DE LOCAÇÃO" in t
+            or "EXTRATO DE LOCACAO" in t
+        )
         tax_patterns = r"ISS|INSS|PIS|COFINS|ICMS|CSLL|IRRF|IRPJ"
         tax_matches = re.findall(tax_patterns, t)
-        if len(tax_matches) >= 2:
+        if len(tax_matches) >= 2 and not is_fatura_locacao:
             logging.getLogger(__name__).debug(
                 f"OutrosExtractor: can_handle excluído - múltiplos impostos ({len(tax_matches)})"
             )
@@ -119,6 +126,13 @@ class OutrosExtractor(BaseExtractor):
         if "DEMONSTRATIVO" in t and ("LOCA" in t or "LOCAÇÃO" in t or "LOCACAO" in t):
             logging.getLogger(__name__).debug(
                 "OutrosExtractor: can_handle detectou demonstrativo de locação"
+            )
+            return True
+
+        # EXTRATO DE LOCAÇÃO (ex: REPROMAQ)
+        if "EXTRATO DE LOCAÇÃO" in t or "EXTRATO DE LOCACAO" in t:
+            logging.getLogger(__name__).debug(
+                "OutrosExtractor: can_handle detectou extrato de locação"
             )
             return True
 
@@ -174,6 +188,10 @@ class OutrosExtractor(BaseExtractor):
         t = text.upper()
         if "LOCA" in t and "DEMONSTRATIVO" in t:
             data["subtipo"] = "LOCACAO"
+        elif "EXTRATO DE LOCAÇÃO" in t or "EXTRATO DE LOCACAO" in t:
+            data["subtipo"] = "LOCACAO"
+        elif "FATURA DE LOCAÇÃO" in t or "FATURA DE LOCACAO" in t:
+            data["subtipo"] = "LOCACAO"
         elif "FATURA" in t:
             data["subtipo"] = "FATURA"
 
@@ -192,7 +210,7 @@ class OutrosExtractor(BaseExtractor):
             "EXATA TELCO": "EXATA TELCO",
             "LEVYCAM": "LEVYCAM CORRETORA DE CÂMBIO",
         }
-        
+
         for keyword, supplier in KNOWN_SUPPLIERS.items():
             if keyword in t:
                 data["fornecedor_nome"] = supplier
@@ -231,6 +249,28 @@ class OutrosExtractor(BaseExtractor):
                     logger.debug(
                         f"OutrosExtractor: valor_total extraído (layout analítico): R$ {data['valor_total']:.2f}"
                     )
+
+            # 1b) Layout EXTRATO DE LOCAÇÃO (Repromaq): "VALOR TOTAL : 267,81"
+            if not data.get("valor_total"):
+                m_valor_total = re.search(r"(?i)\bVALOR\s+TOTAL\s*:\s*([\d.,]+)", text)
+                if m_valor_total:
+                    val = parse_br_money(m_valor_total.group(1))
+                    if val > 0:
+                        data["valor_total"] = val
+                        logger.debug(
+                            f"OutrosExtractor: valor_total extraído (VALOR TOTAL): R$ {data['valor_total']:.2f}"
+                        )
+
+            # 1c) Layout EXTRATO DE LOCAÇÃO (Repromaq): "R$ TOTAL : 267,81"
+            if not data.get("valor_total"):
+                m_rs_total = re.search(r"(?i)R\$\s*TOTAL\s*:\s*([\d.,]+)", text)
+                if m_rs_total:
+                    val = parse_br_money(m_rs_total.group(1))
+                    if val > 0:
+                        data["valor_total"] = val
+                        logger.debug(
+                            f"OutrosExtractor: valor_total extraído (R$ TOTAL): R$ {data['valor_total']:.2f}"
+                        )
 
         # 2) Padrões genéricos (inclui casos com R$)
         if not data.get("valor_total"):
@@ -276,6 +316,51 @@ class OutrosExtractor(BaseExtractor):
             logger.debug(
                 f"OutrosExtractor: data_emissao extraída: {data['data_emissao']}"
             )
+
+        # Número do documento (para extratos de locação)
+        # Prioridade: NÚMERO DO RECIBO > Nº SXXXXX > NÚMERO DA FATURA > NÚMERO DO CONTRATO
+        if data.get("subtipo") == "LOCACAO":
+            # Padrão REPROMAQ extrato: "NÚMERO DO RECIBO:S09679"
+            m_recibo = re.search(
+                r"(?i)N[ÚU]MERO\s+DO\s+RECIBO\s*:\s*([A-Z0-9\-]+)", text
+            )
+            if m_recibo:
+                data["numero_documento"] = m_recibo.group(1).strip()
+                logger.debug(
+                    f"OutrosExtractor: numero_documento extraído (recibo): {data['numero_documento']}"
+                )
+
+            # Padrão REPROMAQ fatura: "Nº S09679"
+            if not data.get("numero_documento"):
+                m_num = re.search(r"N[ºo°]\s+([A-Z]\d{4,}(?:-\d+)?)", text)
+                if m_num:
+                    data["numero_documento"] = m_num.group(1).strip()
+                    logger.debug(
+                        f"OutrosExtractor: numero_documento extraído (Nº): {data['numero_documento']}"
+                    )
+
+            # Padrão: "NÚMERO DA FATURA ... S09679"
+            if not data.get("numero_documento"):
+                m_fatura = re.search(
+                    r"(?i)N[ÚU]MERO\s+DA\s+FATURA[\s\S]{0,30}?([A-Z]\d{4,}(?:-\d+)?)",
+                    text,
+                )
+                if m_fatura:
+                    data["numero_documento"] = m_fatura.group(1).strip()
+                    logger.debug(
+                        f"OutrosExtractor: numero_documento extraído (fatura): {data['numero_documento']}"
+                    )
+
+            # Fallback: "NÚMERO DO CONTRATO :4152"
+            if not data.get("numero_documento"):
+                m_contrato = re.search(
+                    r"(?i)N[ÚU]MERO\s+DO\s+CONTRATO\s*:\s*(\d+)", text
+                )
+                if m_contrato:
+                    data["numero_documento"] = f"CONTRATO-{m_contrato.group(1).strip()}"
+                    logger.debug(
+                        f"OutrosExtractor: numero_documento extraído (contrato): {data['numero_documento']}"
+                    )
 
         # Log final do resultado
         if data.get("valor_total"):

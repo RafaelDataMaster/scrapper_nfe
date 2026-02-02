@@ -66,7 +66,7 @@ Erros: #[N] | Warnings: #[N] | Info: #[N]
 
 Problemas Críticos Encontrados:
 - PDFs protegidos por senha: #[N]
-- PDFs com erro de abertura: #[N]  
+- PDFs com erro de abertura: #[N]
 - Lotes lentos (>20s): #[N]
 - Documentos sem extrator: #[N]
 - Falhas de correlação: #[N]
@@ -74,21 +74,22 @@ Problemas Críticos Encontrados:
 
 ### 2. ERROS POR MÓDULO
 
-| Módulo | Erros | Warnings | % do Total |
-|--------|-------|----------|------------|
-| #[core.processor] | #[N] | #[N] | #[X%] |
-| #[extractors.nfse_generic] | #[N] | #[N] | #[X%] |
-| #[strategies.native] | #[N] | #[N] | #[X%] |
+| Módulo                     | Erros | Warnings | % do Total |
+| -------------------------- | ----- | -------- | ---------- |
+| #[core.processor]          | #[N]  | #[N]     | #[X%]      |
+| #[extractors.nfse_generic] | #[N]  | #[N]     | #[X%]      |
+| #[strategies.native]       | #[N]  | #[N]     | #[X%]      |
 
 ### 3. ANÁLISE DE LOTES LENTOS
 
 **Top 5 lotes mais lentos:**
 
-| Batch ID | Duração | Extratores Testados | Erros | Ação Recomendada |
-|----------|---------|---------------------|-------|------------------|
-| #[id] | #[45.2s] | #[Lista] | #[N] | #[Otimizar/Investigar] |
+| Batch ID | Duração  | Extratores Testados | Erros | Ação Recomendada       |
+| -------- | -------- | ------------------- | ----- | ---------------------- |
+| #[id]    | #[45.2s] | #[Lista]            | #[N]  | #[Otimizar/Investigar] |
 
 **Padrões identificados em lotes lentos:**
+
 - [ ] PDFs muito grandes (>100 páginas)
 - [ ] OCR necessário (PDF em imagem)
 - [ ] Múltiplos extratores testados antes de match
@@ -98,17 +99,17 @@ Problemas Críticos Encontrados:
 
 #### Casos onde erro no log resultou em problema no CSV:
 
-| Batch ID | Erro no Log | Impacto no CSV | Severidade |
-|----------|-------------|----------------|------------|
-| #[id] | #[Falha ao desbloquear PDF] | #[Valor zero, sem dados] | #[ALTA] |
-| #[id] | #[Nenhum extrator compatível] | #[Classificado como OUTRO] | #[MÉDIA] |
-| #[id] | #[Timeout na extração] | #[Dados parciais] | #[ALTA] |
+| Batch ID | Erro no Log                   | Impacto no CSV             | Severidade |
+| -------- | ----------------------------- | -------------------------- | ---------- |
+| #[id]    | #[Falha ao desbloquear PDF]   | #[Valor zero, sem dados]   | #[ALTA]    |
+| #[id]    | #[Nenhum extrator compatível] | #[Classificado como OUTRO] | #[MÉDIA]   |
+| #[id]    | #[Timeout na extração]        | #[Dados parciais]          | #[ALTA]    |
 
 #### Falsos positivos (erro no log mas CSV correto):
 
-| Batch ID | Erro no Log | CSV Status | Observação |
-|----------|-------------|------------|------------|
-| #[id] | #[Warning de regex] | #[OK] | #[Erro tratado, fallback funcionou] |
+| Batch ID | Erro no Log         | CSV Status | Observação                          |
+| -------- | ------------------- | ---------- | ----------------------------------- |
+| #[id]    | #[Warning de regex] | #[OK]      | #[Erro tratado, fallback funcionou] |
 
 ### 5. PADRÕES DE ERRO FREQUENTES
 
@@ -135,13 +136,14 @@ Problemas Críticos Encontrados:
 
 **Documentos que falharão na exportação:**
 
-| Problema | Quantidade | Impacto na Planilha PAF |
-|----------|------------|------------------------|
-| Valor zero | #[N] | #[Coluna VALOR vazia] |
-| Vencimento inválido | #[N] | #[Não calcula situação] |
-| Fornecedor genérico | #[N] | #[Coluna FORNECEDOR incorreta] |
+| Problema            | Quantidade | Impacto na Planilha PAF        |
+| ------------------- | ---------- | ------------------------------ |
+| Valor zero          | #[N]       | #[Coluna VALOR vazia]          |
+| Vencimento inválido | #[N]       | #[Não calcula situação]        |
+| Fornecedor genérico | #[N]       | #[Coluna FORNECEDOR incorreta] |
 
 **Validação de exportação:**
+
 ```bash
 # Verificar se há dados que não serão exportados
 grep -E "(valor.*0\.0.*fornecedor.*$|vencimento.*$)" data/output/relatorio_lotes.csv | wc -l
@@ -152,9 +154,9 @@ grep -E "(valor.*0\.0.*fornecedor.*$|vencimento.*$)" data/output/relatorio_lotes
 #### Ações Imediatas (Alta Prioridade)
 
 1. **[Problema]:** #[Descrição]
-   - **Ação:** #[O que fazer]
-   - **Arquivos afetados:** #[lista]
-   - **Estimativa de correção:** #[tempo]
+    - **Ação:** #[O que fazer]
+    - **Arquivos afetados:** #[lista]
+    - **Estimativa de correção:** #[tempo]
 
 2. **[Problema]:** #[Descrição]
    ...
@@ -162,12 +164,13 @@ grep -E "(valor.*0\.0.*fornecedor.*$|vencimento.*$)" data/output/relatorio_lotes
 #### Ações de Médio Prazo
 
 1. **[Melhoria]:** #[Descrição]
-   - **Benefício:** #[impacto esperado]
-   - **Esforço:** #[alto/médio/baixo]
+    - **Benefício:** #[impacto esperado]
+    - **Esforço:** #[alto/médio/baixo]
 
 #### Monitoramento Contínuo
 
 **Métricas a acompanhar:**
+
 - Taxa de sucesso de extração: #[X%] (meta: >95%)
 - Tempo médio por lote: #[Xs] (meta: <10s)
 - Documentos sem extrator: #[N] (meta: <5%)
@@ -209,16 +212,20 @@ python scripts/analyze_logs.py --errors-only --today
 # Sem extrator
 2026-01-29 08:44:30 - core.processor - WARNING - Nenhum extrator compatível encontrado
 
-# PDF protegido
-2026-01-29 08:44:30 - strategies.pdf_utils - WARNING - Falha ao desbloquear PDF arquivo.pdf
+# PDF protegido por senha (formato atual)
+2026-01-29 08:44:30 - strategies.pdf_utils - INFO - PDF arquivo.pdf: senha desconhecida (pdfplumber)
+
+# Extração bem-sucedida via email body (Sabesp e similares)
+2026-01-29 08:44:31 - core.batch_processor - INFO - 📧 Detectado email Sabesp - usando SabespWaterBillExtractor
 ```
 
 ### Códigos de Erro Importantes
 
-| Mensagem no Log | Significado | Ação Recomendada |
-|-----------------|-------------|------------------|
-| `Falha ao desbloquear PDF` | Senha desconhecida | Adicionar CNPJ a `config/empresas.py` |
-| `Nenhum extrator compatível` | Layout não reconhecido | Criar extrator específico |
-| `Timeout na extração` | PDF muito grande/complexo | Aumentar timeout ou otimizar OCR |
-| `Linha digitável não encontrada` | Boleto com formato diferente | Verificar extrator de boleto |
-| `can_handle.*False` | Extrator recusou documento | Revisar padrões de detecção |
+| Mensagem no Log                       | Significado                                | Ação Recomendada                                                       |
+| ------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
+| `PDF arquivo.pdf: senha desconhecida` | Senha não encontrada nos CNPJs cadastrados | Ver se há extrator de email body disponível (Sabesp) ou adicionar CNPJ |
+| `Detectado email Sabesp`              | PDF falhou mas dados extraídos do email    | Nenhuma - resolvido automaticamente                                    |
+| `Nenhum extrator compatível`          | Layout não reconhecido                     | Criar extrator específico                                              |
+| `Timeout na extração`                 | PDF muito grande/complexo                  | Aumentar timeout ou otimizar OCR                                       |
+| `Linha digitável não encontrada`      | Boleto com formato diferente               | Verificar extrator de boleto                                           |
+| `can_handle.*False`                   | Extrator recusou documento                 | Revisar padrões de detecção                                            |

@@ -45,6 +45,33 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 02/02/2026
+
+- [x] **CscNotaDebitoExtractor**: Novo extrator para documentos CSC/Linnia tipo "NOTA DÉBITO / RECIBO FATURA"
+    - Arquivo novo: `extractors/csc_nota_debito.py` com 25 testes
+    - Detecta por CNPJ `38.323.227/0001-40` e padrões "NOTA DÉBITO / RECIBO FATURA"
+    - Extrai: numero_documento, valor_total, data_emissao, competencia, tomador
+    - Retorna tipo OUTRO com subtipo NOTA_DEBITO
+    - Tolerância a OCR ruidoso (letras espaçadas: "N O T A D É B I T O")
+    - Corrigidos 7 casos CSC/Linnia totalizando ~R$ 24.966
+- [x] **REPROMAQ Extrato de Locação**: Correção para documentos de locação REPROMAQ classificados incorretamente
+    - `nfse_generic.py`: Adicionado "EXTRATO DE LOCAÇÃO" na lista de rejeição
+    - `outros.py`: Suporte para detectar "EXTRATO DE LOCAÇÃO" e "FATURA DE LOCAÇÃO"
+    - Novos padrões para extrair número do recibo (S09679) e valor total
+    - Exceção na regra de impostos para faturas de locação
+    - Subtipo LOCACAO para documentos de locação
+- [x] **Correção de regex para extração de número da nota**: Ajustes nos padrões de extração para capturar números em formatos não cobertos anteriormente:
+    - **NfseGenericExtractor**: Adicionados padrões para números em linha separada do "Nº" (TCF Services com 15 dígitos), números curtos de 3+ dígitos ("Numero: 347"), e formato "Recibo número: 59/2026"
+    - **MugoExtractor**: Alterado limite de `\d{6,12}` para `\d{4,15}` para capturar números de 5 dígitos como "71039"
+    - Corrigidos 12 casos de NFSE_SEM_NUMERO (TCF Services, MUGO, ATIVE, GAC) totalizando ~R$ 4.657
+- [x] **SabespWaterBillExtractor**: Novo extrator para faturas da Sabesp que extrai dados do corpo do email HTML (PDFs protegidos por senha com CPF do titular)
+    - Detecta por sender @sabesp.com.br, subject ou padrões no corpo
+    - Extrai: valor, vencimento, número de fornecimento, código de barras
+    - Retorna tipo UTILITY_BILL com subtipo WATER
+- [x] **Documentação de PDF Password Handling**: Novo arquivo `docs/context/pdf_password_handling.md` documentando comportamento de fallback para PDFs protegidos por senha
+- [x] **Ajustes em analyze_logs.py**: Melhorias nos padrões de regex para correlação de logs, atualizado `docs/context/log_correlation.md` com novos exemplos
+- [x] **Documentação de comandos para agentes IA**: Atualizado `docs/context/commands_reference.md` com dicas sobre comandos PowerShell problemáticos e alternativas confiáveis
+
 ### 30/01/2026
 
 - [x] **Criação de extratores especializados para casos específicos de OCR e contratos**:

@@ -1,7 +1,7 @@
 # Prompt: Diagnóstico Rápido de Caso Problemático
 
 > **Uso:** Execute este prompt quando identificar um caso específico com problema no `relatorio_lotes.csv` ou `analise_pdfs_detalhada.txt`
-> 
+>
 > **Ferramentas:** `scripts/inspect_pdf.py`, `scripts/check_problematic_pdfs.py`, `scripts/analyze_logs.py --batch <id>`
 
 ---
@@ -68,44 +68,73 @@ python scripts/check_problematic_pdfs.py --csv data/output/relatorio_lotes.csv
 
 **Para cada PDF no batch:**
 
-| Arquivo | Páginas | Texto (chars) | Classificação Sugerida | Valores Detectados |
-|---------|---------|---------------|------------------------|-------------------|
-| #[nome] | #[n] | #[chars] | #[NFSE/Boleto/Admin/Desconhecido] | #[R$ X,XX] |
+| Arquivo | Páginas | Texto (chars) | Classificação Sugerida            | Valores Detectados |
+| ------- | ------- | ------------- | --------------------------------- | ------------------ |
+| #[nome] | #[n]    | #[chars]      | #[NFSE/Boleto/Admin/Desconhecido] | #[R$ X,XX]         |
 
 ### 2. TESTE DE EXTRATORES
 
-**Ordem de prioridade dos extratores:**
+**Ordem de prioridade dos extratores (23 total):**
 
 ```
 #[Priority] [Extrator Name]                 [Status]
 00          BoletoRepromaqExtractor          [OK] SELECIONADO / [X] Não compatível
-01          EmcFaturaExtractor               [OK] SELECIONADO / [X] Não compatível
-...
-15          DanfeExtractor                   [OK] SELECIONADO / [X] Não compatível
+01          BoletoGoxExtractor               [OK] SELECIONADO / [X] Não compatível
+02          EmcFaturaExtractor               [OK] SELECIONADO / [X] Não compatível
+03          NetCenterExtractor               [OK] SELECIONADO / [X] Não compatível
+04          NfseCustomMontesClarosExtractor  [OK] SELECIONADO / [X] Não compatível
+05          NfseCustomVilaVelhaExtractor     [OK] SELECIONADO / [X] Não compatível
+06          UtilityBillExtractor             [OK] SELECIONADO / [X] Não compatível
+07          NfcomTelcablesExtractor          [OK] SELECIONADO / [X] Não compatível
+08          AcimocExtractor                  [OK] SELECIONADO / [X] Não compatível
+09          MugoExtractor                    [OK] SELECIONADO / [X] Não compatível
+10          ProPainelExtractor               [OK] SELECIONADO / [X] Não compatível
+11          TunnaFaturaExtractor             [OK] SELECIONADO / [X] Não compatível
+12          UfinetExtractor                  [OK] SELECIONADO / [X] Não compatível
+13          CscNotaDebitoExtractor           [OK] SELECIONADO / [X] Não compatível  ← NOVO (02/02/2026)
+14          AdminDocumentExtractor           [OK] SELECIONADO / [X] Não compatível
+15          ComprovanteBancarioExtractor     [OK] SELECIONADO / [X] Não compatível
+16          OcrDanfeExtractor                [OK] SELECIONADO / [X] Não compatível
+17          DanfeExtractor                   [OK] SELECIONADO / [X] Não compatível
+18          BoletoExtractor                  [OK] SELECIONADO / [X] Não compatível
+19          SicoobExtractor                  [OK] SELECIONADO / [X] Não compatível
+20          AditivoContratoExtractor         [OK] SELECIONADO / [X] Não compatível
+21          OutrosExtractor                  [OK] SELECIONADO / [X] Não compatível  ← Fallback genérico
+22          NfseGenericExtractor             [OK] SELECIONADO / [X] Não compatível  ← Fallback genérico
 ```
+
+**Extratores fora do registry (chamados diretamente):**
+
+- `SabespWaterBillExtractor` - Faturas Sabesp via email body
+- `EmailBodyExtractor` - Extração genérica de corpo de email
+- `XmlExtractor` - Processamento de XMLs fiscais
 
 ### 3. DIAGNÓSTICO TÉCNICO DETALHADO
 
 #### Campo Problemático: #[VALOR/NÚMERO/VENCIMENTO/FORNECEDOR/TIPO]
 
 **O que deveria ter sido extraído:**
+
 ```
 #[Valor correto esperado, ex: R$ 700,00]
 #[Local no PDF onde aparece, ex: "Valor Total: R$ 700,00" na seção inferior]
 ```
 
 **O que foi extraído:**
+
 ```
 #[Valor incorreto ou ausente]
 ```
 
 **Análise do texto bruto (trechos relevantes):**
+
 ```
 #[Cole aqui os trechos do texto bruto que contêm a informação]
 #[Ex: "Valor Total R$ 700,00" vs "Valor dos Serviços R$ 0,00"]
 ```
 
 **Causa raiz identificada:**
+
 - [ ] Regex não captura variação de layout (padrão diferente)
 - [ ] OCR falhou (PDF em imagem, texto ilegível)
 - [ ] Roteamento errado (extrator genérico selecionado antes do específico)
@@ -115,17 +144,18 @@ python scripts/check_problematic_pdfs.py --csv data/output/relatorio_lotes.csv
 
 ### 4. MATRIZ DE IMPACTO
 
-| Critério | Avaliação |
-|----------|-----------|
-| **Severidade** | #[ALTA/MÉDIA/BAIXA] |
-| **Frequência** | #[Único/Padrão frequente/Episódico] |
-| **Bloqueia exportação Sheets** | #[Sim/Não] |
-| **Afeta conciliação NF↔Boleto** | #[Sim/Não] |
-| **Impacto financeiro** | #[Valor estimado ou "N/A"] |
+| Critério                        | Avaliação                           |
+| ------------------------------- | ----------------------------------- |
+| **Severidade**                  | #[ALTA/MÉDIA/BAIXA]                 |
+| **Frequência**                  | #[Único/Padrão frequente/Episódico] |
+| **Bloqueia exportação Sheets**  | #[Sim/Não]                          |
+| **Afeta conciliação NF↔Boleto** | #[Sim/Não]                          |
+| **Impacto financeiro**          | #[Valor estimado ou "N/A"]          |
 
 ### 5. AÇÃO RECOMENDADA
 
 #### Opção A: Ajustar Extrator Existente
+
 ```yaml
 Arquivo: #[extractors/nome_extrator.py]
 Método: #[_extract_valor / _extract_numero_nota / can_handle]
@@ -136,6 +166,7 @@ Testes: #[Lista de casos que devem passar]
 ```
 
 #### Opção B: Criar Novo Extrator Específico
+
 ```yaml
 Prioridade: #[1-15 - posição no registry]
 Classe: #[NomeDoExtrator]
@@ -144,6 +175,7 @@ Campos especiais: #[lista de campos com padrões únicos]
 ```
 
 #### Opção C: Correção Manual/Dados
+
 ```yaml
 Justificativa: #[Por que não vale automatizar]
 Ação manual: #[O que fazer com este caso específico]
@@ -168,6 +200,7 @@ python scripts/export_to_sheets.py --dry-run
 ```
 
 **Critérios de aceitação:**
+
 - [ ] Valor extraído correto: #[R$ X,XX]
 - [ ] Número da nota extraído: #[número]
 - [ ] Vencimento extraído: #[data]
@@ -181,21 +214,25 @@ python scripts/export_to_sheets.py --dry-run
 ## Notas de Debug
 
 **Para casos de VALOR ZERO com NFSE:**
+
 - Verificar se há múltiplos valores no PDF (ex: R$ 0,00, R$ 0,00, R$ 700,00)
 - O sistema pode estar pegando o primeiro valor ao invés do maior/correto
 - Padrão comum: "Valor dos Serviços R$ 0,00" vs "Valor Total R$ 700,00"
 
 **Para casos de VENCIMENTO VAZIO:**
+
 - Verificar se o PDF tem formato de data diferente (DD/MM/AAAA vs AAAA-MM-DD)
 - Documentos administrativos geralmente não têm vencimento
 - Boletos têm vencimento embutido na linha digitável (códigos 40-44)
 
 **Para casos de CLASSIFICAÇÃO ERRADA:**
+
 - Verificar a ordem dos extratores no `extractors/__init__.py`
 - Extratores específicos devem vir ANTES dos genéricos
 - Verificar padrões negativos no `can_handle()` que podem estar bloqueando
 
 **Para casos de FORNECEDOR GENÉRICO:**
+
 - Padrões como "CNPJ FORNECEDOR", "FORNECEDOR", "CPF Fornecedor:" indicam falha
 - Verificar se o extrator está pegando o campo antes do valor ser preenchido
 - Empresas internas (CSC, RBC, MOC, etc.) não devem ser fornecedores
@@ -211,7 +248,7 @@ Ao implementar a correção, siga os padrões do projeto:
 1. **Para novo extrator:** Use [`creation.md`](./creation.md) + [`coding_standards.md`](./coding_standards.md)
 2. **Para ajuste simples:** Mantenha consistência com o código existente
 3. **Sempre:**
-   - Type hints obrigatórios
-   - Docstrings nos métodos públicos
-   - Valide com `basedpyright`
-   - Teste regressão com `validate_extraction_rules.py`
+    - Type hints obrigatórios
+    - Docstrings nos métodos públicos
+    - Valide com `basedpyright`
+    - Teste regressão com `validate_extraction_rules.py`
