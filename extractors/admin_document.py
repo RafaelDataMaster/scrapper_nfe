@@ -511,7 +511,31 @@ class AdminDocumentExtractor(BaseExtractor):
                         f"AdminDocumentExtractor: fornecedor extraído (nome+CNPJ): {fornecedor}"
                     )
 
-        # 3. Procurar linha com apenas nome em caixa alta (fallback)
+        # 3. Para ORDEM_SERVICO, procurar fornecedor na seção de assinaturas ou cabeçalho
+        # Ex: "GlobeNet Cabos Submarinos S.A.(Brazil)" na seção de assinaturas
+        if not data.get("fornecedor_nome") and data.get("subtipo") == "ORDEM_SERVICO":
+            # PRIORIDADE 1: Procurar padrões conhecidos de fornecedores em ordens de serviço
+            # Isso é mais confiável que tentar extrair da seção de assinaturas
+            known_os_suppliers = [
+                (
+                    r"GLOBENET\s+CABOS\s+SUBMARINOS\s+S\.?A\.?",
+                    "GlobeNet Cabos Submarinos S.A.",
+                ),
+                (r"\bGLOBENET\b", "GlobeNet Cabos Submarinos S.A."),
+                (r"\bVTAL\b", "VTAL"),
+                (r"\bEQUINIX\b", "EQUINIX"),
+                (r"LUMEN\s+TECHNOLOGIES", "LUMEN TECHNOLOGIES"),
+                (r"AMERICAN\s+TOWER", "AMERICAN TOWER DO BRASIL"),
+            ]
+            for pattern, supplier_name in known_os_suppliers:
+                if re.search(pattern, text, re.IGNORECASE):
+                    data["fornecedor_nome"] = supplier_name
+                    logger.debug(
+                        f"AdminDocumentExtractor: fornecedor extraído (known OS supplier): {supplier_name}"
+                    )
+                    break
+
+        # 4. Procurar linha com apenas nome em caixa alta (fallback)
         if not data.get("fornecedor_nome"):
             # Procura por linhas que parecem ser nomes de empresas (muitas maiúsculas, termina com LTDA, S/A, etc.)
             m_empresa = re.search(
@@ -525,6 +549,26 @@ class AdminDocumentExtractor(BaseExtractor):
                 logger.debug(
                     f"AdminDocumentExtractor: fornecedor extraído (linha empresa): {fornecedor}"
                 )
+
+        # 5. Evitar extrair nomes de contatos como fornecedor
+        # Nomes de pessoa física em seções de "Contato Comercial", "Contato Tecnico" não são fornecedores
+        if data.get("fornecedor_nome"):
+            fornecedor = data["fornecedor_nome"]
+            # Lista de nomes que indicam contato, não fornecedor
+            invalid_patterns = [
+                r"^Marco\s+T[uú]lio",
+                r"^Contato\s+(?:Comercial|Tecnico|T[eé]cnico)",
+                r"^Anderson\s+",
+                r"^Nicole\s+",
+                r"^Vanessa\s+",
+            ]
+            for pattern in invalid_patterns:
+                if re.match(pattern, fornecedor, re.IGNORECASE):
+                    logger.debug(
+                        f"AdminDocumentExtractor: fornecedor '{fornecedor}' parece ser contato, removendo"
+                    )
+                    data["fornecedor_nome"] = ""
+                    break
 
         # CNPJ (primeiro formatado)
         if not data.get("cnpj_fornecedor"):

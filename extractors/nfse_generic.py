@@ -354,6 +354,52 @@ class NfseGenericExtractor(BaseExtractor):
     def _extract_fornecedor_nome(self, text: str) -> Optional[str]:
         text = self._normalize_text(text or "")
 
+        # Padrão 0A: Nome/Razão social: EMPRESA LTDA (formato de prefeituras como Divinópolis, Nepomuceno)
+        # Ex: "Nome/Razão social:ULUHUB TREINAMENTO E DESENVOLVIMENTO LTDA Inscrição estadual:"
+        m_nome_razao = re.search(
+            r"(?i)Nome/Raz[ãa]o\s+social\s*:\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+(?:LTDA|S/?A|EIRELI|ME|EPP))",
+            text,
+        )
+        if m_nome_razao:
+            nome = m_nome_razao.group(1).strip()
+            # Limpar texto após o sufixo (ex: "LTDA Inscrição" -> "LTDA")
+            nome = re.sub(
+                r"(LTDA|S/?A|EIRELI|ME|EPP)\s+.*", r"\1", nome, flags=re.IGNORECASE
+            )
+            if len(nome) >= 5 and not self._is_empresa_propria(nome):
+                return nome
+
+        # Padrão 0B: DANFSe portal nacional - Nome/NomeEmpresarial seguido de E-mail na mesma linha
+        # O nome real está na linha seguinte, formato: "CNPJ_PARCIAL + NOME"
+        # Ex: "Nome/NomeEmpresarial E-mail\n57.428.297WALQUIRIACRISTINASILVA CONTATO@..."
+        m_danfse = re.search(
+            r"(?i)Nome/NomeEmpresarial\s+E-mail\s*\n\s*[\d\.]+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s]+?)(?:\s+[A-Za-z0-9@\._]+@|\s*$)",
+            text,
+        )
+        if m_danfse:
+            nome = m_danfse.group(1).strip()
+            # Inserir espaços em nomes grudados (ex: "WALQUIRIACRISTINASILVA" -> mantém como está)
+            if len(nome) >= 5 and not self._is_empresa_propria(nome):
+                return nome
+
+        # Padrão 0C: DANFSe alternativo - Nome fantasia seguido do nome real
+        # Ex: "Nome fantasia: AGYONET\nNome/Razão social:AGYONET LTDA"
+        m_fantasia = re.search(
+            r"(?i)Nome\s+fantasia\s*:\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]{3,50}?)(?:\s*\n|$)",
+            text,
+        )
+        if m_fantasia:
+            nome_fantasia = m_fantasia.group(1).strip()
+            # Verificar se há Nome/Razão social logo após com nome mais completo
+            if m_nome_razao:
+                # Preferir o nome da razão social se disponível
+                pass
+            elif len(nome_fantasia) >= 3 and not self._is_empresa_propria(
+                nome_fantasia
+            ):
+                # Usar nome fantasia se não tiver razão social
+                return nome_fantasia
+
         # Padrão 1: Empresa com sufixo (LTDA, S/A, etc.) antes de CPF/CNPJ
         # Este é o padrão mais confiável para NFS-e
         m_empresa_antes_cnpj = re.search(
@@ -408,13 +454,27 @@ class NfseGenericExtractor(BaseExtractor):
             r"(?i)Nome[^\n]*?[:\-\s]+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s&\.\-]{5,120})",
         ]
 
+        # Lista de nomes genéricos/inválidos que devem ser rejeitados
+        nomes_invalidos = [
+            r"^Prestador\s+de\s+Servi[çc]os$",
+            r"^Nome$",
+            r"^E-mail$",
+            r"^Email$",
+            r"^Fantasia$",
+            r"^Nome\s+Fantasia$",
+            r"^Nome/NomeEmpresarial$",
+            r"^Telefone$",
+            r"^Endere[çc]o$",
+        ]
+        pattern_invalidos = re.compile("|".join(nomes_invalidos), re.IGNORECASE)
+
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
                 nome = match.group(1).strip()
                 nome = re.sub(r"\d+", "", nome).strip()
-                # Rejeitar textos genéricos como "PRESTADOR DE SERVIÇOS" sem nome real
-                if re.match(r"(?i)^(Prestador\s+de\s+Servi[çc]os|Nome)\s*$", nome):
+                # Rejeitar textos genéricos como "PRESTADOR DE SERVIÇOS", "E-mail", etc.
+                if pattern_invalidos.match(nome):
                     continue
                 if len(nome) >= 5 and not self._is_empresa_propria(nome):
                     return nome

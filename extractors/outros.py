@@ -197,24 +197,62 @@ class OutrosExtractor(BaseExtractor):
 
         # Fornecedor (tentativas)
         # Mapeamento de fornecedores conhecidos por palavra-chave
+        # NOTA: NÃO incluir empresas próprias do grupo (CSC, EXATA, RBC, etc.)
+        # Fornecedores que precisam de match exato (word boundary) para evitar falsos positivos
+        # Ex: "TIM" não deve fazer match em "MULTIMIDIA"
+        KNOWN_SUPPLIERS_WORD_BOUNDARY = {
+            "TIM": "TIM",
+        }
+
+        # Fornecedores que podem usar substring match (são suficientemente únicos)
         KNOWN_SUPPLIERS = {
             "LOCAWEB": "LOCAWEB",
             "CORREIOS": "CORREIOS",
             "EMPRESA BRASILEIRA DE CORREIOS": "CORREIOS",
             "EXTRATO SINTETICO": "CORREIOS",
             "EXTRATO SINTÉTICO": "CORREIOS",
-            "TIM": "TIM",
             "FATURA TIM": "TIM",
             "CONTATIM": "TIM",
             "MITELECOM": "MI TELECOM",
-            "EXATA TELCO": "EXATA TELCO",
             "LEVYCAM": "LEVYCAM CORRETORA DE CÂMBIO",
+            "FILIBRAS": "FILIBRAS COMERCIAL IMPORTACAO E EXPORTACAO LTDA",
+            "GLOBENET": "GLOBENET CABOS SUBMARINOS S.A.",
+            "GLOBE NET": "GLOBENET CABOS SUBMARINOS S.A.",
+            "AMERICAN TOWER": "AMERICAN TOWER DO BRASIL",
         }
 
-        for keyword, supplier in KNOWN_SUPPLIERS.items():
-            if keyword in t:
+        # Primeiro, verificar fornecedores que precisam de word boundary
+        for keyword, supplier in KNOWN_SUPPLIERS_WORD_BOUNDARY.items():
+            # Usar regex para garantir que é uma palavra isolada
+            if re.search(rf"\b{re.escape(keyword)}\b", t):
                 data["fornecedor_nome"] = supplier
                 break
+
+        # Se não encontrou, verificar fornecedores com substring match
+        if not data.get("fornecedor_nome"):
+            for keyword, supplier in KNOWN_SUPPLIERS.items():
+                if keyword in t:
+                    data["fornecedor_nome"] = supplier
+                    break
+
+        # Para documentos de locação, o fornecedor geralmente é a primeira empresa no documento
+        # (antes da seção "DESTINATÁRIO DA LOCAÇÃO" ou "TOMADOR")
+        if not data.get("fornecedor_nome") and data.get("subtipo") == "LOCACAO":
+            # Pegar texto antes de "DESTINATÁRIO" ou "TOMADOR" para evitar pegar o cliente
+            texto_cabecalho = text
+            for delimitador in ["DESTINATÁRIO", "DESTINATARIO", "TOMADOR", "CLIENTE"]:
+                if delimitador in text.upper():
+                    idx = text.upper().find(delimitador)
+                    texto_cabecalho = text[:idx]
+                    break
+
+            # Procurar primeira empresa LTDA no cabeçalho
+            m = re.search(
+                r"(?im)^\s*([A-ZÀ-ÿ][A-ZÀ-ÿ0-9\s\.&\-]+(?:LTDA|S/?A|EIRELI)\.?)\s*$",
+                texto_cabecalho,
+            )
+            if m:
+                data["fornecedor_nome"] = re.sub(r"\s+", " ", m.group(1)).strip()
 
         if not data.get("fornecedor_nome"):
             # Tentar padrão "Fornecedor: NOME LTDA"

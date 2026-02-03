@@ -45,6 +45,28 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 03/02/2026
+
+- [x] **Correção de 4 casos de Severidade ALTA na análise de saúde dos batches**:
+    - **TIM vs MULTIMIDIA**: Bug de substring match onde "TIM" era encontrado dentro de "MULTIMIDIA"
+        - `extractors/outros.py`: Separação de `KNOWN_SUPPLIERS` em dois grupos - `KNOWN_SUPPLIERS_WORD_BOUNDARY` (usa regex `\bTIM\b`) e `KNOWN_SUPPLIERS` (substring match)
+        - Adicionados "AMERICAN TOWER" e "GLOBENET" como fornecedores conhecidos
+        - Corrigidos 2 casos: TIM → AMERICAN TOWER DO BRASIL (R$ 7.847,23 cada)
+    - **Original (watermark Santander)**: OCR lendo watermark do banco como nome do beneficiário
+        - `extractors/comprovante_bancario.py`: Adicionada lista `INVALID_SUPPLIER_NAMES` com watermarks/labels bancários
+        - Novo padrão específico para formato Santander: "Nome/Razão Social do Beneficiário Original CPF/CNPJ do Beneficiário EMPRESA"
+        - Limpeza de sufixos "Original", "Copia", "Via" do nome do beneficiário
+        - Corrigido 1 caso: Original → ESPN DO BRASIL (R$ 5.635,71)
+    - **Marco Túlio Lima (contato comercial)**: Sistema extraindo nome de contato como fornecedor em Ordens de Serviço
+        - `extractors/admin_document.py`: Adicionada lista de fornecedores conhecidos para ORDEM_SERVICO (GlobeNet, VTAL, Equinix, Lumen, American Tower)
+        - Validação para evitar nomes de contato como "Marco Túlio" serem extraídos como fornecedor
+        - Corrigido 1 caso: Marco Túlio Lima → GlobeNet Cabos Submarinos S.A. (R$ 26.250,00)
+- [x] **Resultado final da análise de saúde**:
+    - Severidade CRÍTICA: 0 ✅
+    - Severidade ALTA: 0 ✅ (eram 4, agora zerado!)
+    - Fornecedores válidos: 868 (86.3%)
+    - Total de batches analisados: 1006
+
 ### 02/02/2026
 
 - [x] **CscNotaDebitoExtractor**: Novo extrator para documentos CSC/Linnia tipo "NOTA DÉBITO / RECIBO FATURA"

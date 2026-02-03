@@ -56,6 +56,22 @@ class ComprovanteBancarioExtractor(BaseExtractor):
     para evitar que comprovantes sejam classificados como NFSe.
     """
 
+    # Nomes inválidos para fornecedor (watermarks, labels do banco, etc.)
+    # "Original" aparece como watermark/selo em comprovantes do Santander
+    INVALID_SUPPLIER_NAMES = {
+        "ORIGINAL",  # Watermark do Santander que OCR lê como nome
+        "COPIA",
+        "CÓPIA",
+        "VIA",
+        "2A VIA",
+        "2ª VIA",
+        "PAGADOR",
+        "BENEFICIARIO",
+        "BENEFICIÁRIO",
+        "FAVORECIDO",
+        "CLIENTE",
+    }
+
     # Padrões fortes que indicam comprovante bancário
     STRONG_PATTERNS = [
         r"COMPROVANTE\s+DE\s+TRANSFER[EÊ]NCIA",
@@ -130,6 +146,7 @@ class ComprovanteBancarioExtractor(BaseExtractor):
             r"FATURA\s+DE\s+SERVI[CÇ]O",
             r"PREFEITURA\s+MUNICIPAL",
             r"SECRETARIA\s+(?:MUNICIPAL\s+)?(?:DA\s+)?FAZENDA",
+            r"NOTA\s+DE\s+D[EÉ]BITO",  # Nota de débito não é comprovante bancário
         ]
 
         for pattern in exclusion_patterns:
@@ -206,12 +223,46 @@ class ComprovanteBancarioExtractor(BaseExtractor):
             data["recebedor_agencia_conta"] = recebedor_data.get("agencia_conta")
             # Usar recebedor como fornecedor_nome para compatibilidade
             if recebedor_data.get("nome"):
-                data["fornecedor_nome"] = recebedor_data["nome"]
+                nome = recebedor_data["nome"]
+                # Limpar termos inválidos que podem aparecer no nome (watermarks do banco)
+                nome = re.sub(
+                    r"\s+(?:Original|Copia|Cópia|Via|2[ªa]\s*Via)\s*(?:-\s*CNPJ.*)?$",
+                    "",
+                    nome,
+                    flags=re.I,
+                ).strip()
+                # Validar se não é um nome inválido (watermark, label, etc.)
+                if nome.upper().strip() not in self.INVALID_SUPPLIER_NAMES:
+                    data["fornecedor_nome"] = nome
             if recebedor_data.get("documento"):
                 # Tentar identificar se é CNPJ ou CPF
                 doc = recebedor_data["documento"]
                 if "/" in doc:
                     data["cnpj_fornecedor"] = doc
+
+        # Fallback: extrair beneficiário/favorecido se recebedor não foi encontrado
+        if not data.get("fornecedor_nome"):
+            fornecedor_fallback = self._extract_beneficiario_fallback(text)
+            if fornecedor_fallback:
+                nome = fornecedor_fallback.get("nome")
+                # Validar se não é um nome inválido (watermark, label, etc.)
+                if nome and nome.upper().strip() not in self.INVALID_SUPPLIER_NAMES:
+                    data["fornecedor_nome"] = nome
+                    if fornecedor_fallback.get("documento"):
+                        data["cnpj_fornecedor"] = fornecedor_fallback["documento"]
+                    logger.debug(
+                        f"ComprovanteBancarioExtractor: fornecedor extraído via fallback: {data.get('fornecedor_nome')}"
+                    )
+
+        # Fallback: extrair vencimento de boleto pago
+        if not data.get("vencimento"):
+            m_venc = re.search(
+                r"(?:Data\s+de\s+vencimento|Vencimento)\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})",
+                text,
+                re.I,
+            )
+            if m_venc:
+                data["vencimento"] = parse_date_br(m_venc.group(1))
 
         # Extrair identificação no extrato
         m_id = re.search(
@@ -380,5 +431,71 @@ class ComprovanteBancarioExtractor(BaseExtractor):
             )
             if m_ag2:
                 result["agencia_conta"] = f"{m_ag2.group(1)}/{m_ag2.group(2)}"
+
+        return result if result else None
+
+    def _extract_beneficiario_fallback(self, text: str) -> Optional[Dict[str, str]]:
+        """
+        Fallback para extrair beneficiário/favorecido de comprovantes com formatos alternativos.
+
+        Formatos suportados:
+        - "Favorecido\nNome do beneficiário: EMPRESA XYZ"
+        - "Beneficiário: EMPRESA XYZ"
+        - "Nome do beneficiário: EMPRESA XYZ"
+
+        Args:
+            text: Texto completo do comprovante
+
+        Returns:
+            Dicionário com nome e documento ou None
+        """
+        result: Dict[str, str] = {}
+
+        # Padrões para nome do beneficiário/favorecido
+        # NOTA: A ordem importa - padrões mais específicos primeiro
+        nome_patterns = [
+            # Padrão específico Santander: "Nome/Razão Social do Beneficiário Original CPF/CNPJ do Beneficiário EMPRESA Original - CNPJ"
+            # O "Original" é um watermark que aparece entre os campos
+            r"Nome/Raz[ãa]o\s+Social\s+do\s+Benefici[aá]rio\s+Original\s+CPF/CNPJ\s+do\s+Benefici[aá]rio\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+?)(?:\s+Original|\s+-\s*CNPJ)",
+            # Padrões genéricos
+            r"Nome\s+do\s+benefici[aá]rio\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+?)(?:\s*\n|Documento|CPF|CNPJ|$)",
+            r"Favorecido\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+(?:LTDA|S/?A|ME|EPP)?)",
+            r"Benefici[aá]rio\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+(?:LTDA|S/?A|ME|EPP)?)",
+            r"Recebedor\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+(?:LTDA|S/?A|ME|EPP)?)",
+        ]
+
+        for pattern in nome_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                nome = re.sub(r"\s+", " ", m.group(1)).strip()
+                # Limpar possíveis sufixos indesejados
+                nome = re.sub(
+                    r"\s*(Documento|CPF|CNPJ).*$", "", nome, flags=re.I
+                ).strip()
+                # Remover termos inválidos que podem aparecer como sufixo (watermarks do banco)
+                nome = re.sub(
+                    r"\s+(?:Original|Copia|Cópia|Via|2[ªa]\s*Via)\s*(?:-\s*CNPJ.*)?$",
+                    "",
+                    nome,
+                    flags=re.I,
+                ).strip()
+                if len(nome) >= 5:
+                    result["nome"] = nome
+                    break
+
+        # Padrões para documento do beneficiário (CNPJ mascarado ou completo)
+        doc_patterns = [
+            r"Documento\s+do\s+benefici[aá]rio\s*[:\-]?\s*([\d\.\-/\*]+)",
+            r"CNPJ\s+(?:do\s+)?(?:benefici[aá]rio|favorecido)\s*[:\-]?\s*([\d\.\-/\*]+)",
+            r"CPF\s+(?:do\s+)?(?:benefici[aá]rio|favorecido)\s*[:\-]?\s*([\d\.\-\*]+)",
+        ]
+
+        for pattern in doc_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                doc = m.group(1).strip()
+                if len(doc) >= 10:  # CNPJ ou CPF mínimo
+                    result["documento"] = doc
+                    break
 
         return result if result else None

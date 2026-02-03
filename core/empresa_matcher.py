@@ -22,6 +22,7 @@ Example:
     >>> if match:
     ...     print(f"Empresa: {match.codigo} - {match.razao_social}")
 """
+
 from __future__ import annotations
 
 import re
@@ -63,13 +64,13 @@ class EmpresaMatch:
 
 def normalize_cnpj_to_digits(value: str) -> Optional[str]:
     """Normaliza um CNPJ para apenas dígitos (14 caracteres).
-    
+
     Args:
         value: CNPJ em qualquer formato (com ou sem pontuação).
-        
+
     Returns:
         String com 14 dígitos ou None se inválido.
-        
+
     Example:
         >>> normalize_cnpj_to_digits("12.345.678/0001-90")
         '12345678000190'
@@ -84,13 +85,13 @@ def normalize_cnpj_to_digits(value: str) -> Optional[str]:
 
 def format_cnpj(digits: str) -> str:
     """Formata dígitos de CNPJ para o padrão XX.XXX.XXX/XXXX-XX.
-    
+
     Args:
         digits: String com 14 dígitos do CNPJ.
-        
+
     Returns:
         CNPJ formatado ou string vazia se inválido.
-        
+
     Example:
         >>> format_cnpj("12345678000190")
         '12.345.678/0001-90'
@@ -103,16 +104,16 @@ def format_cnpj(digits: str) -> str:
 
 def empresa_codigo_from_razao(razao_social: str) -> str:
     """Extrai o código/sigla da empresa a partir da razão social.
-    
+
     O código é o primeiro token alfanumérico da razão social,
     geralmente uma sigla como CSC, MASTER, OP11, RBC.
-    
+
     Args:
         razao_social: Razão social da empresa.
-        
+
     Returns:
         Código da empresa em maiúsculas ou string vazia.
-        
+
     Example:
         >>> empresa_codigo_from_razao("CSC GESTAO INTEGRADA S/A")
         'CSC'
@@ -128,10 +129,10 @@ def empresa_codigo_from_razao(razao_social: str) -> str:
 
 def _load_empresas_cadastro() -> Dict[str, Dict[str, str]]:
     """Carrega o cadastro de empresas normalizado por CNPJ.
-    
+
     Realiza import local de config.empresas para evitar carga
     em caminhos que não usam a feature de detecção de empresa.
-    
+
     Returns:
         Dicionário onde chave é CNPJ (14 dígitos) e valor é payload
         com 'razao_social' e outros dados da empresa.
@@ -154,22 +155,22 @@ def _load_empresas_cadastro() -> Dict[str, Dict[str, str]]:
 
 def iter_cnpjs_in_text(text: str) -> Iterable[Tuple[str, int, int, str]]:
     """Itera sobre todos os CNPJs encontrados no texto.
-    
+
     Detecta CNPJs em vários formatos:
     - Formatado: 12.345.678/0001-90
     - Com espaços: 12 . 345 . 678 / 0001 - 90
     - Apenas dígitos: 12345678000190
-    
+
     Args:
         text: Texto onde buscar CNPJs.
-        
+
     Yields:
         Tupla (cnpj_digits, start, end, raw_match) onde:
         - cnpj_digits: CNPJ normalizado (14 dígitos)
         - start: Posição inicial no texto
         - end: Posição final no texto
         - raw_match: Texto original encontrado
-        
+
     Example:
         >>> for cnpj, start, end, raw in iter_cnpjs_in_text(texto):
         ...     print(f"CNPJ {cnpj} encontrado na posição {start}")
@@ -187,17 +188,17 @@ def iter_cnpjs_in_text(text: str) -> Iterable[Tuple[str, int, int, str]]:
 
 def iter_domains_in_text(text: str) -> Iterable[str]:
     """Itera sobre domínios encontrados no texto.
-    
+
     Detecta domínios a partir de:
     - Endereços de e-mail (usuario@dominio.com)
     - Domínios soltos (soumaster.com.br)
-    
+
     Args:
         text: Texto onde buscar domínios.
-        
+
     Yields:
         Domínios encontrados em minúsculas (sem duplicatas).
-        
+
     Example:
         >>> list(iter_domains_in_text("Contato: nf@soumaster.com.br"))
         ['soumaster.com.br']
@@ -223,20 +224,20 @@ def iter_domains_in_text(text: str) -> Iterable[str]:
 
 def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
     """Detecta qual empresa do cadastro está mencionada no documento.
-    
+
     Aplica estratégias em ordem de prioridade:
     1. Match por CNPJ (score base: 10)
     2. Match por nome/código (score base: 5)
     3. Match por domínio de e-mail (score base: 7)
-    
+
     O score é incrementado por contexto (ex: "PAGADOR", "TOMADOR").
-    
+
     Args:
         text: Texto do documento (PDF extraído ou XML).
-        
+
     Returns:
         EmpresaMatch com dados da empresa encontrada ou None.
-        
+
     Example:
         >>> match = find_empresa_no_texto(texto_boleto)
         >>> if match:
@@ -326,7 +327,11 @@ def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
                 # Exige match exato do código com o início do domínio principal,
                 # ou que o código seja palavra isolada (evita "MASTER" em "SOUMASTER")
                 is_prefix_match = dom_main.startswith(codigo_up)
-                is_word_boundary = bool(re.search(rf"(?<![A-Z0-9]){re.escape(codigo_up)}(?![A-Z0-9])", dom_up))
+                is_word_boundary = bool(
+                    re.search(
+                        rf"(?<![A-Z0-9]){re.escape(codigo_up)}(?![A-Z0-9])", dom_up
+                    )
+                )
 
                 if is_prefix_match or is_word_boundary:
                     # pontua por match no domínio; quanto mais "limpo" o match, maior o score
@@ -353,13 +358,13 @@ def find_empresa_no_texto(text: str) -> Optional[EmpresaMatch]:
 
 def is_cnpj_nosso(cnpj_value: Optional[str]) -> bool:
     """Verifica se um CNPJ pertence ao cadastro de empresas.
-    
+
     Args:
         cnpj_value: CNPJ em qualquer formato (com ou sem pontuação).
-        
+
     Returns:
         True se o CNPJ está no cadastro, False caso contrário.
-        
+
     Example:
         >>> is_cnpj_nosso("38.323.227/0001-40")  # CSC
         True
@@ -375,16 +380,16 @@ def is_cnpj_nosso(cnpj_value: Optional[str]) -> bool:
 
 def is_nome_nosso(nome: Optional[str]) -> bool:
     """Verifica se um nome corresponde a uma empresa do cadastro.
-    
+
     Usa heurística de match por código/sigla (ex: CSC, RBC, OP11).
     Ignora tokens genéricos como SERVICOS, CONSULTORIA, LTDA.
-    
+
     Args:
         nome: Nome ou razão social a verificar.
-        
+
     Returns:
         True se o nome contém um código de empresa cadastrada.
-        
+
     Example:
         >>> is_nome_nosso("CSC GESTAO INTEGRADA S/A")
         True
@@ -404,18 +409,50 @@ def is_nome_nosso(nome: Optional[str]) -> bool:
     # Heurística: se contém um "código" curto/distintivo (primeiro token) de alguma empresa nossa.
     # IMPORTANTe: evitar falsos positivos com tokens genéricos (ex: SERVICOS, CONSULTORIA).
     stopwords = {
-        'SERVICO', 'SERVICOS',
-        'CONSULTORIA',
-        'GESTAO', 'INTEGRADA',
-        'COMERCIO', 'INDUSTRIA',
-        'TECNOLOGIA', 'SOLUCOES',
-        'SISTEMA', 'SISTEMAS',
-        'EMPRESA', 'EMPRESAS',
-        'ADMINISTRACAO', 'ADMINISTRADORA',
-        'PARTICIPACOES',
-        'GRUPO', 'HOLDING',
-        'COMPANHIA', 'CIA',
-        'LTDA', 'SA', 'S/A',
+        "SERVICO",
+        "SERVICOS",
+        "CONSULTORIA",
+        "GESTAO",
+        "INTEGRADA",
+        "COMERCIO",
+        "INDUSTRIA",
+        "TECNOLOGIA",
+        "SOLUCOES",
+        "SISTEMA",
+        "SISTEMAS",
+        "EMPRESA",
+        "EMPRESAS",
+        "ADMINISTRACAO",
+        "ADMINISTRADORA",
+        "PARTICIPACOES",
+        "GRUPO",
+        "HOLDING",
+        "COMPANHIA",
+        "CIA",
+        "LTDA",
+        "SA",
+        "S/A",
+        # Nomes geográficos genéricos (evitar falsos positivos como "AUTO POSTO PORTAL DE MINAS")
+        "MINAS",
+        "GERAIS",
+        "PAULO",
+        "JANEIRO",
+        "BAHIA",
+        "GOIAS",
+        "BRASIL",
+        "NACIONAL",
+        "REGIONAL",
+        "FEDERAL",
+        "ESTADUAL",
+        "NORTE",
+        "SUL",
+        "LESTE",
+        "OESTE",
+        "CENTRO",
+        "CENTRAL",
+        "PORTAL",
+        "DIGITAL",
+        "TELECOM",
     }
     for payload in cadastro.values():
         razao = (payload.get("razao_social") or "").strip()
@@ -441,16 +478,16 @@ def is_nome_nosso(nome: Optional[str]) -> bool:
 
 def pick_first_non_our_cnpj(text: str) -> Optional[str]:
     """Retorna o primeiro CNPJ no texto que NÃO pertence ao cadastro.
-    
+
     Útil para identificar o CNPJ do fornecedor/beneficiário em documentos
     onde o CNPJ da empresa (pagador) também aparece.
-    
+
     Args:
         text: Texto do documento.
-        
+
     Returns:
         CNPJ em formato de 14 dígitos ou None se não encontrado.
-        
+
     Example:
         >>> # Texto com CNPJ da CSC e do fornecedor
         >>> pick_first_non_our_cnpj(texto_boleto)
@@ -468,7 +505,9 @@ def pick_first_non_our_cnpj(text: str) -> Optional[str]:
     return None
 
 
-def infer_fornecedor_from_text(text: str, empresa_cnpj_digits: Optional[str]) -> Optional[str]:
+def infer_fornecedor_from_text(
+    text: str, empresa_cnpj_digits: Optional[str]
+) -> Optional[str]:
     """Tenta inferir FORNECEDOR a partir de uma linha com CNPJ que não seja o da empresa.
 
     Mantém conservador: só usa quando encontra uma linha que parece ser nome de entidade.
@@ -515,7 +554,7 @@ def infer_fornecedor_from_text(text: str, empresa_cnpj_digits: Optional[str]) ->
 
     best_name: Optional[str] = None
     best_cnpj: Optional[str] = None
-    best_score = -10**9
+    best_score = -(10**9)
 
     for i, ln in enumerate(lines):
         if not ln:
@@ -575,4 +614,3 @@ def infer_fornecedor_from_text(text: str, empresa_cnpj_digits: Optional[str]) ->
         return f"{best_name} - CNPJ {format_cnpj(best_cnpj)}"
 
     return None
-
