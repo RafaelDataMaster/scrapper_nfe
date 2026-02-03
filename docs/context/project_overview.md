@@ -11,6 +11,75 @@
 > **IMPORTANTE:** Esta seção contém snapshots das sessões de trabalho. Mantém apenas os últimos 3 snapshots.  
 > **Template:** Ver `project_status_template.md` para o formato completo.
 
+### Snapshot: 03/02/2026 - 16:50 - ANALISE_SAUDE_MELHORIAS
+
+**Tipo:** MELHORIA_EXTRATORES_E_ANALISE
+
+**Contexto da Sessão:**
+
+- Sessão continuação de: 02/02/2026 15:00 (CSC_NOTA_DEBITO_EXTRACTOR)
+- Foco: Investigar problemas reportados pela análise de saúde e corrigir extração de vencimentos
+- Tempo total: ~1 hora
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | Categoria |
+|---|------|--------|---------------------|-----------|
+| 1 | Datas com pontos (DD.MM.YYYY) | ✅ CONCLUÍDA | utility_bill.py, utils.py | Correção Extrator |
+| 2 | Layout tabular EDP | ✅ CONCLUÍDA | utility_bill.py | Correção Extrator |
+| 3 | Análise de saúde inteligente | ✅ CONCLUÍDA | analyze_batch_health.py | Melhoria Script |
+
+**Correção #1: Suporte a datas com pontos** ✅ CONCLUÍDA
+
+- **Problema:** Vencimentos no formato `DD.MM.YYYY` (pontos) não eram extraídos - ex.: EDP Nota de Débito
+- **Causa raiz:** Regex só reconhecia `/` ou `-` como separadores de data
+- **Solução:**
+    - `extractors/utility_bill.py`: Adicionados padrões para `DD.MM.YYYY`
+    - `extractors/utils.py`: `parse_date_br` normaliza `.` → `/` antes de processar
+- **Arquivos:** `extractors/utility_bill.py`, `extractors/utils.py`
+
+**Correção #2: Layout tabular EDP** ✅ CONCLUÍDA
+
+- **Problema:** Data de vencimento em layout tabular (Data Emissão | Apresentação | Vencimento) não era capturada
+- **Causa raiz:** Padrão esperava label explícito "Vencimento:" antes da data
+- **Solução:** Novo padrão específico para capturar terceira data em layouts tabulares EDP
+- **Arquivos:** `extractors/utility_bill.py`
+
+**Correção #3: Análise de saúde inteligente** ✅ CONCLUÍDA
+
+- **Problema:** Script reportava muitos falsos positivos como erros (NFS-e sem vencimento, PDFs protegidos)
+- **Causa raiz:** Análise não considerava contexto do tipo de documento
+- **Solução:**
+    - Identificação de tipo de documento (NFSE, BOLETO, UTILITY\_\*)
+    - Severidade contextual: NFS-e sem vencimento = INFO (esperado, vem do boleto)
+    - Detecção de PDFs protegidos (Sabesp) → `PDF_PROTEGIDO_OK` / INFO
+    - `STATUS_CONFERIR` tratado como INFO em vez de BAIXA
+    - Agrupamento por fornecedor e relatório mais rico
+- **Arquivos:** `scripts/analyze_batch_health.py`
+
+**Métricas Finais:**
+
+| Métrica                               | Valor     |
+| ------------------------------------- | --------- |
+| Total batches analisados              | 1006      |
+| Batches com problemas reais (≥ MÉDIA) | 36 (3.6%) |
+| Severidade CRÍTICA                    | 0 ✅      |
+| Severidade ALTA                       | 0 ✅      |
+| Severidade MÉDIA                      | 31        |
+| Severidade BAIXA                      | 5         |
+| STATUS_CONFERIR (INFO)                | 512       |
+| NFSE_SEM_VENCIMENTO (INFO)            | 30        |
+| PDF_PROTEGIDO_OK (INFO)               | 3         |
+
+**Descobertas Importantes:**
+
+- 3 "erros" no log eram PDFs protegidos por senha (Sabesp) - exigem 3 primeiros dígitos do CPF
+- Dados foram extraídos do corpo do e-mail (fallback), então não há perda de informação
+- ~30 casos de NFS-e sem vencimento são esperados (vencimento vem do boleto associado)
+
+**Testes:** Suite completa: **589 passed, 1 skipped**
+
+---
+
 ### Snapshot: 02/02/2026 - 15:00 - CSC_NOTA_DEBITO_EXTRACTOR
 
 **Tipo:** EXTRATOR_NOVO_IMPLEMENTADO
@@ -286,7 +355,12 @@ python -c "import pandas as pd; df = pd.read_csv('data/output/relatorio_consolid
 
 ---
 
-### Snapshot: 30/01/2026 - 13:00 - CORRECOES_ADITIVOS_OCR_CONCLUIDAS
+---
+
+> **NOTA:** Snapshots anteriores a 02/02/2026 foram arquivados. Ver histórico no README.md principal.
+
+<!-- ARCHIVED SNAPSHOTS BELOW - Keeping for reference but not displayed -->
+<!-- ### Snapshot: 30/01/2026 - 13:00 - CORRECOES_ADITIVOS_OCR_CONCLUIDAS
 
 **Tipo:** CORRECOES_ADITIVOS_OCR_CONCLUIDAS
 
@@ -579,6 +653,8 @@ Get-Content data/output/relatorio_lotes.csv | Select-String "boleto" | Where-Obj
 - [x] docs/context/\* (documentação atualizada - README, coding_standards, logging_guide, logging_standards, etc)
 
 ---
+
+-->
 
 ## 1. Objetivo do Projeto
 
