@@ -157,8 +157,9 @@ def parse_date_br(value: str) -> Optional[str]:
     # Remove espaços extras que podem aparecer em PDFs mal extraídos
     value = re.sub(r"\s+", "", value.strip())
 
-    # Normaliza separadores: hífen -> barra para parsing uniforme
-    normalized = value.replace("-", "/")
+    # Normaliza separadores: hífen e ponto -> barra para parsing uniforme
+    # Suporta formatos: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    normalized = value.replace("-", "/").replace(".", "/")
 
     # Tenta diferentes formatos
     for fmt in ("%d/%m/%Y", "%d/%m/%y"):

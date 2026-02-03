@@ -47,6 +47,24 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ### 03/02/2026
 
+- [x] **Melhorias na extração de vencimentos e análise de saúde**:
+    - **`extractors/utility_bill.py`**:
+        - Adicionados padrões para datas com pontos (`DD.MM.YYYY`) — ex.: EDP Nota de Débito
+        - Novo padrão específico para capturar `Data Vencimento` em layout tabular (EDP)
+        - Reorganização dos regex (mais específicos primeiro)
+    - **`extractors/utils.py`**:
+        - `parse_date_br` agora normaliza `.` → `/` para suportar formato `DD.MM.YYYY`
+    - **`scripts/analyze_batch_health.py`** - Melhorias substanciais:
+        - Identificação de tipo de documento (NFSE, BOLETO, UTILITY\_\*)
+        - Severidade contextual (ex.: NFS-e sem vencimento = INFO, não erro)
+        - Detecção de PDFs protegidos por senha (Sabesp) → `PDF_PROTEGIDO_OK` / INFO
+        - `STATUS_CONFERIR` tratado como informativo (INFO) em vez de BAIXA
+        - Agrupamento por fornecedor e relatório mais rico
+    - **Resultados após correções**:
+        - Batches com problemas reais (severidade ≥ MÉDIA): 36 (3.6%)
+        - Casos informativos esperados: STATUS_CONFERIR: 512 | NFSE_SEM_VENCIMENTO: 30 | PDF_PROTEGIDO_OK: 3
+        - 3 "erros" do log eram PDFs protegidos por senha (Sabesp) — dados obtidos via corpo do e-mail
+
 - [x] **Correção de 4 casos de Severidade ALTA na análise de saúde dos batches**:
     - **TIM vs MULTIMIDIA**: Bug de substring match onde "TIM" era encontrado dentro de "MULTIMIDIA"
         - `extractors/outros.py`: Separação de `KNOWN_SUPPLIERS` em dois grupos - `KNOWN_SUPPLIERS_WORD_BOUNDARY` (usa regex `\bTIM\b`) e `KNOWN_SUPPLIERS` (substring match)
