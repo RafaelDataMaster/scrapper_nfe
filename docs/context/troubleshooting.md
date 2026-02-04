@@ -187,6 +187,88 @@ cnpj_fornecedor: 43.776.517/0001-80
 
 ---
 
+## 🏢 Fornecedores Corrompidos em NFCom (DANFE/Boleto)
+
+### 1. Cabeçalhos de Tabela Capturados como Fornecedor
+
+**Sintoma:** Fornecedor extraído é um cabeçalho de tabela ou fragmento de texto:
+
+```
+fornecedor: "CNPJ/CPF INSCRIÇÃO ESTADUAL - CNPJ 01.492.641/0001-73"
+fornecedor: "(-) Desconto / Abatimentos (-) Outras deduções..."
+fornecedor: "BETIM / MG - CEP: 32669-895"
+fornecedor: "- INSC. EST. 7029809450010 FATURA DE SERVIÇO"
+```
+
+**Causa:** Layouts NFCom não convencionais onde o nome do fornecedor aparece em posição inesperada, e o extrator captura texto incorreto.
+
+**Solução implementada (04/02/2026):**
+
+1. **Mapeamento CNPJ→Nome** em `extractors/danfe.py`:
+
+    ```python
+    CNPJ_TO_NOME = {
+        "05.872.814/0007-25": "VOGEL SOL. EM TEL. E INF. S.A.",
+        "01.492.641/0001-73": "Century Telecom LTDA",
+        "71.208.516/0001-74": "ALGAR TELECOM S/A",
+        "05.334.864/0001-63": "NIPCABLE DO BRASIL TELECOM LTDA",
+    }
+    ```
+
+2. **Padrões inválidos** em `_is_invalid_fornecedor()`:
+    - `CPF/CNPJ INSCRIÇÃO` (cabeçalho de tabela)
+    - `CIDADE / UF - CEP` (fragmento de endereço)
+    - `Nº DO CLIENTE:` (fragmento NFCom)
+    - `(-) Desconto`, `Abatimentos`, `Outras deduções` (tabela de descontos)
+    - `- INSC. EST.`, `FATURA DE SERVIÇO` (fragmentos de cabeçalho)
+
+3. **Tokens inválidos em Boleto** (`_looks_like_header_or_label()`):
+    - "DESCONTO", "ABATIMENTO", "OUTRAS DEDUÇÕES"
+    - "MORA / MULTA", "OUTROS ACRÉSCIMOS", "VALOR COBRADO"
+    - "(=)", "(-)", "(+)"
+
+**Como adicionar novos CNPJs problemáticos:**
+
+```python
+# Em extractors/danfe.py, adicione ao dicionário CNPJ_TO_NOME:
+CNPJ_TO_NOME = {
+    # ... CNPJs existentes ...
+    "XX.XXX.XXX/XXXX-XX": "NOME CORRETO DA EMPRESA",
+}
+```
+
+**Como adicionar novos padrões inválidos:**
+
+```python
+# Em extractors/danfe.py, função _is_invalid_fornecedor():
+invalid_patterns = [
+    # ... padrões existentes ...
+    r"^NOVO_PADRAO_INVALIDO",  # Descrição do padrão
+]
+```
+
+---
+
+### 2. Nome com "S/A" (barra) não Reconhecido
+
+**Sintoma:** Empresas com "S/A" (barra) não são capturadas:
+
+```
+Esperado:  "ALGAR TELECOM S/A"
+Capturado: "- INSC. EST. 7029809450010..."
+```
+
+**Causa:** Regex esperava `S\.?A\.?` mas não aceitava `S/A` com barra.
+
+**Solução:** Regex corrigido para `S[/.]?A\.?` que aceita:
+
+- S.A.
+- SA
+- S/A
+- S.A
+
+---
+
 ## 📄 Documentos CSC/Linnia (Nota Débito/Recibo Fatura)
 
 ### Documentos "NOTA DÉBITO / RECIBO FATURA" da CSC GESTAO

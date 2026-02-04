@@ -346,6 +346,31 @@ class OutrosExtractor(BaseExtractor):
                 logger.debug(
                     f"OutrosExtractor: vencimento extraído (contrato): {data['vencimento']}"
                 )
+            else:
+                # Layout OCR tabular corrompido (Correios): "Emissão: Vencimento: ... 20/12/2025 12/01/2026"
+                # Busca duas datas consecutivas onde a segunda é o vencimento
+                m_venc3 = re.search(
+                    r"(?i)\bVENCIMENTO\b[^0-9]*\d{2}/\d{2}/\d{4}[^0-9]+(\d{2}/\d{2}/\d{4})",
+                    text,
+                )
+                if m_venc3:
+                    data["vencimento"] = parse_date_br(m_venc3.group(1))
+                    logger.debug(
+                        f"OutrosExtractor: vencimento extraído (OCR tabular): {data['vencimento']}"
+                    )
+                else:
+                    # Fallback: busca padrão "dd/mm/yyyy Em aberto" (típico de faturas)
+                    # Inclui "Em" isolado pois OCR pode quebrar "Em aberto" em linhas separadas
+                    m_venc4 = re.search(
+                        r"(\d{2}/\d{2}/\d{4})\s+(?:Em\s+aberto|ABERTO|Pendente|PENDENTE|Em\b)",
+                        text,
+                        re.IGNORECASE,
+                    )
+                    if m_venc4:
+                        data["vencimento"] = parse_date_br(m_venc4.group(1))
+                        logger.debug(
+                            f"OutrosExtractor: vencimento extraído (em aberto): {data['vencimento']}"
+                        )
 
         # Algumas faturas têm uma data isolada perto do topo; pegamos a primeira como 'data_emissao'
         m_date = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", text)

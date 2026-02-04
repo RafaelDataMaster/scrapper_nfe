@@ -339,6 +339,39 @@ Alguns extratores não estão no registry padrão pois processam dados de forma 
 | ------------------------ | ------------------------------- | ------------------------------------ | ---------- |
 | `CscNotaDebitoExtractor` | `extractors/csc_nota_debito.py` | Nota Débito/Recibo Fatura CSC GESTAO | 02/02/2026 |
 
+### Correções de Fornecedores NFCom (04/02/2026)
+
+Correções importantes nos extratores DANFE e Boleto para evitar captura de cabeçalhos de tabela como fornecedor:
+
+**Problema corrigido:** Fornecedores extraídos incorretamente como:
+
+- `"CNPJ/CPF INSCRIÇÃO ESTADUAL - CNPJ 01.492.641/0001-73"`
+- `"(-) Desconto / Abatimentos (-) Outras deduções..."`
+- `"BETIM / MG - CEP: 32669-895"`
+
+**Soluções implementadas:**
+
+1. **Mapeamento CNPJ→Nome** (`extractors/danfe.py`):
+
+    ```python
+    CNPJ_TO_NOME = {
+        "05.872.814/0007-25": "VOGEL SOL. EM TEL. E INF. S.A.",
+        "01.492.641/0001-73": "Century Telecom LTDA",
+        "71.208.516/0001-74": "ALGAR TELECOM S/A",
+        "05.334.864/0001-63": "NIPCABLE DO BRASIL TELECOM LTDA",
+    }
+    ```
+
+2. **Padrões inválidos** em `_is_invalid_fornecedor()`:
+    - Cabeçalhos: `CPF/CNPJ INSCRIÇÃO`, `Nº DO CLIENTE:`
+    - Endereços: `CIDADE / UF - CEP`
+    - Descontos: `(-) Desconto`, `Abatimentos`, `Outras deduções`
+
+3. **Tokens inválidos em Boleto** (`_looks_like_header_or_label()`):
+    - "DESCONTO", "ABATIMENTO", "OUTRAS DEDUÇÕES", "(=)", "(-)", "(+)"
+
+**Resultado:** 29 → 0 fornecedores problemáticos no DANFE, 9 → 0 no relatório de lotes.
+
 ### SabespWaterBillExtractor (02/02/2026)
 
 PDFs da Sabesp são protegidos por senha (CPF do titular). Este extrator:

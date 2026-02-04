@@ -234,6 +234,22 @@ class NfseGenericExtractor(BaseExtractor):
         if not text:
             return None
 
+        # PRIMEIRO: Tentar padrões DANFSe no texto ORIGINAL (antes de limpar datas)
+        # Isso é necessário porque esses padrões usam lookahead para datas
+        padroes_danfse = [
+            # DANFSe portal nacional (fitz): número em linha separada
+            r"(?im)N[úu]mero\s+da\s+NFS-?e\s*\n(?:[^\n]*\n)*?^\s*(\d{1,15})\s*$",
+            # DANFSe portal nacional (pdfplumber): "Número da NFS-e Competência... 193 02/02/2026"
+            # Usa .{0,15} para lidar com normalização que pode quebrar "Competência" -> "Compet ncia"
+            r"(?i)N[úu]mero\s+da\s+NFS-?e\s+(?:Compet.{0,10}ncia[^\d]*)?(\d{1,10})(?=\s+\d{2}/\d{2}/\d{4})",
+            # DANFSe alternativo: captura número após cabeçalho com possível espaço extra
+            r"(?i)N[úu]mero\s+da\s+NFS-?e\s+[^\n]*\n\s*(\d{1,10})(?=\s+\d{2}/\d{2}/\d{4})",
+        ]
+        for regex in padroes_danfse:
+            match = re.search(regex, text)
+            if match:
+                return match.group(1)
+
         texto_limpo = text
         # Remove datas no formato DD/MM/YYYY para não confundir com números
         texto_limpo = re.sub(r"\d{2}/\d{2}/\d{4}", " ", texto_limpo)
@@ -261,7 +277,7 @@ class NfseGenericExtractor(BaseExtractor):
                 resultado = match.group(1)
                 return resultado
 
-        # Padrões para números simples (fallback)
+        # Padrões para números simples (fallback) - aplicados no texto limpo (sem datas)
         padroes = [
             r"(?i)Número\s+da\s+Nota.*?(?<!\d)(\d{1,15})(?!\d)",
             r"(?i)(?:(?:Número|Numero|N[º°o])\s*da\s*)?NFS-e\s*(?:N[º°o]|Num)?\.?\s*[:.-]?\s*\b(\d{1,15})\b",
@@ -382,6 +398,44 @@ class NfseGenericExtractor(BaseExtractor):
             if len(nome) >= 5 and not self._is_empresa_propria(nome):
                 return nome
 
+        # Padrão 0B2: DANFSe portal nacional (fitz) - "Nome / Nome Empresarial" e "E-mail" em linhas separadas
+        # O nome real vem após essas duas linhas de cabeçalho
+        # Ex: "Nome / Nome Empresarial\nE-mail\nPROSEG SEGURANCA LTDA\nfinanceito@..."
+        m_danfse2 = re.search(
+            r"(?i)Nome\s*/\s*Nome\s+Empresarial\s*\n\s*E-?mail\s*\n\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+?)(?:\s*\n|$)",
+            text,
+        )
+        if m_danfse2:
+            nome = m_danfse2.group(1).strip()
+            # Limpar email se capturado junto
+            nome = re.split(r"\s+[a-zA-Z0-9_.+-]+@", nome)[0].strip()
+            if len(nome) >= 5 and not self._is_empresa_propria(nome):
+                return nome
+
+        # Padrão 0B2b: DANFSe portal nacional (pdfplumber) - tudo na mesma linha
+        # Ex: "Nome / Nome Empresarial E-mail\nPROSEG SEGURANCA LTDA financeito@..."
+        m_danfse2b = re.search(
+            r"(?i)Nome\s*/\s*Nome\s+Empresarial\s+E-?mail\s*\n\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+?)(?:\s+[a-zA-Z0-9_.+-]+@|\s*\n|$)",
+            text,
+        )
+        if m_danfse2b:
+            nome = m_danfse2b.group(1).strip()
+            if len(nome) >= 5 and not self._is_empresa_propria(nome):
+                return nome
+
+        # Padrão 0B3: DANFSe - EMITENTE DA NFS-e seguido de seção com dados do prestador
+        # Ex: "EMITENTE DA NFS-e\nCNPJ...\nPrestador do Serviço\n42.072.700/0001-31\n...\nNome / Nome Empresarial\nE-mail\nPROSEG..."
+        # Buscar nome após "Prestador do Serviço" ou similar, seguido de CNPJ e depois o nome
+        m_emitente = re.search(
+            r"(?i)(?:EMITENTE\s+DA\s+NFS-?e|Prestador\s+do\s+Servi[çc]o)\s*\n(?:[^\n]*\n){0,5}?Nome\s*/?\s*(?:Nome\s+)?Empresarial\s*\n?\s*E-?mail\s*\n\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s&\.\-]+?)(?:\s*\n|$)",
+            text,
+        )
+        if m_emitente:
+            nome = m_emitente.group(1).strip()
+            nome = re.split(r"\s+[a-zA-Z0-9_.+-]+@", nome)[0].strip()
+            if len(nome) >= 5 and not self._is_empresa_propria(nome):
+                return nome
+
         # Padrão 0C: DANFSe alternativo - Nome fantasia seguido do nome real
         # Ex: "Nome fantasia: AGYONET\nNome/Razão social:AGYONET LTDA"
         m_fantasia = re.search(
@@ -463,6 +517,7 @@ class NfseGenericExtractor(BaseExtractor):
             r"^Fantasia$",
             r"^Nome\s+Fantasia$",
             r"^Nome/NomeEmpresarial$",
+            r"^Nome\s+Empresarial",  # Cabeçalho de tabela DANFSe
             r"^Telefone$",
             r"^Endere[çc]o$",
         ]

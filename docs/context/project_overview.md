@@ -1,6 +1,6 @@
 # Overview do Sistema de Extração de Documentos Fiscais
 
-> **Data de geração:** 2026-02-02  
+> **Data de geração:** 2026-02-04  
 > **Versão do sistema:** v0.3.x  
 > **Status da documentação:** Esta documentação complementa (e corrige onde necessário) a documentação oficial que está parcialmente desatualizada.
 
@@ -10,6 +10,86 @@
 
 > **IMPORTANTE:** Esta seção contém snapshots das sessões de trabalho. Mantém apenas os últimos 3 snapshots.  
 > **Template:** Ver `project_status_template.md` para o formato completo.
+
+### Snapshot: 04/02/2026 - 13:30 - CORRECAO_FORNECEDORES_DANFE_BOLETO
+
+**Tipo:** CORRECAO_EXTRATORES
+
+**Contexto da Sessão:**
+
+- Sessão continuação de: 03/02/2026 16:50 (ANALISE_SAUDE_MELHORIAS)
+- Foco: Corrigir extração de fornecedores em DANFE e Boletos (NFCom) após clean_dev + run_ingestion
+- Tempo total: ~30 minutos
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | Categoria |
+|---|------|--------|---------------------|-----------|
+| 1 | Mapeamento CNPJ→Nome | ✅ CONCLUÍDA | danfe.py | Correção Extrator |
+| 2 | Padrões inválidos DANFE | ✅ CONCLUÍDA | danfe.py | Correção Extrator |
+| 3 | Padrões inválidos Boleto | ✅ CONCLUÍDA | boleto.py | Correção Extrator |
+| 4 | Regex NFCom S/A com barra | ✅ CONCLUÍDA | danfe.py | Correção Extrator |
+
+**Correção #1: Mapeamento CNPJ→Nome** ✅ CONCLUÍDA
+
+- **Problema:** Fornecedores com OCR corrompido ou layout não reconhecido
+- **Causa raiz:** Alguns NFCom têm layouts não convencionais onde o nome vem em posição inesperada
+- **Solução:** Adicionados CNPJs conhecidos ao mapeamento `CNPJ_TO_NOME`:
+    - VOGEL SOL. EM TEL. E INF. S.A. (05.872.814/0007-25, 05.872.814/0001-11)
+    - Century Telecom LTDA (01.492.641/0001-73)
+    - ALGAR TELECOM S/A (71.208.516/0001-74)
+    - NIPCABLE DO BRASIL TELECOM LTDA (05.334.864/0001-63)
+- **Arquivos:** `extractors/danfe.py`
+
+**Correção #2: Padrões inválidos DANFE** ✅ CONCLUÍDA
+
+- **Problema:** Cabeçalhos de tabela e fragmentos de endereço capturados como fornecedor
+- **Causa raiz:** Regex não rejeitava padrões como "CNPJ/CPF INSCRIÇÃO", "BETIM / MG - CEP:", etc.
+- **Solução:** Novos padrões em `_is_invalid_fornecedor()`:
+    - `CPF/CNPJ INSCRIÇÃO ESTADUAL` (cabeçalho de tabela)
+    - `BETIM / MG - CEP:` e padrão genérico `CIDADE / UF - CEP`
+    - `Nº DO CLIENTE:` (fragmento de NFCom)
+    - `(-) Desconto / Abatimentos`, `Outras deduções` (tabela de descontos)
+    - `- INSC. EST.`, `FATURA DE SERVIÇO` (fragmentos de cabeçalho NFCom)
+- **Arquivos:** `extractors/danfe.py`
+
+**Correção #3: Padrões inválidos Boleto** ✅ CONCLUÍDA
+
+- **Problema:** Linhas de tabela de descontos/abatimentos capturadas como fornecedor
+- **Causa raiz:** `_looks_like_header_or_label()` não rejeitava esses padrões
+- **Solução:** Novos tokens inválidos:
+    - "DESCONTO", "ABATIMENTO", "OUTRAS DEDUÇÕES"
+    - "MORA / MULTA", "OUTROS ACRÉSCIMOS", "VALOR COBRADO"
+    - "(=)", "(-)", "(+)" (símbolos de operações em tabelas)
+- **Arquivos:** `extractors/boleto.py`
+
+**Correção #4: Regex NFCom S/A com barra** ✅ CONCLUÍDA
+
+- **Problema:** "ALGAR TELECOM S/A" não era capturado (barra em vez de ponto)
+- **Causa raiz:** Regex esperava `S\.?A\.?` mas não `S/A`
+- **Solução:** Novo padrão `S[/.]?A\.?` para aceitar ambos os formatos
+- **Arquivos:** `extractors/danfe.py`
+
+**Métricas Finais:**
+
+| Métrica                            | Antes | Depois |
+| ---------------------------------- | ----- | ------ |
+| Fornecedores problemáticos (lotes) | 9     | 0 ✅   |
+| Fornecedores problemáticos (DANFE) | 29    | 0 ✅   |
+| Batches com fornecedor válido      | 922   | 929    |
+| Severidade CRÍTICA                 | 0     | 0 ✅   |
+| Severidade ALTA                    | 0     | 0 ✅   |
+| Batches com problemas reais        | 5     | 5      |
+
+**Fornecedores Corrigidos:**
+
+- VOGEL SOL. EM TEL. E INF. S.A. (antes: "BETIM / MG - CEP:")
+- Century Telecom LTDA (antes: "CNPJ/CPF INSCRIÇÃO ESTADUAL - CNPJ 01.492.641/0001-73")
+- ALGAR TELECOM S/A (antes: "- INSC. EST. 7029809450010 FATURA DE SERVIÇO")
+- MITelecom Ltda (antes: "(-) Desconto / Abatimentos (-) Outras deduções...")
+
+**Testes:** Suite completa: **589 passed, 1 skipped**
+
+---
 
 ### Snapshot: 03/02/2026 - 16:50 - ANALISE_SAUDE_MELHORIAS
 
@@ -80,7 +160,7 @@
 
 ---
 
-### Snapshot: 02/02/2026 - 15:00 - CSC_NOTA_DEBITO_EXTRACTOR
+### Snapshot: 02/02/2026 - 15:00 - CSC_NOTA_DEBITO_EXTRACTOR (Arquivado)
 
 **Tipo:** EXTRATOR_NOVO_IMPLEMENTADO
 

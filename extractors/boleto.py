@@ -44,51 +44,51 @@ from extractors.utils import (
 def _decode_vencimento_from_linha_digitavel(linha_digitavel: str) -> Optional[str]:
     """
     Calcula a data de vencimento a partir da linha digitável do boleto.
-    
+
     A linha digitável (47 dígitos) contém o fator de vencimento nas posições 34-37
     (4 dígitos do Campo 5). O fator representa o número de dias desde 07/10/1997.
     O fator reinicia a cada 10000 dias (aproximadamente a cada 27 anos).
-    
+
     Formato da linha digitável numérica (47 dígitos):
     - Campo 1 (pos 0-9): 10 dígitos
     - Campo 2 (pos 10-20): 11 dígitos
     - Campo 3 (pos 21-31): 11 dígitos
     - Campo 4 (pos 32): 1 dígito (DV geral)
     - Campo 5 (pos 33-46): 14 dígitos (4 fator + 10 valor)
-    
+
     Args:
         linha_digitavel: String com a linha digitável (47 dígitos, com ou sem pontos/espaços)
-        
+
     Returns:
         Data de vencimento no formato ISO (YYYY-MM-DD) ou None se não conseguir calcular
     """
     if not linha_digitavel:
         return None
-    
+
     # Remove caracteres não numéricos (pontos, espaços)
     linha_numerica = re.sub(r"\D", "", linha_digitavel)
-    
+
     # Verifica se tem pelo menos 47 dígitos
     if len(linha_numerica) < 47:
         return None
-    
+
     try:
         # Extrai o fator de vencimento (4 primeiros dígitos do Campo 5)
         # Campo 5 começa na posição 33, então fator está em 33-36 (0-indexed)
         fator_vencimento = int(linha_numerica[33:37])
-        
+
         # Se o fator for 0, o boleto não tem vencimento definido (vencimento conforme contrato)
         if fator_vencimento == 0:
             return None
-        
+
         # Data base: 07/10/1997 (fator 0)
         data_base = datetime(1997, 10, 7)
-        
+
         # Calcula a data de vencimento considerando o reinício do fator
         # O fator reinicia a cada 10000 dias (aproximadamente a cada 27 anos)
         # Primeiro reinício: em 22/02/2025 (fator 10000)
         dias_totais = fator_vencimento
-        
+
         # Se a data calculada for anterior a 2020, assumimos que houve reinício
         # e adicionamos 10000 dias
         data_vencimento = data_base + timedelta(days=dias_totais)
@@ -96,13 +96,13 @@ def _decode_vencimento_from_linha_digitavel(linha_digitavel: str) -> Optional[st
             # Adiciona um ciclo completo (10000 dias)
             dias_totais += 10000
             data_vencimento = data_base + timedelta(days=dias_totais)
-        
+
         # Valida se a data é razoável (entre 2020 e 2045)
         if 2020 <= data_vencimento.year <= 2045:
             return data_vencimento.strftime("%Y-%m-%d")
-        
+
         return None
-        
+
     except (ValueError, IndexError):
         return None
 
@@ -236,13 +236,13 @@ class BoletoExtractor(BaseExtractor):
         # Campos básicos
         data["cnpj_beneficiario"] = self._extract_cnpj_beneficiario(text)
         data["valor_documento"] = self._extract_valor(text)
-        
+
         # Vencimento: tenta extrair do texto, se não conseguir, usa linha digitável
         vencimento = self._extract_vencimento(text)
         if not vencimento:
             vencimento = self._extract_vencimento_from_linha_digitavel(text)
         data["vencimento"] = vencimento
-        
+
         data["numero_documento"] = self._extract_numero_documento(text)
         data["data_emissao"] = self._extract_data_documento(text)
         data["linha_digitavel"] = self._extract_linha_digitavel(text)
@@ -340,6 +340,16 @@ class BoletoExtractor(BaseExtractor):
             "AGÊNCIA",
             "AGENCIA",
             "CONTA",
+            # Padrões de linha de descontos/abatimentos (cabeçalho de tabela)
+            "DESCONTO",
+            "ABATIMENTO",
+            "OUTRAS DEDUÇÕES",
+            "MORA / MULTA",
+            "OUTROS ACRÉSCIMOS",
+            "VALOR COBRADO",
+            "(=)",
+            "(-)",
+            "(+)",
         ]
         return any(t in s_up for t in bad_tokens)
 
@@ -923,13 +933,13 @@ class BoletoExtractor(BaseExtractor):
     def _extract_vencimento_from_linha_digitavel(self, text: str) -> Optional[str]:
         """
         Fallback para extrair vencimento da linha digitável quando não encontrado no texto.
-        
+
         Extrai a linha digitável do texto e calcula o vencimento a partir do fator
         de vencimento (posições 33-36 da linha digitável).
-        
+
         Args:
             text: Texto do PDF.
-            
+
         Returns:
             Data de vencimento no formato ISO (YYYY-MM-DD) ou None.
         """

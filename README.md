@@ -45,6 +45,33 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 04/02/2026
+
+- [x] **Correção de extração de fornecedores em DANFE e Boletos (NFCom)**:
+    - **`extractors/danfe.py`** - Melhorias significativas:
+        - Adicionados CNPJs no mapeamento `CNPJ_TO_NOME` para correção automática via CNPJ:
+            - VOGEL SOL. EM TEL. E INF. S.A. (05.872.814/0007-25, 05.872.814/0001-11)
+            - Century Telecom LTDA (01.492.641/0001-73)
+            - ALGAR TELECOM S/A (71.208.516/0001-74)
+            - NIPCABLE DO BRASIL TELECOM LTDA (05.334.864/0001-63)
+        - Novos padrões inválidos em `_is_invalid_fornecedor()`:
+            - `CPF/CNPJ INSCRIÇÃO ESTADUAL` (cabeçalho de tabela)
+            - `BETIM / MG - CEP:` e padrão genérico `CIDADE / UF - CEP`
+            - `Nº DO CLIENTE:` (fragmento de NFCom)
+            - `(-) Desconto / Abatimentos`, `Outras deduções` (tabela de descontos)
+            - `- INSC. EST.`, `FATURA DE SERVIÇO` (fragmentos de cabeçalho NFCom)
+        - Novo padrão NFCom para layout VOGEL/ALGAR: `DOCUMENTO AUXILIAR NOME\nDA NOTA FISCAL`
+        - Correção do regex para aceitar "S/A" (com barra) além de "S.A."
+    - **`extractors/boleto.py`** - Novos tokens inválidos em `_looks_like_header_or_label()`:
+        - "DESCONTO", "ABATIMENTO", "OUTRAS DEDUÇÕES"
+        - "MORA / MULTA", "OUTROS ACRÉSCIMOS", "VALOR COBRADO"
+        - "(=)", "(-)", "(+)" (símbolos de operações em tabelas)
+    - **Resultados após correções**:
+        - Fornecedores problemáticos no relatório de lotes: 9 → 0 ✅
+        - Fornecedores problemáticos no DANFE: 29 → 0 ✅
+        - Batches com fornecedor válido: 922 → 929 (87.8%)
+        - Severidade CRÍTICA/ALTA: 0 ✅
+
 ### 03/02/2026
 
 - [x] **Melhorias na extração de vencimentos e análise de saúde**:

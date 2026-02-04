@@ -98,6 +98,30 @@ class BatchHealth:
             forn_upper = self.fornecedor.upper()
             assunto_upper = self.email_subject.upper()
 
+            # Comprovantes de pagamento (TED, transferência, pagamento já realizado)
+            # Esses documentos não têm vencimento pois já foram pagos
+            comprovante_keywords = [
+                "COMPROVANTE",
+                "TED",
+                "TRANSFERENCIA",
+                "TRANSFERÊNCIA",
+                "PAGAMENTO REALIZADO",
+                "PAGAMENTO EFETUADO",
+                "SOLICITACAO DE PAGAMENTO",
+                "SOLICITAÇÃO DE PAGAMENTO",
+            ]
+            if any(k in assunto_upper for k in comprovante_keywords):
+                return "COMPROVANTE_PAGAMENTO"
+
+            # Detectar comprovante pelo subtipo no metadata (ex: COMPROVANTE_BANCARIO)
+            # O subtipo é definido pelo extractor (ComprovanteBancarioExtractor)
+            if self.metadata:
+                docs = self.metadata.get("documents_processed", [])
+                for doc in docs:
+                    subtipo = (doc.get("subtipo") or "").upper()
+                    if subtipo in ["COMPROVANTE_BANCARIO", "TED", "DOC", "PIX"]:
+                        return "COMPROVANTE_PAGAMENTO"
+
             # Utilitários (energia, água)
             if any(
                 u in forn_upper
@@ -417,14 +441,47 @@ class BatchHealthAnalyzer:
                         )
                     )
             elif tipo_doc in ["UTILITY_ENERGY", "UTILITY_WATER"]:
-                # Conta de luz/água DEVE ter vencimento
-                batch.problemas.append(
-                    (
-                        "UTILITY_SEM_VENCIMENTO",
-                        f"Conta de utilidade sem vencimento: R$ {batch.valor_compra:,.2f} ({batch.fornecedor})",
-                        self.SEV_MEDIA,
-                    )
+                # Conta de luz/água DEVE ter vencimento, MAS há exceções:
+                # 1. Valores muito baixos (acumulados para próxima fatura)
+                # 2. Documentos de encerramento de contrato
+                # 3. Comprovantes administrativos
+
+                assunto_lower = batch.email_subject.lower()
+                eh_encerramento = any(
+                    termo in assunto_lower
+                    for termo in [
+                        "encerramento",
+                        "desligamento",
+                        "cancelamento",
+                        "rescisão",
+                    ]
                 )
+                valor_muito_baixo = batch.valor_compra < 1.0  # Menos de R$ 1,00
+
+                if eh_encerramento:
+                    batch.problemas.append(
+                        (
+                            "UTILITY_ENCERRAMENTO",
+                            f"Documento de encerramento de contrato (sem vencimento esperado): R$ {batch.valor_compra:,.2f} ({batch.fornecedor})",
+                            self.SEV_INFO,
+                        )
+                    )
+                elif valor_muito_baixo:
+                    batch.problemas.append(
+                        (
+                            "UTILITY_VALOR_ACUMULADO",
+                            f"Valor baixo (possivelmente acumulado para próxima fatura): R$ {batch.valor_compra:,.2f} ({batch.fornecedor})",
+                            self.SEV_INFO,
+                        )
+                    )
+                else:
+                    batch.problemas.append(
+                        (
+                            "UTILITY_SEM_VENCIMENTO",
+                            f"Conta de utilidade sem vencimento: R$ {batch.valor_compra:,.2f} ({batch.fornecedor})",
+                            self.SEV_MEDIA,
+                        )
+                    )
             elif tipo_doc == "EMAIL_BODY":
                 # Dados do corpo do email podem não ter vencimento
                 if batch.pdf_protegido:
@@ -441,6 +498,76 @@ class BatchHealthAnalyzer:
                             "EMAIL_BODY_SEM_VENCIMENTO",
                             f"Dados do email sem vencimento: R$ {batch.valor_compra:,.2f}",
                             self.SEV_BAIXA,
+                        )
+                    )
+            elif tipo_doc == "COMPROVANTE_PAGAMENTO":
+                # Comprovantes de pagamento não precisam de vencimento (já foram pagos)
+                batch.problemas.append(
+                    (
+                        "COMPROVANTE_OK",
+                        f"Comprovante de pagamento (sem vencimento esperado): R$ {batch.valor_compra:,.2f}",
+                        self.SEV_INFO,
+                    )
+                )
+            elif tipo_doc == "OUTRO":
+                # Verificar se é NFCom/DANFE que não tem vencimento por natureza
+                forn_upper = batch.fornecedor.upper()
+                assunto_upper = batch.email_subject.upper()
+
+                # NFCom e faturas de telecom geralmente não têm vencimento no documento
+                eh_nfcom = any(
+                    k in forn_upper for k in ["AMERICAN TOWER", "TOWER DO BRASIL"]
+                )
+                eh_nfcom = (
+                    eh_nfcom
+                    or "NFCOM" in assunto_upper
+                    or "FATURAMENTO" in assunto_upper
+                )
+
+                # Faturas de locação de baixo valor (faturas complementares)
+                eh_fatura_locacao = batch.valor_compra < 50 and any(
+                    k in forn_upper for k in ["EMPREENDIMENTOS", "LOCAÇÃO", "LOCACAO"]
+                )
+
+                # Caso especial: batch com boleto associado (vencimento está no boleto)
+                # Se o assunto sugere que tem nota e boleto, o vencimento está no boleto
+                tem_boleto_no_batch = batch.boletos > 0
+                assunto_tem_nota_e_boleto = (
+                    "NOTA" in assunto_upper and "BOLETO" in assunto_upper
+                ) or ("NF" in assunto_upper and "BOLETO" in assunto_upper)
+
+                if eh_nfcom:
+                    batch.problemas.append(
+                        (
+                            "NFCOM_SEM_VENCIMENTO",
+                            f"NFCom/Telecom sem vencimento (esperado): R$ {batch.valor_compra:,.2f} ({batch.fornecedor[:30]})",
+                            self.SEV_INFO,
+                        )
+                    )
+                elif eh_fatura_locacao:
+                    batch.problemas.append(
+                        (
+                            "FATURA_LOCACAO_BAIXO_VALOR",
+                            f"Fatura de locação baixo valor (venc. no boleto): R$ {batch.valor_compra:,.2f}",
+                            self.SEV_INFO,
+                        )
+                    )
+                elif tem_boleto_no_batch or assunto_tem_nota_e_boleto:
+                    # O vencimento está no boleto relacionado, não na fatura/NF
+                    batch.problemas.append(
+                        (
+                            "VENCIMENTO_NO_BOLETO",
+                            f"Vencimento disponível no boleto do batch: R$ {batch.valor_compra:,.2f} ({batch.fornecedor[:30]})",
+                            self.SEV_INFO,
+                        )
+                    )
+                elif sugere_boleto:
+                    # Outros casos onde assunto sugere boleto/fatura
+                    batch.problemas.append(
+                        (
+                            "VENCIMENTO_AUSENTE",
+                            f"Valor R$ {batch.valor_compra:,.2f} mas sem vencimento (assunto sugere boleto/fatura)",
+                            self.SEV_MEDIA,
                         )
                     )
             elif sugere_boleto:
@@ -771,8 +898,23 @@ def main():
     # Gerar relatório
     report = analyzer.generate_report(output_path)
 
-    # Imprimir resumo na tela
-    print(report)
+    # Imprimir resumo na tela (com encoding seguro para Windows)
+    import sys
+
+    if sys.platform == "win32":
+        # Substituir emojis por texto para evitar erro de encoding no Windows
+        report_safe = (
+            report.replace("✅", "[OK]")
+            .replace("⚠️", "[!]")
+            .replace("❌", "[X]")
+            .replace("📊", "[#]")
+        )
+        try:
+            print(report_safe)
+        except UnicodeEncodeError:
+            print(report_safe.encode("ascii", "replace").decode("ascii"))
+    else:
+        print(report)
 
 
 if __name__ == "__main__":

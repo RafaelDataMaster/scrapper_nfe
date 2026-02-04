@@ -377,6 +377,44 @@ def normalize_text_for_extraction(text: str) -> str:
     return text
 
 
+def _fix_ocr_duplicated_chars(text: str) -> str:
+    """
+    Corrige caracteres duplicados causados por OCR ruim.
+
+    Alguns PDFs (como boletos da Localiza) têm caracteres duplicados
+    devido a proteção anti-cópia ou problemas de renderização.
+    Ex: "LLOOCCAALLIIZZAA" -> "LOCALIZA"
+
+    Args:
+        text: Texto possivelmente corrompido
+
+    Returns:
+        Texto corrigido
+    """
+    if not text or len(text) < 2:
+        return text
+
+    # Verifica se parece ter caracteres duplicados (padrão: AABBCC)
+    # Heurística: tamanho par E todos os pares consecutivos são iguais
+    if len(text) % 2 != 0:
+        return text
+
+    pairs = [(text[i], text[i + 1]) for i in range(0, len(text), 2)]
+    duplicated_pairs = sum(1 for a, b in pairs if a == b)
+
+    # Para palavras curtas (2-4 chars), exige 100% duplicação
+    # Para palavras longas (6+ chars), exige 70% duplicação
+    if len(text) <= 4:
+        # Palavras curtas: só corrige se todos pares são duplicados (ex: "AA" -> "A")
+        if duplicated_pairs == len(pairs):
+            return "".join(text[i] for i in range(0, len(text), 2))
+    elif len(pairs) >= 3 and duplicated_pairs / len(pairs) >= 0.7:
+        # Palavras longas: corrige se maioria é duplicada
+        return "".join(text[i] for i in range(0, len(text), 2))
+
+    return text
+
+
 def normalize_entity_name(raw: str) -> str:
     """
     Normaliza nome de entidade (empresa/pessoa).
@@ -387,6 +425,9 @@ def normalize_entity_name(raw: str) -> str:
     - Espaços extras
     - Caracteres especiais de pontuação
     - Caracteres OCR problemáticos
+    - Sufixos truncados como "..."
+    - Caracteres duplicados de OCR
+    - Artefatos de OCR corrompido (ex: "Aeee [dede", "[dede", etc.)
 
     Args:
         raw: Nome bruto extraído
@@ -397,11 +438,36 @@ def normalize_entity_name(raw: str) -> str:
     Example:
         >>> normalize_entity_name("EMPRESA XYZ LTDA   12.345.678/0001-90  ")
         'EMPRESA XYZ LTDA'
+        >>> normalize_entity_name("LLOOCCAALLIIZZAA RREENNTT AA CCAARR")
+        'LOCALIZA RENT A CAR'
+        >>> normalize_entity_name("CORREIOS E TELEGRAFOS Aeee [dede")
+        'CORREIOS E TELEGRAFOS'
     """
     name = (raw or "").strip()
 
+    # Remove artefatos OCR com colchetes (ex: "[dede", "[abc123", "Aeee [dede")
+    # Colchetes não são comuns em nomes de empresas
+    name = re.sub(r"\s*\[[^\]]*$", "", name)  # Remove "[algo" no final (sem fechar)
+    name = re.sub(r"\s*\[[^\]]*\]", " ", name)  # Remove "[algo]" completo
+
+    # Remove palavras curtas suspeitas no final (artefatos OCR como "Aeee", "dede")
+    # Padrão: palavras de 2-5 letras repetidas (ex: "Aeee", "eee", "dede")
+    name = re.sub(
+        r"\s+[A-Za-z]([a-z])\1{2,}\s*$", "", name
+    )  # "Aeee" (vogal + 3+ repetidas)
+    name = re.sub(r"\s+([a-z])\1([a-z])\2\s*$", "", name)  # "dede" (padrão abab)
+
+    # Remove sufixos truncados como "..." ou ".." (em qualquer posição)
+    name = re.sub(r"\.{2,}", " ", name)
+
     # Normaliza espaços
     name = re.sub(r"\s+", " ", name)
+
+    # Corrige caracteres duplicados de OCR (ex: "LLOOCCAALLIIZZAA" -> "LOCALIZA")
+    # Aplica por palavra para preservar espaços
+    words = name.split()
+    fixed_words = [_fix_ocr_duplicated_chars(word) for word in words]
+    name = " ".join(fixed_words)
 
     # Remove CNPJ
     name = re.sub(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", " ", name)
@@ -422,8 +488,59 @@ def normalize_entity_name(raw: str) -> str:
     for char in problematic_chars:
         name = name.replace(char, " ")
 
+    # Remove sufixos residuais após limpeza (ex: "// -- // --77")
+    name = re.sub(r"[\s/\-]+\d*\s*$", "", name)
+
+    # Remove palavras soltas no final que parecem lixo OCR
+    # (palavras muito curtas ou com padrões estranhos após empresa válida)
+    # Ex: "EMPRESA LTDA ABC" onde "ABC" é lixo
+    words = name.split()
+    if len(words) >= 3:
+        last_word = words[-1]
+        # Se última palavra é curta (<=4 chars) e não é sufixo empresarial válido
+        valid_suffixes = {
+            "LTDA",
+            "SA",
+            "S/A",
+            "S.A",
+            "S.A.",
+            "ME",
+            "MEI",
+            "EPP",
+            "EIRELI",
+            "SS",
+            "SIMPLES",
+            "CIA",
+            "CIA.",
+            "INC",
+            "CORP",
+            "BRASIL",
+            "BR",
+            "SP",
+            "RJ",
+            "MG",
+            "PR",
+            "SC",
+            "RS",
+            "BA",
+            "GO",
+            "DF",
+            "ES",
+            "PE",
+            "CE",
+            "PA",
+            "MA",
+            "MT",
+            "MS",
+        }
+        if len(last_word) <= 4 and last_word.upper() not in valid_suffixes:
+            # Verifica se parece lixo (padrão de caracteres repetidos ou estranhos)
+            if re.match(r"^[A-Za-z]([a-z])\1+$", last_word):  # ex: "Aeee"
+                words = words[:-1]
+                name = " ".join(words)
+
     # Limpa espaços e pontuação residual
-    name = re.sub(r"\s+", " ", name).strip(" -:;")
+    name = re.sub(r"\s+", " ", name).strip(" -:;/")
 
     return name.strip()
 
