@@ -20,6 +20,7 @@ Example:
     ...     dados = SicoobExtractor().extract(texto)
     ...     print(f"Banco: {dados['banco_nome']}")  # SICOOB
 """
+
 import re
 from typing import Any, Dict
 
@@ -43,12 +44,38 @@ class SicoobExtractor(BaseExtractor):
     def can_handle(cls, text: str) -> bool:
         text_compact = _compact(text)
 
+        # ========== EXCLUSÃO: NFCom e DANFSe ==========
+        # NFCom (Nota Fiscal de Comunicação) NÃO é boleto, mesmo tendo
+        # linha digitável para pagamento - é primariamente uma nota fiscal.
+        exclusion_patterns = [
+            # DANFSe
+            "DANFSE",
+            "DOCUMENTOAUXILIARDANFSE",
+            "DOCUMENTOAUXILIARDANFS",
+            # NFCom (Nota Fiscal Fatura de Serviços de Comunicação)
+            "NFCOM",
+            "NOTAFISCALFATURA",
+            "NOTAFISCALFATURADESERVICOS",
+            "SERVICOSDECOMUNICACAO",
+            "FATURASERVICOSCOMUNICACAO",
+            "DOCUMENTOAUXILIARDANOTAFISCALFATURA",
+        ]
+
+        for pattern in exclusion_patterns:
+            if pattern in text_compact:
+                return False
+
+        # Verificação específica para NFCom: "NOTA FISCAL" + "COMUNICAÇÃO"
+        if "NOTAFISCAL" in text_compact and "COMUNICACAO" in text_compact:
+            return False
+
         # Assinaturas fortes
         has_bank = (
             "SICOOB" in text_compact
             or "BANCOOB" in text_compact
             or "7560" in text_compact  # ex: "756-0" compactado
-            or "756" in text_compact and "LINHADIGITAVEL" in text_compact
+            or "756" in text_compact
+            and "LINHADIGITAVEL" in text_compact
         )
 
         # Confirma sinais mínimos de boleto para evitar pegar docs aleatórios.
@@ -74,7 +101,11 @@ class SicoobExtractor(BaseExtractor):
         raw_text = text or ""
 
         fornecedor = (data.get("fornecedor_nome") or "").strip()
-        if (not fornecedor) or len(fornecedor) < 5 or re.search(r"(?i)\bCPF\b|\bCNPJ\b|\bBENEFICI", fornecedor):
+        if (
+            (not fornecedor)
+            or len(fornecedor) < 5
+            or re.search(r"(?i)\bCPF\b|\bCNPJ\b|\bBENEFICI", fornecedor)
+        ):
             # Captura bloco entre "Beneficiário" e "Agência/CNPJ/CPF".
             # Usa DOTALL para tolerar OCR quebrando linhas.
             m = re.search(
@@ -95,7 +126,10 @@ class SicoobExtractor(BaseExtractor):
         data["banco_nome"] = "SICOOB"
 
         # Caso específico: Camargo e Silva (heurística conservadora)
-        if "CAMARGO" in (raw_text or "").upper() and "SILVA" in (raw_text or "").upper():
+        if (
+            "CAMARGO" in (raw_text or "").upper()
+            and "SILVA" in (raw_text or "").upper()
+        ):
             m = re.search(r"(?i)\b(CAMARGO\s+E\s+SILVA\s+[^\n\r0-9]{3,80})\b", raw_text)
             if m:
                 data["fornecedor_nome"] = m.group(1).strip()

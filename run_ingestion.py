@@ -207,6 +207,34 @@ def export_batch_results(batches: List[BatchResult], output_dir: Path) -> None:
     # Exporta relatório de lotes (resumo por batch)
     if resumos_lotes:
         output_lotes = output_dir / "relatorio_lotes.csv"
+
+        # Sanitiza campos de texto para evitar quebras de linha no CSV
+        for resumo in resumos_lotes:
+            if resumo.get("email_subject"):
+                resumo["email_subject"] = (
+                    resumo["email_subject"]
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                    .replace(";", ",")  # Evita conflito com delimitador CSV
+                    .strip()
+                )
+            if resumo.get("email_sender"):
+                resumo["email_sender"] = (
+                    resumo["email_sender"]
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                    .replace(";", ",")
+                    .strip()
+                )
+            if resumo.get("divergencia"):
+                resumo["divergencia"] = (
+                    resumo["divergencia"]
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                    .replace(";", ",")
+                    .strip()
+                )
+
         df_lotes = pd.DataFrame(resumos_lotes)
 
         # Reordena colunas do resumo

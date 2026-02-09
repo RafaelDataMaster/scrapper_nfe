@@ -45,6 +45,56 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 09/02/2026
+
+- [x] **Análise de Saúde do `relatorio_lotes.csv`**: Diagnóstico completo de qualidade das extrações
+    - Identificados 1.238 lotes, 90,9% com valor extraído, 118 CONCILIADO, 1.097 CONFERIR
+    - Detectadas 26 linhas quebradas no CSV por `\n` no campo `email_subject`
+    - Identificados padrões de fornecedores incorretos (Giga+, RSM, Regus, etc.)
+- [x] **Sanitização de campos CSV**: `run_ingestion.py` agora remove `\n`, `\r`, `;` de `email_subject`, `email_sender` e `divergencia` antes de exportar
+- [x] **Correção de fornecedor Giga+/DB3**: Boletos extraíam "forma, voc assegura que seu pagamento é seguro" como fornecedor
+    - **`extractors/boleto.py`**: Adicionados termos à blacklist em `_looks_like_header_or_label()`:
+        - "PAGAMENTO", "SEGURO", "ASSEGURA", "FORMA,", "DESSA FORMA"
+        - "CPF OU CNPJ", "CONTATO CNPJ", "E-MAIL", "ENDEREÇO", "MUNICÍPIO", "CEP "
+    - Resultado: 15 → 0 ocorrências, fornecedor agora extrai "DB3 SERVICOS - CE - FORTALEZA"
+- [x] **Normalização de nomes de fornecedor**: `extractors/utils.py` → `normalize_entity_name()` expandido:
+    - Prefixos removidos: `E-mail`, `Beneficiario`, `Nome/NomeEmpresarial`, `Nome / Nome Empresarial E-mail`, `Razão Social`
+    - Sufixos removidos: `CONTATO`, `CPF ou CNPJ`, `- CNPJ`, `| CNPJ - CNPJ`, `|` solto, `- Endereço...`, `Endereço Município CEP...`
+    - Exemplos corrigidos:
+        - `E-mail RSMBRASILAUDITORIAECONSULTORIALTDA CONTATO` → `RSMBRASILAUDITORIAECONSULTORIALTDA`
+        - `PITTSBURG FIP MULTIESTRATEGIA CPF ou CNPJ` → `PITTSBURG FIP MULTIESTRATEGIA`
+        - `VERO S.A. CNL. | CNPJ - CNPJ` → `VERO S.A. CNL.`
+- [x] **Centralização da normalização**: `core/batch_result.py` e `core/document_pairing.py` agora usam `normalize_entity_name()` de `extractors/utils.py` em vez de lógica duplicada
+- [x] **Documentação**: Criado `docs/context/sessao_2026_02_09_saude_extracao.md` com relatório completo e comandos de verificação
+
+### 06/02/2026
+
+- [x] **Fix Timeout em PDFs com QR Code vetorial**: PDFs com QR Codes complexos causavam timeout de 90s no pdfminer
+    - **Causa**: `abrir_pdfplumber_com_senha()` chamava `extract_text()` para validar abertura do PDF
+    - **`strategies/pdf_utils.py`**: Removido `extract_text()` do fluxo de validação - PDF que abre sem erro é retornado imediatamente
+    - **Resultado**: Tempo de abertura 90s+ → 0.01s, extração via OCR em ~4s
+    - **Batch exemplo**: `email_20260205_131749_6cb7ddf4` (boleto Banco Inter/Partners RL)
+- [x] **Padrão CEMIG no UtilityBillExtractor**: 166 de 224 faturas CEMIG (74%) tinham valores incorretos
+    - **`extractors/utility_bill.py`**: Adicionado padrão específico para capturar "valor a pagar" no layout CEMIG
+    - Padrão: `MÊS/ANO DATA_VENCIMENTO VALOR_A_PAGAR` (ex: "JAN/26 10/02/2026 205,05")
+- [x] **Suporte a NFCom no XmlExtractor**: XMLs de NFCom (Nota Fiscal de Comunicação - modelo 62) não eram processados
+    - **`extractors/xml_extractor.py`**:
+        - Detecção do namespace `http://www.portalfiscal.inf.br/nfcom`
+        - Novo método `_extract_nfcom()` para extrair fornecedor, CNPJ, número NF, valor, vencimento
+        - Usado por operadoras de telecom (MITelecom, etc.)
+- [x] **Documentação**: Criado `docs/context/sessao_2026_02_06_correcoes_extracao_valores.md`
+
+### 05/02/2026
+
+- [x] **TIMFaturaExtractor**: Novo extrator para faturas da TIM S.A.
+    - **Arquivo novo**: `extractors/tim_fatura.py`
+    - Detecta por padrões "TIM S.A." + "FATURA" + CNPJ da TIM
+    - Extrai: número da fatura, valor total, vencimento, CNPJ
+    - Posicionado no registry antes de `NfseCustomMontesClaros` e `UtilityBillExtractor`
+- [x] **Correção de detecção de PDFs protegidos**: `pdf_utils.py` agora detecta `PdfminerException` sem mensagem corretamente
+- [x] **Testes**: 636 passed, 1 skipped
+- [x] **Documentação**: Criado `docs/context/sessao_2026_02_05_timeout_tim.md`
+
 ### 04/02/2026
 
 - [x] **Correção de extração de fornecedores em DANFE e Boletos (NFCom)**:

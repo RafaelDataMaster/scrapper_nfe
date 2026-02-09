@@ -564,6 +564,29 @@ class DanfeExtractor(BaseExtractor):
                 {"parcela": d[0], "vencimento": d[1], "valor": d[2]} for d in duplicatas
             ]
 
+        # Fallback: vencimento do cabeçalho (comum em NFCom)
+        # Formato típico: "Nome CPF/CNPJ Vencimento" seguido de dados
+        # Ex: "CARRIER TELECOM S/A 38.323.230/0001-64 20/01/2026"
+        if not data.get("vencimento"):
+            # Padrão 1: "Vencimento" seguido de data
+            venc_patterns = [
+                r"(?i)\bVENCIMENTO\b[^\d]*(\d{2}/\d{2}/\d{4})",
+                r"(?i)\bVENCIMENTO\b[^\d]*(\d{2}/\d{2}/\d{2})\b",
+                # Padrão 2: Cabeçalho NFCom com CNPJ seguido de data
+                r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s+(\d{2}/\d{2}/\d{4})",
+                # Padrão 3: Data após "Data de Vencimento"
+                r"(?i)DATA\s+DE\s+VENCIMENTO[:\s]+(\d{2}/\d{2}/\d{4})",
+            ]
+            for pat in venc_patterns:
+                m = re.search(pat, text)
+                if m:
+                    from extractors.utils import parse_date_br
+
+                    venc_iso = parse_date_br(m.group(1))
+                    if venc_iso:
+                        data["vencimento"] = venc_iso
+                        break
+
         # Extração adicional: Número do pedido (comum em DANFEs)
         pedido_patterns = [
             r"(?i)\bPEDIDO\s*(?:DE\s*COMPRAS?)?\s*[:\-]?\s*(\d+)",

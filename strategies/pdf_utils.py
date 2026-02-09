@@ -9,6 +9,7 @@ Funcionalidades:
     - Abertura de PDFs com tentativa automática de desbloqueio
     - Suporte para pdfplumber e pypdfium2
 """
+
 import logging
 import os
 from typing import Any, List, Optional
@@ -81,18 +82,40 @@ def abrir_pdfplumber_com_senha(file_path: str) -> Optional[Any]:
     try:
         pdf = pdfplumber.open(file_path)
         # Tenta acessar páginas para verificar se realmente abriu
-        _ = pdf.pages
-        logger.debug(f"PDF aberto sem senha (pdfplumber): {filename}")
-        return pdf
+        if pdf.pages:
+            # PDF abriu com sucesso - retorna imediatamente
+            # Não tenta extract_text() aqui pois PDFs com elementos vetoriais complexos
+            # (como QR codes) podem travar o pdfminer por muito tempo.
+            # Se o PDF for escaneado (sem texto nativo), a estratégia de extração
+            # usará OCR posteriormente.
+            logger.debug(f"PDF aberto sem senha (pdfplumber): {filename}")
+            return pdf
+        else:
+            logger.debug(f"PDF {filename}: sem páginas")
+            return None
     except Exception as e:
         error_msg = str(e).lower()
+        error_type = type(e).__name__
         # pdfplumber/pdfminer usa "password" ou "encrypted" nas mensagens de erro
-        if "password" not in error_msg and "encrypted" not in error_msg:
+        # Também trata PdfminerException genérico (às vezes sem mensagem) como possível senha
+        is_password_error = (
+            "password" in error_msg
+            or "encrypted" in error_msg
+            or error_type
+            == "PdfminerException"  # Erro genérico do pdfminer (comum em PDFs protegidos)
+            or not error_msg.strip()  # Mensagem vazia também pode indicar proteção
+        )
+
+        if not is_password_error:
             # Erro diferente de senha - logar debug e tentar outra estratégia
-            logger.debug(f"PDF {filename}: pdfplumber indisponível ({type(e).__name__})")
+            logger.debug(
+                f"PDF {filename}: pdfplumber indisponível ({error_type}: {error_msg})"
+            )
             return None
 
-        logger.debug(f"PDF {filename}: protegido por senha, tentando desbloqueio (pdfplumber)")
+        logger.debug(
+            f"PDF {filename}: protegido por senha, tentando desbloqueio (pdfplumber)"
+        )
 
     # 2. Gerar candidatos e tentar cada um
     candidatos = gerar_candidatos_senha()
@@ -101,10 +124,13 @@ def abrir_pdfplumber_com_senha(file_path: str) -> Optional[Any]:
     for senha in candidatos:
         try:
             pdf = pdfplumber.open(file_path, password=senha)
-            # Tenta acessar páginas para verificar se realmente abriu
-            _ = pdf.pages
-            logger.info(f"✅ PDF desbloqueado com senha '{senha}' (pdfplumber): {filename}")
-            return pdf
+            # Tenta acessar páginas para verificar se a senha funcionou
+            # Não usa extract_text() pois pode travar em PDFs com elementos vetoriais complexos
+            if pdf.pages:
+                logger.info(
+                    f"✅ PDF desbloqueado com senha '{senha}' (pdfplumber): {filename}"
+                )
+                return pdf
         except Exception:
             # Senha incorreta, continuar tentando
             continue
@@ -146,7 +172,9 @@ def abrir_pypdfium_com_senha(file_path: str) -> Optional[Any]:
             logger.debug(f"PDF {filename}: pypdfium2 indisponível ({type(e).__name__})")
             return None
 
-        logger.debug(f"PDF {filename}: protegido por senha, tentando desbloqueio (pypdfium2)")
+        logger.debug(
+            f"PDF {filename}: protegido por senha, tentando desbloqueio (pypdfium2)"
+        )
 
     # 2. Gerar candidatos e tentar cada um
     candidatos = gerar_candidatos_senha()
@@ -155,7 +183,9 @@ def abrir_pypdfium_com_senha(file_path: str) -> Optional[Any]:
     for senha in candidatos:
         try:
             pdf = pdfium.PdfDocument(file_path, password=senha)
-            logger.info(f"✅ PDF desbloqueado com senha '{senha}' (pypdfium2): {filename}")
+            logger.info(
+                f"✅ PDF desbloqueado com senha '{senha}' (pypdfium2): {filename}"
+            )
             return pdf
         except pdfium.PdfiumError:
             # Senha incorreta, continuar tentando

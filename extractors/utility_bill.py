@@ -219,19 +219,83 @@ class UtilityBillExtractor(BaseExtractor):
         return None
 
     def _extract_value(self, text: str) -> float:
-        """Extrai valor total."""
-        patterns = [
+        """
+        Extrai valor total a pagar da fatura.
+
+        Prioriza padrões que indicam o VALOR FINAL A PAGAR,
+        não valores parciais como tributos ou descontos.
+        """
+        text_upper = text.upper()
+
+        # Padrões prioritários - valor final a pagar (ordem de confiabilidade)
+        priority_patterns = [
+            # "Total a Pagar: R$ 1.234,56" - mais específico
             r"TOTAL\s+A\s+PAGAR\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor a Pagar: R$ 1.234,56"
+            r"VALOR\s+A\s+PAGAR\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Total da Fatura: R$ 1.234,56"
+            r"TOTAL\s+DA\s+FATURA\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Total da Fatura: R$ 1.234,56"
+            r"VALOR\s+TOTAL\s+DA\s+FATURA\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Total Geral: R$ 1.234,56"
+            r"TOTAL\s+GERAL\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Cobrado: R$ 1.234,56"
+            r"VALOR\s+COBRADO\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor do Documento: R$ 1.234,56"
+            r"VALOR\s+DO\s+DOCUMENTO\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Total: R$ 1.234,56"
             r"VALOR\s+TOTAL\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
-            r"R\$\s*([\d.]+,\d{2})",
         ]
 
-        for pattern in patterns:
+        for pattern in priority_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 try:
                     valor_str = match.group(1).replace(".", "").replace(",", ".")
-                    return float(valor_str)
+                    valor = float(valor_str)
+                    if valor > 0:
+                        return valor
+                except (ValueError, IndexError):
+                    continue
+
+        # Padrões específicos para CEMIG (NF-e de energia elétrica)
+        # Layout: "NOME_CLIENTE MMM/YYYY DD/MM/YYYY VALOR"
+        # Ex: "SUNRISE PARTICIPACOES LTDA DEZ/2025 17/01/2026 205,05"
+        if "CEMIG" in text_upper:
+            cemig_patterns = [
+                # Padrão principal: MÊS/ANO DATA VALOR (após nome do cliente)
+                r"[A-Z]{3}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+(\d{1,3}(?:\.\d{3})*,\d{2})",
+                # Padrão alternativo: apenas após a data de vencimento
+                r"\d{2}/\d{2}/\d{4}\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*\n",
+            ]
+            for pattern in cemig_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    try:
+                        valor_str = match.group(1).replace(".", "").replace(",", ".")
+                        valor = float(valor_str)
+                        # Validar que é um valor razoável para conta de energia (> R$ 10)
+                        if valor >= 10.0:
+                            return valor
+                    except (ValueError, IndexError):
+                        continue
+
+        # Padrões secundários - fallback
+        fallback_patterns = [
+            # "Total: R$ 1.234,56"
+            r"TOTAL\s*[:\-]\s*R?\$?\s*([\d.]+,\d{2})",
+            # Qualquer R$ isolado (pega o primeiro maior que zero)
+            r"R\$\s*([\d.]+,\d{2})",
+        ]
+
+        for pattern in fallback_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                try:
+                    valor_str = match.group(1).replace(".", "").replace(",", ".")
+                    valor = float(valor_str)
+                    if valor > 0:
+                        return valor
                 except (ValueError, IndexError):
                     continue
 

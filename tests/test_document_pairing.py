@@ -9,6 +9,7 @@ Testa os casos:
 5. Pareamento por valor (caso Locaweb)
 6. Normalização de números de nota
 """
+
 import pytest
 
 from core.batch_result import BatchResult
@@ -59,12 +60,79 @@ class TestDocumentPair:
 
         summary = pair.to_summary()
 
-        assert summary['batch_id'] == "batch_123_v1"
-        assert summary['numero_nota'] == "2025/119"
-        assert summary['valor_compra'] == 9290.71
-        assert summary['valor_boleto'] == 9290.71
-        assert summary['status_conciliacao'] == "CONCILIADO"
-        assert summary['diferenca_valor'] == 0.0
+        assert summary["batch_id"] == "batch_123_v1"
+        assert summary["numero_nota"] == "2025/119"
+        assert summary["valor_compra"] == 9290.71
+        assert summary["valor_boleto"] == 9290.71
+        assert summary["status_conciliacao"] == "CONCILIADO"
+        assert summary["diferenca_valor"] == 0.0
+
+    def test_to_summary_valor_compra_from_boleto_when_no_nf(self):
+        """
+        Testa que valor_compra usa valor do boleto quando não há NF.
+
+        Quando só tem boleto (sem NF ou NF com valor 0), o valor_compra
+        deve refletir o valor do boleto, pois é o valor efetivo da transação.
+        """
+        pair = DocumentPair(
+            pair_id="batch_only_bol",
+            batch_id="batch_only_bol",
+            numero_nota=None,
+            valor_nf=0.0,  # Sem NF
+            valor_boleto=630.0,  # Só boleto
+            vencimento="2025-12-20",
+            fornecedor="GOX S.A.",
+            status="CONFERIR",
+        )
+
+        summary = pair.to_summary()
+
+        # valor_compra deve ser igual ao valor_boleto quando não há NF
+        assert summary["valor_compra"] == 630.0
+        assert summary["valor_boleto"] == 630.0
+
+    def test_to_summary_valor_compra_from_nf_when_available(self):
+        """
+        Testa que valor_compra prioriza valor da NF quando disponível.
+
+        Quando há NF com valor > 0, o valor_compra deve vir da NF,
+        mesmo que o valor do boleto seja diferente.
+        """
+        pair = DocumentPair(
+            pair_id="batch_divergente",
+            batch_id="batch_divergente",
+            numero_nota="123",
+            valor_nf=500.0,  # NF com valor
+            valor_boleto=450.0,  # Boleto com valor diferente
+            vencimento="2025-12-20",
+            fornecedor="TESTE LTDA",
+            status="DIVERGENTE",
+            diferenca=50.0,
+        )
+
+        summary = pair.to_summary()
+
+        # valor_compra deve vir da NF, não do boleto
+        assert summary["valor_compra"] == 500.0
+        assert summary["valor_boleto"] == 450.0
+
+    def test_to_summary_valor_compra_zero_when_no_documents(self):
+        """
+        Testa que valor_compra é 0 quando não há NF nem boleto com valor.
+        """
+        pair = DocumentPair(
+            pair_id="batch_empty",
+            batch_id="batch_empty",
+            numero_nota=None,
+            valor_nf=0.0,
+            valor_boleto=0.0,
+            status="CONFERIR",
+        )
+
+        summary = pair.to_summary()
+
+        assert summary["valor_compra"] == 0.0
+        assert summary["valor_boleto"] == 0.0
 
 
 class TestDocumentPairingServiceNormalization:
@@ -112,11 +180,17 @@ class TestDocumentPairingServiceNormalization:
 
     def test_extract_numero_from_filename_boleto(self, service):
         """Testa extração de número do nome do arquivo de boleto."""
-        assert service._extract_numero_from_filename("03_BOLETO NF 2025.119.pdf") == "2025.119"
+        assert (
+            service._extract_numero_from_filename("03_BOLETO NF 2025.119.pdf")
+            == "2025.119"
+        )
 
     def test_extract_numero_from_filename_nfse(self, service):
         """Testa extração de número de arquivo XML NFSE."""
-        assert service._extract_numero_from_filename("nfse_202500000000119.xml") == "202500000000119"
+        assert (
+            service._extract_numero_from_filename("nfse_202500000000119.xml")
+            == "202500000000119"
+        )
 
     def test_extract_numero_from_filename_sem_numero(self, service):
         """Testa arquivo sem número identificável."""
@@ -520,8 +594,8 @@ class TestBatchResultToSummaries:
         summaries = batch.to_summaries()
 
         assert len(summaries) == 1
-        assert summaries[0]['status_conciliacao'] == "CONCILIADO"
-        assert summaries[0]['valor_compra'] == 1000.0
+        assert summaries[0]["status_conciliacao"] == "CONCILIADO"
+        assert summaries[0]["valor_compra"] == 1000.0
 
     def test_to_summaries_multiplos(self):
         """Testa to_summaries com múltiplos pares."""
@@ -565,7 +639,7 @@ class TestBatchResultToSummaries:
         summaries = batch.to_summaries()
 
         assert len(summaries) == 2
-        assert all(s['status_conciliacao'] == "CONCILIADO" for s in summaries)
+        assert all(s["status_conciliacao"] == "CONCILIADO" for s in summaries)
 
     def test_has_multiple_invoices(self):
         """Testa detecção de múltiplas notas."""

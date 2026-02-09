@@ -139,11 +139,15 @@ class BoletoExtractor(BaseExtractor):
         text_norm_upper = strip_accents(text_upper)
         text_compact = re.sub(r"[^A-Z0-9]+", "", text_norm_upper)
 
-        # ========== VERIFICAÇÃO DE EXCLUSÃO: DANFSe ==========
+        # ========== VERIFICAÇÃO DE EXCLUSÃO: DANFSe e NFCom ==========
         # DANFSe (Documento Auxiliar da NFS-e) NÃO é boleto, mesmo tendo
         # uma chave de acesso que pode parecer linha digitável.
-        # Se o documento contém indicadores fortes de DANFSe, excluir imediatamente.
+        # NFCom (Nota Fiscal de Comunicação) também NÃO é boleto, mesmo
+        # contendo linha digitável para pagamento - é primariamente uma nota fiscal.
+
+        # Exclusões que podem aparecer em qualquer lugar do documento
         danfse_exclusion_patterns = [
+            # DANFSe
             "DANFSE",
             "DANFS-E",
             "DOCUMENTOAUXILIARDANFSE",
@@ -154,6 +158,25 @@ class BoletoExtractor(BaseExtractor):
 
         for pattern in danfse_exclusion_patterns:
             if pattern in text_compact:
+                return False
+
+        # NFCom: só exclui se indicadores aparecem no INÍCIO do documento
+        # (para não excluir boletos que mencionam NFCom em resumo de serviços)
+        first_500_compact = re.sub(r"[^A-Z0-9]+", "", text_norm_upper[:500])
+        nfcom_header_patterns = [
+            "DOCAUXILIARDANOTAFISCALFATURA",
+            "DOCUMENTOAUXILIARDANOTAFISCALFATURA",
+            "NOTAFISCALFATURADESERVICOSDE",
+        ]
+
+        for pattern in nfcom_header_patterns:
+            if pattern in first_500_compact:
+                return False
+
+        # Verificação específica para NFCom: "NOTA FISCAL" + "COMUNICAÇÃO" no INÍCIO
+        if "NOTAFISCAL" in first_500_compact and "COMUNICACAO" in first_500_compact:
+            # Confirma que é NFCom (não apenas menção)
+            if "RAZAOSOCIAL" in first_500_compact or "CNPJ" in first_500_compact[:200]:
                 return False
 
         # Verificação adicional: "DOCUMENTO AUXILIAR" + "NFS" no mesmo contexto
@@ -350,6 +373,18 @@ class BoletoExtractor(BaseExtractor):
             "(=)",
             "(-)",
             "(+)",
+            # Frases genéricas que não são nomes de fornecedor (ex: Giga+ Empresas)
+            "PAGAMENTO",
+            "SEGURO",
+            "ASSEGURA",
+            "FORMA,",
+            "DESSA FORMA",
+            "CPF OU CNPJ",
+            "CONTATO CNPJ",
+            "E-MAIL",
+            "ENDEREÇO",
+            "MUNICÍPIO",
+            "CEP ",
         ]
         return any(t in s_up for t in bad_tokens)
 
@@ -595,25 +630,47 @@ class BoletoExtractor(BaseExtractor):
 
     def _extract_valor(self, text: str) -> float:
         """
-        Extrai o valor do documento do boleto.
+        Extrai o valor do documento do boleto (valor total a pagar).
 
         Implementa 3 níveis de fallback para extração robusta:
-        1. Padrões específicos (com/sem R$)
-        2. Heurística do maior valor monetário encontrado
-        3. Extração do valor da linha digitável (10 últimos dígitos em centavos)
+        1. Padrões prioritários para VALOR A PAGAR (mais específicos)
+        2. Padrões específicos de boleto (com/sem R$)
+        3. Heurística do maior valor monetário encontrado
+        4. Extração do valor da linha digitável (10 últimos dígitos em centavos)
 
         Returns:
             float: Valor do documento em reais ou 0.0 se não encontrado.
         """
-        # Padrão: Procura "Valor do Documento" ou valores monetários
-        # Aceita formatos com ou sem R$
+        # PADRÕES PRIORITÁRIOS - Valor total a pagar (ordem de confiabilidade)
+        # Estes capturam especificamente o valor que o cliente precisa pagar
+        priority_patterns = [
+            # "Valor do Documento: R$ 1.234,56" - padrão de boleto mais confiável
+            r"(?i)Valor\s+do\s+Documento\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # "Valor Cobrado: R$ 1.234,56"
+            r"(?i)Valor\s+Cobrado\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # "Valor a Pagar: R$ 1.234,56"
+            r"(?i)Valor\s+a\s+Pagar\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # "Total a Pagar: R$ 1.234,56"
+            r"(?i)Total\s+a\s+Pagar\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # "Valor Nominal: R$ 1.234,56"
+            r"(?i)Valor\s+Nominal\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # "Valor Total: R$ 1.234,56"
+            r"(?i)Valor\s+Total\s*[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+        ]
+
+        # Tenta padrões prioritários primeiro
+        for pattern in priority_patterns:
+            match = re.search(pattern, text)
+            if match:
+                valor_str = match.group(1)
+                valor = float(valor_str.replace(".", "").replace(",", "."))
+                if valor > 0:
+                    return valor
+
+        # Padrões secundários de boleto
         patterns = [
             # Procura uma data (DD/MM/AAAA) seguida de um valor monetário no final da linha/bloco
             r"\d{2}/\d{2}/\d{4}\s+.*?(\d{1,3}(?:\.\d{3})*,\d{2})",
-            # Com R$ explícito
-            r"(?i)Valor\s+do\s+Documento\s*[:\s]*R\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
-            r"(?i)Valor\s+Nominal\s*[:\s]*R\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
-            r"(?i)Valor\s+Cobrado\s*[:\s]*R\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
             # Sem R$ explícito (valor logo após o rótulo)
             # Útil para boletos com layout tabular
             r"(?i)Valor\s+do\s+Documento[\s\n]+(\d{1,3}(?:\.\d{3})*,\d{2})\b",

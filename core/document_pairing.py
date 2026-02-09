@@ -26,11 +26,14 @@ Status de pareamento:
 - PAREADO_FORCADO: Pareamento forçado por lote (mesma origem de e-mail)
 - DIVERGENTE_VALOR: Pareamento forçado com valores divergentes
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+
+from extractors.utils import normalize_entity_name
 
 if TYPE_CHECKING:
     from core.batch_result import BatchResult
@@ -61,6 +64,7 @@ class DocumentPair:
         email_sender: Remetente do email (contexto)
         source_folder: Pasta de origem
     """
+
     pair_id: str
     batch_id: str
     numero_nota: Optional[str] = None
@@ -99,31 +103,47 @@ class DocumentPair:
         """
         Converte o par para dicionário de resumo (formato do relatório de lotes).
 
+        O valor_compra representa o VALOR TOTAL A PAGAR da compra/fatura.
+        Quando não há NF com valor mas existe boleto, usa o valor do boleto
+        como valor_compra para refletir o valor efetivo da transação.
+
         Returns:
             Dicionário compatível com o formato esperado pelo relatório
         """
+        # Determina valor_compra:
+        # - Se tem NF com valor > 0: usa valor da NF
+        # - Se NF sem valor mas tem boleto: usa valor do boleto (valor a pagar)
+        # - Senão: 0
+        if self.valor_nf > 0:
+            valor_compra = self.valor_nf
+        elif self.valor_boleto > 0:
+            # Quando não há NF mas há boleto, o valor do boleto É o valor da compra
+            valor_compra = self.valor_boleto
+        else:
+            valor_compra = 0.0
+
         return {
-            'batch_id': self.pair_id,
-            'data': self.email_date,  # Data do email (não data de processamento)
-            'status_conciliacao': self.status,
-            'divergencia': self.divergencia,
-            'diferenca_valor': self.diferenca,
-            'fornecedor': self.fornecedor,
-            'vencimento': self.vencimento,
-            'numero_nota': self.numero_nota,
-            'valor_compra': self.valor_nf,
-            'valor_boleto': self.valor_boleto,
-            'total_documents': self.total_documents,
-            'total_errors': self.total_errors,
-            'danfes': self.danfes,
-            'boletos': self.boletos,
-            'nfses': self.nfses,
-            'outros': self.outros,
-            'avisos': self.avisos,
-            'email_subject': self.email_subject,
-            'email_sender': self.email_sender,
-            'empresa': self.empresa,
-            'source_folder': self.source_folder,
+            "batch_id": self.pair_id,
+            "data": self.email_date,  # Data do email (não data de processamento)
+            "status_conciliacao": self.status,
+            "divergencia": self.divergencia,
+            "diferenca_valor": self.diferenca,
+            "fornecedor": self.fornecedor,
+            "vencimento": self.vencimento,
+            "numero_nota": self.numero_nota,
+            "valor_compra": valor_compra,
+            "valor_boleto": self.valor_boleto,
+            "total_documents": self.total_documents,
+            "total_errors": self.total_errors,
+            "danfes": self.danfes,
+            "boletos": self.boletos,
+            "nfses": self.nfses,
+            "outros": self.outros,
+            "avisos": self.avisos,
+            "email_subject": self.email_subject,
+            "email_sender": self.email_sender,
+            "empresa": self.empresa,
+            "source_folder": self.source_folder,
         }
 
 
@@ -146,27 +166,34 @@ class DocumentPairingService:
     # Padrões para extrair número da nota do nome do arquivo
     PATTERNS_NUMERO_NOTA = [
         # NF 2025.119.pdf, NF 2025-119.pdf, NF 2025/119.pdf
-        r'NF[_\s\-]*(\d{4}[\.\/\-]\d+)',
+        r"NF[_\s\-]*(\d{4}[\.\/\-]\d+)",
         # NF 119.pdf, NF-119.pdf
-        r'NF[_\s\-]*(\d+)',
+        r"NF[_\s\-]*(\d+)",
         # nfse_202500000000119.xml
-        r'nfse[_\-]*(\d+)',
+        r"nfse[_\-]*(\d+)",
         # Nota_fiscal_123.pdf
-        r'[Nn]ota[_\s\-]*[Ff]iscal[_\s\-]*(\d+)',
+        r"[Nn]ota[_\s\-]*[Ff]iscal[_\s\-]*(\d+)",
         # BOLETO NF 2025.119.pdf
-        r'BOLETO[_\s\-]*NF[_\s\-]*(\d{4}[\.\/\-]\d+)',
-        r'BOLETO[_\s\-]*NF[_\s\-]*(\d+)',
+        r"BOLETO[_\s\-]*NF[_\s\-]*(\d{4}[\.\/\-]\d+)",
+        r"BOLETO[_\s\-]*NF[_\s\-]*(\d+)",
     ]
 
     # Palavras que indicam documentos auxiliares (não são notas fiscais)
     # Esses documentos serão ignorados no pareamento
     AUXILIAR_KEYWORDS = [
-        'demonstrativo', 'atestado', 'recibo', 'comprovante',
-        'declaracao', 'declaração', 'termo', 'contrato',
-        'recs', 'recebimento',  # Recibos de entrega
+        "demonstrativo",
+        "atestado",
+        "recibo",
+        "comprovante",
+        "declaracao",
+        "declaração",
+        "termo",
+        "contrato",
+        "recs",
+        "recebimento",  # Recibos de entrega
     ]
 
-    def pair_documents(self, batch: 'BatchResult') -> List[DocumentPair]:
+    def pair_documents(self, batch: "BatchResult") -> List[DocumentPair]:
         """
         Analisa o lote e retorna lista de pares NF↔Boleto.
 
@@ -181,12 +208,17 @@ class DocumentPairingService:
             Lista de DocumentPair, um para cada par identificado
         """
         import logging
+
         logger = logging.getLogger(__name__)
         from core.models import BoletoData, DanfeData, InvoiceData, OtherDocumentData
 
         # Separa documentos por tipo
-        notas_raw: List[Tuple[Optional[str], float, Any]] = []  # (numero_nota, valor, documento)
-        boletos_raw: List[Tuple[Optional[str], float, Any]] = []  # (numero_ref, valor, documento)
+        notas_raw: List[
+            Tuple[Optional[str], float, Any]
+        ] = []  # (numero_nota, valor, documento)
+        boletos_raw: List[
+            Tuple[Optional[str], float, Any]
+        ] = []  # (numero_ref, valor, documento)
 
         # Coleta notas (NFSE, DANFE) - AGORA ACEITA VALOR ZERO TAMBÉM
         for doc in batch.documents:
@@ -205,9 +237,13 @@ class DocumentPairingService:
                     valor = doc.valor_total or 0.0
                     numero = self._extract_numero_nota(doc)
                     notas_raw.append((numero, valor, doc))
-                    logger.debug(f"OutrosDocumento incluído: arquivo={doc.arquivo_origem}, valor={valor}, numero={numero}")
+                    logger.debug(
+                        f"OutrosDocumento incluído: arquivo={doc.arquivo_origem}, valor={valor}, numero={numero}"
+                    )
                 else:
-                    logger.debug(f"OutrosDocumento ignorado (auxiliar): arquivo={doc.arquivo_origem}, valor={doc.valor_total if hasattr(doc, 'valor_total') else 'N/A'}")
+                    logger.debug(
+                        f"OutrosDocumento ignorado (auxiliar): arquivo={doc.arquivo_origem}, valor={doc.valor_total if hasattr(doc, 'valor_total') else 'N/A'}"
+                    )
             elif isinstance(doc, BoletoData):
                 numero = self._extract_numero_boleto(doc)
                 valor = doc.valor_documento or 0.0
@@ -228,7 +264,9 @@ class DocumentPairingService:
         # Agrupa documentos duplicados (mesmo valor = provavelmente mesma nota)
         # Filtra notas com valor > 0 para agrupamento normal
         notas_com_valor = [(n, v, d) for n, v, d in notas_raw if v > 0]
-        notas_agrupadas = self._agrupar_por_valor_e_numero(notas_com_valor) if notas_com_valor else {}
+        notas_agrupadas = (
+            self._agrupar_por_valor_e_numero(notas_com_valor) if notas_com_valor else {}
+        )
         boletos_agrupados = self._agrupar_boletos(boletos_raw)
 
         # Pareia notas com boletos
@@ -236,7 +274,9 @@ class DocumentPairingService:
 
         # NOVO: Se tem boletos órfãos e notas zeradas, tenta pareamento forçado
         if not pairs or self._has_orphan_documents(pairs, notas_raw, boletos_raw):
-            forced = self._try_forced_pairing_orphans(pairs, notas_raw, boletos_raw, batch)
+            forced = self._try_forced_pairing_orphans(
+                pairs, notas_raw, boletos_raw, batch
+            )
             if forced:
                 pairs = forced
 
@@ -253,7 +293,7 @@ class DocumentPairingService:
         self,
         notas: List[Tuple[Optional[str], float, Any]],
         boletos: List[Tuple[Optional[str], float, Any]],
-        batch: 'BatchResult'
+        batch: "BatchResult",
     ) -> Optional[List[DocumentPair]]:
         """
         Tenta pareamento forçado por lote.
@@ -288,9 +328,15 @@ class DocumentPairingService:
         divergencia = f"Nota sem valor (R$ 0,00) pareada com boleto (R$ {valor_boleto:.2f}) por lote"
 
         # Extrai dados do boleto como principal (mais confiável)
-        fornecedor = getattr(doc_boleto, 'fornecedor_nome', None) or getattr(doc_nota, 'fornecedor_nome', None)
-        vencimento = getattr(doc_boleto, 'vencimento', None) or getattr(doc_nota, 'vencimento', None)
-        data_emissao = getattr(doc_nota, 'data_emissao', None) or getattr(doc_boleto, 'data_emissao', None)
+        fornecedor = getattr(doc_boleto, "fornecedor_nome", None) or getattr(
+            doc_nota, "fornecedor_nome", None
+        )
+        vencimento = getattr(doc_boleto, "vencimento", None) or getattr(
+            doc_nota, "vencimento", None
+        )
+        data_emissao = getattr(doc_nota, "data_emissao", None) or getattr(
+            doc_boleto, "data_emissao", None
+        )
 
         # Usa número da nota ou referência do boleto
         numero_final = numero_nota or numero_bol
@@ -309,13 +355,14 @@ class DocumentPairingService:
             valor_boleto=valor_boleto,
             vencimento=vencimento,
             fornecedor=self._normalize_fornecedor(fornecedor) if fornecedor else None,
-            cnpj_fornecedor=getattr(doc_boleto, 'cnpj_beneficiario', None) or getattr(doc_nota, 'cnpj_prestador', None),
+            cnpj_fornecedor=getattr(doc_boleto, "cnpj_beneficiario", None)
+            or getattr(doc_nota, "cnpj_prestador", None),
             data_emissao=data_emissao,
             status=status,
             divergencia=divergencia,
             diferenca=diferenca,
-            documentos_nf=[getattr(doc_nota, 'arquivo_origem', '')],
-            documentos_boleto=[getattr(doc_boleto, 'arquivo_origem', '')],
+            documentos_nf=[getattr(doc_nota, "arquivo_origem", "")],
+            documentos_boleto=[getattr(doc_boleto, "arquivo_origem", "")],
             email_subject=batch.email_subject,
             email_sender=batch.email_sender,
             email_date=batch.email_date,
@@ -330,7 +377,7 @@ class DocumentPairingService:
         self,
         pairs: List[DocumentPair],
         notas: List[Tuple[Optional[str], float, Any]],
-        boletos: List[Tuple[Optional[str], float, Any]]
+        boletos: List[Tuple[Optional[str], float, Any]],
     ) -> bool:
         """
         Verifica se há documentos órfãos (não pareados).
@@ -347,7 +394,7 @@ class DocumentPairingService:
         pairs: List[DocumentPair],
         notas: List[Tuple[Optional[str], float, Any]],
         boletos: List[Tuple[Optional[str], float, Any]],
-        batch: 'BatchResult'
+        batch: "BatchResult",
     ) -> Optional[List[DocumentPair]]:
         """
         Tenta parear documentos órfãos de forma forçada.
@@ -363,8 +410,9 @@ class DocumentPairingService:
             arquivos_boleto_pareados.update(pair.documentos_boleto)
 
         boletos_orfaos = [
-            (n, v, d) for n, v, d in boletos
-            if getattr(d, 'arquivo_origem', '') not in arquivos_boleto_pareados
+            (n, v, d)
+            for n, v, d in boletos
+            if getattr(d, "arquivo_origem", "") not in arquivos_boleto_pareados
         ]
 
         # Se tem exatamente 1 nota zerada e 1 boleto órfão, força
@@ -374,26 +422,25 @@ class DocumentPairingService:
             if novo_pair:
                 # Mantém outros pares válidos e adiciona o forçado
                 outros_pares = [
-                    p for p in pairs
-                    if p.valor_nf > 0 and p.valor_boleto > 0
+                    p for p in pairs if p.valor_nf > 0 and p.valor_boleto > 0
                 ]
                 return outros_pares + novo_pair
 
         return None
 
-    def _extract_empresa(self, batch: 'BatchResult', docs: List[Any]) -> Optional[str]:
+    def _extract_empresa(self, batch: "BatchResult", docs: List[Any]) -> Optional[str]:
         """
         Extrai código da empresa dos documentos ou do batch.
         """
         # Tenta do correlation_result
         if batch.correlation_result:
-            empresa = getattr(batch.correlation_result, 'empresa', None)
+            empresa = getattr(batch.correlation_result, "empresa", None)
             if empresa:
                 return empresa
 
         # Tenta dos documentos
         for doc in docs:
-            empresa = getattr(doc, 'empresa', None)
+            empresa = getattr(doc, "empresa", None)
             if empresa:
                 return empresa
 
@@ -406,35 +453,42 @@ class DocumentPairingService:
         Documentos auxiliares não devem ser tratados como notas fiscais.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
-        arquivo = (getattr(doc, 'arquivo_origem', '') or '').lower()
-        texto = (getattr(doc, 'texto_bruto', '') or '').lower()[:500]
-        fornecedor = (getattr(doc, 'fornecedor_nome', '') or '').lower()
+        arquivo = (getattr(doc, "arquivo_origem", "") or "").lower()
+        texto = (getattr(doc, "texto_bruto", "") or "").lower()[:500]
+        fornecedor = (getattr(doc, "fornecedor_nome", "") or "").lower()
 
         # 1. Verifica se é atestado/declaração (mesmo se tiver valor)
-        if fornecedor.startswith('atestamos') or fornecedor.startswith('declaramos'):
-            logger.debug(f"Documento é auxiliar: fornecedor '{fornecedor}' começa com atestamos/declaramos")
+        if fornecedor.startswith("atestamos") or fornecedor.startswith("declaramos"):
+            logger.debug(
+                f"Documento é auxiliar: fornecedor '{fornecedor}' começa com atestamos/declaramos"
+            )
             return True
 
-        if 'atestamos' in texto[:200] or 'declaramos' in texto[:200]:
+        if "atestamos" in texto[:200] or "declaramos" in texto[:200]:
             logger.debug("Documento é auxiliar: texto contém atestamos/declaramos")
             return True
 
         # 2. Documentos com valor total positivo não são considerados auxiliares
         # (a menos que sejam atestados - já tratado acima)
-        if hasattr(doc, 'valor_total') and doc.valor_total and doc.valor_total > 0:
-            logger.debug(f"Documento NÃO é auxiliar: valor_total positivo (R$ {doc.valor_total})")
+        if hasattr(doc, "valor_total") and doc.valor_total and doc.valor_total > 0:
+            logger.debug(
+                f"Documento NÃO é auxiliar: valor_total positivo (R$ {doc.valor_total})"
+            )
             return False
 
         # 3. Verifica no nome do arquivo por palavras-chave auxiliares
         for keyword in self.AUXILIAR_KEYWORDS:
             if keyword in arquivo:
-                logger.debug(f"Documento é auxiliar: keyword '{keyword}' encontrado em arquivo '{arquivo}'")
+                logger.debug(
+                    f"Documento é auxiliar: keyword '{keyword}' encontrado em arquivo '{arquivo}'"
+                )
                 return True
 
         # 4. Verifica se é um demonstrativo (arquivo que contém "demonstrativo" no nome)
-        if 'demonstrativo' in arquivo:
+        if "demonstrativo" in arquivo:
             logger.debug("Documento é auxiliar: arquivo contém 'demonstrativo'")
             return True
 
@@ -442,8 +496,7 @@ class DocumentPairingService:
         return False
 
     def _agrupar_por_valor_e_numero(
-        self,
-        notas: List[Tuple[Optional[str], float, Any]]
+        self, notas: List[Tuple[Optional[str], float, Any]]
     ) -> Dict[str, Dict[str, Any]]:
         """
         Agrupa notas por valor e número normalizado.
@@ -465,12 +518,14 @@ class DocumentPairingService:
 
             for key, grupo in grupos.items():
                 # Mesmo valor com tolerância?
-                mesmo_valor = abs(grupo['valor'] - valor) <= self.TOLERANCIA_VALOR
+                mesmo_valor = abs(grupo["valor"] - valor) <= self.TOLERANCIA_VALOR
 
                 # Número similar? (um contém o outro ou são equivalentes)
                 numero_similar = False
-                if numero_norm and grupo.get('numero_norm'):
-                    numero_similar = self._numeros_equivalentes(numero_norm, grupo['numero_norm'])
+                if numero_norm and grupo.get("numero_norm"):
+                    numero_similar = self._numeros_equivalentes(
+                        numero_norm, grupo["numero_norm"]
+                    )
 
                 if mesmo_valor or numero_similar:
                     grupo_encontrado = key
@@ -478,57 +533,103 @@ class DocumentPairingService:
 
             if grupo_encontrado:
                 # Adiciona ao grupo existente
-                grupos[grupo_encontrado]['docs'].append(doc)
+                grupos[grupo_encontrado]["docs"].append(doc)
                 # Prefere número mais curto/limpo como principal
-                if numero and (not grupos[grupo_encontrado]['numero'] or
-                              len(numero) < len(grupos[grupo_encontrado]['numero'])):
-                    grupos[grupo_encontrado]['numero'] = numero
-                    grupos[grupo_encontrado]['numero_norm'] = numero_norm
+                if numero and (
+                    not grupos[grupo_encontrado]["numero"]
+                    or len(numero) < len(grupos[grupo_encontrado]["numero"])
+                ):
+                    grupos[grupo_encontrado]["numero"] = numero
+                    grupos[grupo_encontrado]["numero_norm"] = numero_norm
             else:
                 # Cria novo grupo
                 key = numero_norm or f"valor_{valor}"
                 grupos[key] = {
-                    'valor': valor,
-                    'numero': numero,
-                    'numero_norm': numero_norm,
-                    'docs': [doc]
+                    "valor": valor,
+                    "numero": numero,
+                    "numero_norm": numero_norm,
+                    "docs": [doc],
                 }
 
         return grupos
 
     def _agrupar_boletos(
-        self,
-        boletos: List[Tuple[Optional[str], float, Any]]
+        self, boletos: List[Tuple[Optional[str], float, Any]]
     ) -> Dict[str, Dict[str, Any]]:
         """
         Agrupa boletos por número/referência.
+
+        IMPORTANTE: Detecta duplicatas por linha digitável para não somar
+        valores de boletos que são o mesmo documento anexado múltiplas vezes.
         """
         grupos: Dict[str, Dict[str, Any]] = {}
+        # Rastreia linhas digitáveis já vistas para detectar duplicatas
+        linhas_digitaveis_vistas: Set[str] = set()
 
         for numero, valor, doc in boletos:
             numero_norm = self._normalizar_numero_nota(numero) if numero else None
 
+            # Extrai linha digitável para detecção de duplicatas
+            linha_digitavel = self._extract_linha_digitavel(doc)
+
+            # Verifica se é duplicata (mesma linha digitável)
+            is_duplicata = False
+            if linha_digitavel:
+                linha_norm = re.sub(r"\D", "", linha_digitavel)  # Remove não-dígitos
+                if linha_norm in linhas_digitaveis_vistas:
+                    is_duplicata = True
+                else:
+                    linhas_digitaveis_vistas.add(linha_norm)
+
             # Tenta encontrar grupo existente
             grupo_encontrado = None
             for key, grupo in grupos.items():
-                if numero_norm and grupo.get('numero_norm'):
-                    if self._numeros_equivalentes(numero_norm, grupo['numero_norm']):
+                if numero_norm and grupo.get("numero_norm"):
+                    if self._numeros_equivalentes(numero_norm, grupo["numero_norm"]):
+                        grupo_encontrado = key
+                        break
+                # Também agrupa por linha digitável idêntica
+                if linha_digitavel and grupo.get("linha_digitavel"):
+                    linha_grupo = re.sub(r"\D", "", grupo["linha_digitavel"])
+                    linha_atual = re.sub(r"\D", "", linha_digitavel)
+                    if linha_grupo == linha_atual:
                         grupo_encontrado = key
                         break
 
             if grupo_encontrado:
-                grupos[grupo_encontrado]['docs'].append(doc)
-                grupos[grupo_encontrado]['valor'] += valor
+                grupos[grupo_encontrado]["docs"].append(doc)
+                # SÓ soma valor se NÃO for duplicata (arquivo diferente com mesmo conteúdo)
+                if not is_duplicata:
+                    grupos[grupo_encontrado]["valor"] += valor
             else:
-                key = numero_norm or f"boleto_{valor}"
+                key = numero_norm or f"boleto_{valor}_{len(grupos)}"
                 grupos[key] = {
-                    'valor': valor,
-                    'numero': numero,
-                    'numero_norm': numero_norm,
-                    'docs': [doc]
+                    "valor": valor,
+                    "numero": numero,
+                    "numero_norm": numero_norm,
+                    "linha_digitavel": linha_digitavel,
+                    "docs": [doc],
                 }
 
         return grupos
+
+    def _extract_linha_digitavel(self, doc: Any) -> Optional[str]:
+        """
+        Extrai linha digitável de um documento de boleto.
+
+        Args:
+            doc: Documento (BoletoData ou similar)
+
+        Returns:
+            Linha digitável ou None se não encontrada
+        """
+        # Tenta acessar atributo diretamente
+        if hasattr(doc, "linha_digitavel"):
+            return doc.linha_digitavel
+        # Tenta acessar como dict
+        if isinstance(doc, dict):
+            return doc.get("linha_digitavel")
+        return None
 
     def _normalizar_numero_nota(self, numero: str) -> str:
         """
@@ -546,27 +647,27 @@ class DocumentPairingService:
         numero = str(numero).strip()
 
         # Remove prefixos comuns
-        numero = re.sub(r'^(NF|NFSE|NFE|NOTA)[_\s\-]*', '', numero, flags=re.IGNORECASE)
+        numero = re.sub(r"^(NF|NFSE|NFE|NOTA)[_\s\-]*", "", numero, flags=re.IGNORECASE)
 
         # Se tem formato ano/numero ou ano.numero, extrai só o número
-        match = re.search(r'(\d{4})[\.\/\-](\d+)$', numero)
+        match = re.search(r"(\d{4})[\.\/\-](\d+)$", numero)
         if match:
-            return match.group(2).lstrip('0') or '0'
+            return match.group(2).lstrip("0") or "0"
 
         # Se é número longo (tipo 202500000000119), extrai sufixo significativo
         if numero.isdigit() and len(numero) > 8:
             # Remove zeros à esquerda e prefixo de ano (2025...)
-            sufixo = numero.lstrip('0')
+            sufixo = numero.lstrip("0")
             # Se começa com ano (2025, 2024, etc), remove
             if len(sufixo) >= 4 and sufixo[:4].isdigit():
                 ano = int(sufixo[:4])
                 if 2020 <= ano <= 2030:
-                    sufixo = sufixo[4:].lstrip('0') or '0'
+                    sufixo = sufixo[4:].lstrip("0") or "0"
             return sufixo
 
         # Caso simples: remove zeros à esquerda
         if numero.isdigit():
-            return numero.lstrip('0') or '0'
+            return numero.lstrip("0") or "0"
 
         return numero
 
@@ -587,8 +688,8 @@ class DocumentPairingService:
             return True
 
         # Normaliza ambos
-        n1 = num1.lstrip('0') or '0'
-        n2 = num2.lstrip('0') or '0'
+        n1 = num1.lstrip("0") or "0"
+        n2 = num2.lstrip("0") or "0"
 
         if n1 == n2:
             return True
@@ -603,7 +704,7 @@ class DocumentPairingService:
         self,
         notas: Dict[str, Dict[str, Any]],
         boletos: Dict[str, Dict[str, Any]],
-        batch: 'BatchResult'
+        batch: "BatchResult",
     ) -> List[DocumentPair]:
         """
         Pareia grupos de notas com grupos de boletos.
@@ -612,10 +713,10 @@ class DocumentPairingService:
         boletos_usados: Set[str] = set()
 
         for _nota_key, nota_grupo in notas.items():
-            valor_nf = nota_grupo['valor']
-            numero_nota = nota_grupo['numero']
-            numero_norm = nota_grupo.get('numero_norm', '')
-            docs_nf = nota_grupo['docs']
+            valor_nf = nota_grupo["valor"]
+            numero_nota = nota_grupo["numero"]
+            numero_norm = nota_grupo.get("numero_norm", "")
+            docs_nf = nota_grupo["docs"]
 
             # Procura boleto correspondente
             boleto_match = None
@@ -625,7 +726,7 @@ class DocumentPairingService:
                 if bol_key in boletos_usados:
                     continue
 
-                bol_numero_norm = bol_grupo.get('numero_norm', '')
+                bol_numero_norm = bol_grupo.get("numero_norm", "")
 
                 # Tenta parear por número
                 if numero_norm and bol_numero_norm:
@@ -635,7 +736,7 @@ class DocumentPairingService:
                         break
 
                 # Tenta parear por valor
-                if abs(valor_nf - bol_grupo['valor']) <= self.TOLERANCIA_VALOR:
+                if abs(valor_nf - bol_grupo["valor"]) <= self.TOLERANCIA_VALOR:
                     boleto_match = bol_grupo
                     boleto_key_match = bol_key
                     break
@@ -646,7 +747,7 @@ class DocumentPairingService:
             # Fallback: se nota não tem número, usa o número do boleto
             numero_final = numero_nota
             if not numero_final and boleto_match:
-                numero_final = boleto_match.get('numero')
+                numero_final = boleto_match.get("numero")
 
             # Cria o par
             suffix = f"_{numero_final}" if numero_final and len(notas) > 1 else ""
@@ -654,10 +755,10 @@ class DocumentPairingService:
                 batch=batch,
                 numero_nota=numero_final,
                 valor_nf=valor_nf,
-                valor_boleto=boleto_match['valor'] if boleto_match else 0.0,
+                valor_boleto=boleto_match["valor"] if boleto_match else 0.0,
                 docs_nf=docs_nf,
-                docs_boleto=boleto_match['docs'] if boleto_match else [],
-                suffix=suffix
+                docs_boleto=boleto_match["docs"] if boleto_match else [],
+                suffix=suffix,
             )
             pairs.append(pair)
 
@@ -666,12 +767,14 @@ class DocumentPairingService:
             if bol_key not in boletos_usados:
                 pair = self._create_pair(
                     batch=batch,
-                    numero_nota=bol_grupo['numero'],
+                    numero_nota=bol_grupo["numero"],
                     valor_nf=0.0,
-                    valor_boleto=bol_grupo['valor'],
+                    valor_boleto=bol_grupo["valor"],
                     docs_nf=[],
-                    docs_boleto=bol_grupo['docs'],
-                    suffix=f"_bol_{bol_grupo['numero']}" if bol_grupo['numero'] else "_bol"
+                    docs_boleto=bol_grupo["docs"],
+                    suffix=f"_bol_{bol_grupo['numero']}"
+                    if bol_grupo["numero"]
+                    else "_bol",
                 )
                 pairs.append(pair)
 
@@ -681,7 +784,7 @@ class DocumentPairingService:
         self,
         notas_raw: List[Tuple[Optional[str], float, Any]],
         boletos_raw: List[Tuple[Optional[str], float, Any]],
-        batch: 'BatchResult'
+        batch: "BatchResult",
     ) -> List[DocumentPair]:
         """
         Cria par de fallback quando o pareamento normal falha.
@@ -703,7 +806,7 @@ class DocumentPairingService:
             valor_boleto=valor_boleto,
             docs_nf=[n[2] for n in notas_raw],
             docs_boleto=[b[2] for b in boletos_raw],
-            suffix=""
+            suffix="",
         )
 
         return [pair]
@@ -718,17 +821,17 @@ class DocumentPairingService:
         3. Número extraído do nome do arquivo
         """
         # Tenta campo numero_nota
-        numero = getattr(doc, 'numero_nota', None)
+        numero = getattr(doc, "numero_nota", None)
         if numero:
             return str(numero)
 
         # Tenta campo numero_documento (usado por OtherDocumentData)
-        numero_doc = getattr(doc, 'numero_documento', None)
+        numero_doc = getattr(doc, "numero_documento", None)
         if numero_doc:
             return str(numero_doc)
 
         # Tenta extrair do nome do arquivo
-        arquivo = getattr(doc, 'arquivo_origem', '')
+        arquivo = getattr(doc, "arquivo_origem", "")
         return self._extract_numero_from_filename(arquivo)
 
     def _extract_numero_boleto(self, doc: Any) -> Optional[str]:
@@ -740,7 +843,7 @@ class DocumentPairingService:
         2. Campo numero_documento
         3. Campo referencia_nfse (pode estar errado em alguns casos)
         """
-        arquivo = getattr(doc, 'arquivo_origem', '')
+        arquivo = getattr(doc, "arquivo_origem", "")
 
         # Prioridade 1: Número no nome do arquivo (ex: "BOLETO NF 2025.122.pdf")
         # Este é o mais confiável porque vem do nome original do arquivo
@@ -749,12 +852,12 @@ class DocumentPairingService:
             return numero_arquivo
 
         # Prioridade 2: numero_documento
-        numero = getattr(doc, 'numero_documento', None)
+        numero = getattr(doc, "numero_documento", None)
         if numero:
             return str(numero)
 
         # Prioridade 3: referencia_nfse (fallback - pode estar errado)
-        ref = getattr(doc, 'referencia_nfse', None)
+        ref = getattr(doc, "referencia_nfse", None)
         if ref:
             return str(ref)
 
@@ -779,7 +882,7 @@ class DocumentPairingService:
 
         return None
 
-    def _create_empty_pair(self, batch: 'BatchResult') -> DocumentPair:
+    def _create_empty_pair(self, batch: "BatchResult") -> DocumentPair:
         """
         Cria par vazio para lotes sem documentos processáveis.
         """
@@ -796,13 +899,13 @@ class DocumentPairingService:
 
     def _create_pair(
         self,
-        batch: 'BatchResult',
+        batch: "BatchResult",
         numero_nota: Optional[str],
         valor_nf: float,
         valor_boleto: float,
         docs_nf: List[Any],
         docs_boleto: List[Any],
-        suffix: str = ""
+        suffix: str = "",
     ) -> DocumentPair:
         """
         Cria um DocumentPair com todos os dados calculados.
@@ -819,40 +922,50 @@ class DocumentPairingService:
 
         for doc in docs_nf:
             if not fornecedor:
-                fornecedor = getattr(doc, 'fornecedor_nome', None)
+                fornecedor = getattr(doc, "fornecedor_nome", None)
             if not cnpj:
-                cnpj = getattr(doc, 'cnpj_prestador', None) or getattr(doc, 'cnpj_emitente', None)
+                cnpj = getattr(doc, "cnpj_prestador", None) or getattr(
+                    doc, "cnpj_emitente", None
+                )
             if not vencimento:
-                vencimento = getattr(doc, 'vencimento', None)
+                vencimento = getattr(doc, "vencimento", None)
             if not data_emissao:
-                data_emissao = getattr(doc, 'data_emissao', None)
+                data_emissao = getattr(doc, "data_emissao", None)
             if not empresa:
-                empresa = getattr(doc, 'empresa', None)
+                empresa = getattr(doc, "empresa", None)
 
         # Fallback para dados do boleto
         for doc in docs_boleto:
             if not fornecedor:
-                fornecedor = getattr(doc, 'fornecedor_nome', None)
+                fornecedor = getattr(doc, "fornecedor_nome", None)
             if not cnpj:
-                cnpj = getattr(doc, 'cnpj_beneficiario', None)
+                cnpj = getattr(doc, "cnpj_beneficiario", None)
             if not vencimento:
-                vencimento = getattr(doc, 'vencimento', None)
+                vencimento = getattr(doc, "vencimento", None)
             if not data_emissao:
-                data_emissao = getattr(doc, 'data_emissao', None)
+                data_emissao = getattr(doc, "data_emissao", None)
             if not empresa:
-                empresa = getattr(doc, 'empresa', None)
+                empresa = getattr(doc, "empresa", None)
 
         # Calcula status e divergência
         diferenca = round(valor_nf - valor_boleto, 2)
-        status, divergencia = self._calculate_status(valor_nf, valor_boleto, diferenca, docs_boleto)
+        status, divergencia = self._calculate_status(
+            valor_nf, valor_boleto, diferenca, docs_boleto
+        )
 
         # Adiciona avisos do correlation_result (documento administrativo e valor genérico)
         if batch.correlation_result and batch.correlation_result.divergencia:
             import re
 
             # Aviso de documento administrativo
-            if "POSSÍVEL DOCUMENTO ADMINISTRATIVO" in batch.correlation_result.divergencia:
-                admin_match = re.search(r'\[POSSÍVEL DOCUMENTO ADMINISTRATIVO[^\]]*\]', batch.correlation_result.divergencia)
+            if (
+                "POSSÍVEL DOCUMENTO ADMINISTRATIVO"
+                in batch.correlation_result.divergencia
+            ):
+                admin_match = re.search(
+                    r"\[POSSÍVEL DOCUMENTO ADMINISTRATIVO[^\]]*\]",
+                    batch.correlation_result.divergencia,
+                )
                 if admin_match:
                     admin_aviso = admin_match.group(0)
                     if divergencia:
@@ -862,8 +975,14 @@ class DocumentPairingService:
                         divergencia = admin_aviso
 
             # Aviso de valor extraído de documento genérico
-            if "VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO" in batch.correlation_result.divergencia:
-                outros_match = re.search(r'\[VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO[^\]]*\]', batch.correlation_result.divergencia)
+            if (
+                "VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO"
+                in batch.correlation_result.divergencia
+            ):
+                outros_match = re.search(
+                    r"\[VALOR EXTRAÍDO DE DOCUMENTO GENÉRICO[^\]]*\]",
+                    batch.correlation_result.divergencia,
+                )
                 if outros_match:
                     outros_aviso = outros_match.group(0)
                     if divergencia:
@@ -898,8 +1017,8 @@ class DocumentPairingService:
             status=status,
             divergencia=divergencia,
             diferenca=diferenca,
-            documentos_nf=[getattr(d, 'arquivo_origem', '') for d in docs_nf],
-            documentos_boleto=[getattr(d, 'arquivo_origem', '') for d in docs_boleto],
+            documentos_nf=[getattr(d, "arquivo_origem", "") for d in docs_nf],
+            documentos_boleto=[getattr(d, "arquivo_origem", "") for d in docs_boleto],
             email_subject=batch.email_subject,
             email_sender=batch.email_sender,
             email_date=batch.email_date,
@@ -913,7 +1032,7 @@ class DocumentPairingService:
         valor_boleto: float,
         diferenca: float,
         docs_boleto: List[Any],
-        pareamento_forcado: bool = False
+        pareamento_forcado: bool = False,
     ) -> Tuple[str, Optional[str]]:
         """
         Calcula status de conciliação e mensagem de divergência.
@@ -955,38 +1074,39 @@ class DocumentPairingService:
                     f"Valor boleto: R$ {valor_boleto:.2f}"
                 )
             else:
-                return "CONFERIR", f"Conferir boleto (R$ {valor_boleto:.2f}) - NF sem valor encontrada"
+                return (
+                    "CONFERIR",
+                    f"Conferir boleto (R$ {valor_boleto:.2f}) - NF sem valor encontrada",
+                )
         else:
             # Só tem NF (sem boleto) - precisa conferir
-            return "CONFERIR", f"Conferir valor (R$ {valor_nf:.2f}) - sem boleto para comparação"
+            return (
+                "CONFERIR",
+                f"Conferir valor (R$ {valor_nf:.2f}) - sem boleto para comparação",
+            )
 
     def _normalize_fornecedor(self, fornecedor: str) -> str:
         """
         Normaliza nome do fornecedor removendo sujeiras comuns.
+
+        Usa a função centralizada normalize_entity_name de extractors/utils.py
+        que remove prefixos (E-mail, Beneficiario), sufixos (CONTATO, CPF ou CNPJ),
+        e outros artefatos de OCR.
         """
         if not fornecedor:
             return ""
 
-        # Remove quebras de linha e espaços extras
-        normalized = " ".join(fornecedor.split())
+        # Usa função centralizada de normalização
+        return normalize_entity_name(fornecedor)
 
-        # Remove prefixos comuns indesejados
-        prefixos_remover = ["CNPJ", "CPF", "RAZÃO SOCIAL", "RAZAO SOCIAL", "NOME:", "Beneficiário"]
-        for prefixo in prefixos_remover:
-            if normalized.upper().startswith(prefixo.upper()):
-                normalized = normalized[len(prefixo):].strip()
-                if normalized.startswith(":") or normalized.startswith("-"):
-                    normalized = normalized[1:].strip()
-
-        return normalized.strip()
-
-    def _update_document_counts(self, pairs: List[DocumentPair], batch: 'BatchResult') -> None:
+    def _update_document_counts(
+        self, pairs: List[DocumentPair], batch: "BatchResult"
+    ) -> None:
         """
         Atualiza contadores de documentos em cada par.
 
         Distribui os contadores proporcionalmente ou atribui ao primeiro par.
         """
-
 
         # Conta tipos no batch
         total_danfes = len(batch.danfes)
@@ -1004,22 +1124,32 @@ class DocumentPairingService:
             pairs[0].outros = total_outros
             pairs[0].avisos = total_avisos
             pairs[0].total_errors = total_errors
-            pairs[0].total_documents = len(pairs[0].documentos_nf) + len(pairs[0].documentos_boleto)
+            pairs[0].total_documents = len(pairs[0].documentos_nf) + len(
+                pairs[0].documentos_boleto
+            )
         else:
             # Múltiplos pares: conta documentos específicos de cada par
             for pair in pairs:
-                pair.danfes = sum(1 for f in pair.documentos_nf if any(
-                    f == getattr(d, 'arquivo_origem', '') for d in batch.danfes
-                ))
-                pair.nfses = sum(1 for f in pair.documentos_nf if any(
-                    f == getattr(d, 'arquivo_origem', '') for d in batch.nfses
-                ))
-                pair.outros = sum(1 for f in pair.documentos_nf if any(
-                    f == getattr(d, 'arquivo_origem', '') for d in batch.outros
-                ))
+                pair.danfes = sum(
+                    1
+                    for f in pair.documentos_nf
+                    if any(f == getattr(d, "arquivo_origem", "") for d in batch.danfes)
+                )
+                pair.nfses = sum(
+                    1
+                    for f in pair.documentos_nf
+                    if any(f == getattr(d, "arquivo_origem", "") for d in batch.nfses)
+                )
+                pair.outros = sum(
+                    1
+                    for f in pair.documentos_nf
+                    if any(f == getattr(d, "arquivo_origem", "") for d in batch.outros)
+                )
                 pair.boletos = len(pair.documentos_boleto)
                 pair.avisos = 0  # Avisos ficam no primeiro par
-                pair.total_documents = len(pair.documentos_nf) + len(pair.documentos_boleto)
+                pair.total_documents = len(pair.documentos_nf) + len(
+                    pair.documentos_boleto
+                )
                 pair.total_errors = 0  # Erros ficam no primeiro par
 
             # Primeiro par recebe avisos e erros
@@ -1028,7 +1158,7 @@ class DocumentPairingService:
                 pairs[0].total_errors = total_errors
 
 
-def pair_batch_documents(batch: 'BatchResult') -> List[DocumentPair]:
+def pair_batch_documents(batch: "BatchResult") -> List[DocumentPair]:
     """
     Função de conveniência para parear documentos de um lote.
 

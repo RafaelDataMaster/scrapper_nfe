@@ -37,6 +37,8 @@ from extractors.utils import (
     BR_MONEY_RE,
     parse_br_money,
     parse_date_br,
+    normalize_ocr_money_string,
+    extract_br_money_values,
 )
 
 
@@ -275,13 +277,55 @@ class OutrosExtractor(BaseExtractor):
             data["cnpj_fornecedor"] = m_cnpj.group(0)
 
         # Valor total (locação/fatura)
+        # PRIORIDADE: Extrair o VALOR TOTAL A PAGAR (valor final da compra/fatura)
+        #
+        # Ordem de prioridade dos padrões:
+        # 1. "Total a Pagar" / "Valor a Pagar" - mais específico
+        # 2. "Valor Total" / "Total da Fatura" - genérico mas confiável
+        # 3. Fallback para maior valor R$ encontrado
+
+        # Normaliza texto para OCR
+        normalized_text = normalize_ocr_money_string(text)
+
+        # 0) Padrões PRIORITÁRIOS para VALOR TOTAL A PAGAR (independente do subtipo)
+        # Estes padrões capturam o valor final que o cliente precisa pagar
+        priority_patterns = [
+            # "Total a Pagar: R$ 1.234,56" ou "Total a Pagar R$ 1.234,56"
+            r"(?i)\bTOTAL\s+A\s+PAGAR\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor a Pagar: R$ 1.234,56"
+            r"(?i)\bVALOR\s+A\s+PAGAR\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Total da Fatura: R$ 1.234,56"
+            r"(?i)\bTOTAL\s+DA\s+FATURA\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Total da Fatura: R$ 1.234,56"
+            r"(?i)\bVALOR\s+TOTAL\s+DA\s+FATURA\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Total Geral: R$ 1.234,56"
+            r"(?i)\bTOTAL\s+GERAL\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Cobrado: R$ 1.234,56"
+            r"(?i)\bVALOR\s+COBRADO\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor do Documento: R$ 1.234,56" (boletos/faturas)
+            r"(?i)\bVALOR\s+DO\s+DOCUMENTO\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+            # "Valor Líquido: R$ 1.234,56" (NFS-e)
+            r"(?i)\bVALOR\s+L[ÍI]QUIDO\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+        ]
+
+        for pattern in priority_patterns:
+            m = re.search(pattern, normalized_text)
+            if m:
+                val = parse_br_money(m.group(1))
+                if val > 0:
+                    data["valor_total"] = val
+                    logger.debug(
+                        f"OutrosExtractor: valor_total extraído (padrão prioritário): R$ {data['valor_total']:.2f}"
+                    )
+                    break
+
         # 1) Layout analítico (Repromaq): "Total a Pagar no Mês ... 2.855,00" (sem R$)
-        if data.get("subtipo") == "LOCACAO":
+        if not data.get("valor_total") and data.get("subtipo") == "LOCACAO":
             m_total_mes = re.search(r"(?i)\bTOTAL\s+A\s+PAGAR\s+NO\s+M[ÊE]S\b", text)
             if m_total_mes:
                 window = text[m_total_mes.start() : m_total_mes.start() + 400]
-                values = [parse_br_money(v) for v in BR_MONEY_RE.findall(window)]
-                values = [v for v in values if v > 0]
+                # Usar extract_br_money_values que aplica normalização OCR
+                values = extract_br_money_values(window)
                 if values:
                     data["valor_total"] = max(values)
                     logger.debug(
@@ -313,14 +357,22 @@ class OutrosExtractor(BaseExtractor):
         # 2) Padrões genéricos (inclui casos com R$)
         if not data.get("valor_total"):
             value_patterns = [
+                # Padrões com contexto específico (mais confiáveis)
                 r"(?i)\bTOTAL\s+A\s+PAGAR\b[\s\S]{0,40}?R\$\s*([\d\.,]+)",
                 r"(?i)\bTOTAL\s+A\s+PAGAR\b[\s\S]{0,80}?(\d{1,3}(?:\.\d{3})*,\d{2})\b",
+                r"(?i)\bVALOR\s+TOTAL\s+DA\s+FATURA\b[\s\S]{0,40}?R\$\s*([\d\.,]+)",
                 r"(?i)\bVALOR\s+DA\s+LOCA[ÇC][ÃA]O\b[\s\S]{0,40}?([\d\.]+,\d{2})\b",
+                # "Valor Total: R$ 1.234,56" (comum em faturas)
+                r"(?i)\bVALOR\s+TOTAL\s*[:\-]?\s*R?\$?\s*([\d.]+,\d{2})",
+                # "Total: R$ 1.234,56"
+                r"(?i)\bTOTAL\s*[:\-]\s*R?\$?\s*([\d.]+,\d{2})",
+                # Fallback: qualquer "VALOR ... R$ xxx"
                 r"(?i)\bVALOR\b[\s\S]{0,20}?R\$\s*([\d\.,]+)",
+                # Último recurso: R$ isolado (pega o primeiro)
                 r"\bR\$\s*([\d\.]+,\d{2})\b",
             ]
             for pat in value_patterns:
-                m = re.search(pat, text)
+                m = re.search(pat, normalized_text)
                 if m:
                     val = parse_br_money(m.group(1))
                     if val > 0:

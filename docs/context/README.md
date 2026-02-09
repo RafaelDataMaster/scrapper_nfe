@@ -338,6 +338,38 @@ Alguns extratores não estão no registry padrão pois processam dados de forma 
 | Extrator                 | Arquivo                         | Propósito                            | Data       |
 | ------------------------ | ------------------------------- | ------------------------------------ | ---------- |
 | `CscNotaDebitoExtractor` | `extractors/csc_nota_debito.py` | Nota Débito/Recibo Fatura CSC GESTAO | 02/02/2026 |
+| `BoletoGoxExtractor`     | `extractors/boleto_gox.py`      | Boletos GOX S.A. (extrai nº do nome) | 30/01/2026 |
+| `UtilityBillExtractor`   | `extractors/utility_bill.py`    | Faturas energia/água (CEMIG, COPASA) | 30/01/2026 |
+| `TIMFaturaExtractor`     | `extractors/tim_fatura.py`      | Faturas TIM S.A.                     | 05/02/2026 |
+
+### Suporte a NFCom no XmlExtractor (06/02/2026)
+
+Adicionado suporte para **NFCom (Nota Fiscal de Comunicação - modelo 62)** no `XmlExtractor`:
+
+- Detecta namespace `http://www.portalfiscal.inf.br/nfcom`
+- Extrai: fornecedor, CNPJ, número NF, valor total, vencimento
+- Usado por operadoras de telecom (MITelecom, etc.)
+
+**Arquivo:** `extractors/xml_extractor.py`
+
+### Fix Timeout em PDFs com QR Code (06/02/2026)
+
+**Problema:** PDFs com QR Codes vetoriais complexos causavam timeout de 90s no `pdfminer`.
+
+**Causa:** `abrir_pdfplumber_com_senha()` chamava `extract_text()` para validar abertura do PDF.
+
+**Solução:** Removido `extract_text()` do fluxo de validação - PDF que abre sem erro é retornado imediatamente.
+
+**Arquivo:** `strategies/pdf_utils.py`
+
+### Padrão CEMIG no UtilityBillExtractor (06/02/2026)
+
+Adicionado padrão específico para faturas CEMIG que captura corretamente o "valor a pagar":
+
+- Padrão: `MÊS/ANO DATA_VENCIMENTO VALOR_A_PAGAR`
+- Exemplo: `JAN/26 10/02/2026 205,05`
+
+**Arquivo:** `extractors/utility_bill.py`
 
 ### Correções de Fornecedores NFCom (04/02/2026)
 
@@ -408,6 +440,39 @@ if CscNotaDebitoExtractor.can_handle(texto):
     # data["valor_total"] = 2163.60
     # data["subtipo"] = "NOTA_DEBITO"
 ```
+
+### Normalização de Fornecedores e Sanitização CSV (09/02/2026)
+
+**Problema 1:** CSV `relatorio_lotes.csv` com linhas quebradas por `\n` no campo `email_subject`.
+
+**Solução:** Sanitização em `run_ingestion.py` - remove `\n`, `\r`, `;` antes de exportar.
+
+**Problema 2:** Fornecedores extraídos com prefixos/sufixos inválidos:
+
+- `E-mail RSMBRASILAUDITORIAECONSULTORIALTDA CONTATO`
+- `PITTSBURG FIP MULTIESTRATEGIA CPF ou CNPJ`
+- `forma, voc assegura que seu pagamento é seguro.`
+
+**Soluções implementadas:**
+
+1. **`extractors/utils.py` → `normalize_entity_name()`**:
+    - Remove prefixos: `E-mail`, `Beneficiario`, `Nome/NomeEmpresarial`
+    - Remove sufixos: `CONTATO`, `CPF ou CNPJ`, `- CNPJ`, `| CNPJ`, `- Endereço...`
+
+2. **`extractors/boleto.py` → `_looks_like_header_or_label()`**:
+    - Blacklist: `PAGAMENTO`, `SEGURO`, `ASSEGURA`, `FORMA,`, `E-MAIL`, `ENDEREÇO`
+
+3. **Centralização**: `batch_result.py` e `document_pairing.py` agora usam `normalize_entity_name()` centralizado.
+
+**Arquivos modificados:**
+
+- `run_ingestion.py`
+- `extractors/utils.py`
+- `extractors/boleto.py`
+- `core/batch_result.py`
+- `core/document_pairing.py`
+
+**Sessão completa:** `docs/context/sessao_2026_02_09_saude_extracao.md`
 
 ---
 

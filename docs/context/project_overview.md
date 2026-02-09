@@ -11,6 +11,80 @@
 > **IMPORTANTE:** Esta seção contém snapshots das sessões de trabalho. Mantém apenas os últimos 3 snapshots.  
 > **Template:** Ver `project_status_template.md` para o formato completo.
 
+### Snapshot: 05/02/2026 - 08:50 - OCR_MONEY_NORMALIZATION_FIX
+
+**Tipo:** CORRECAO_EXTRATORES
+
+**Contexto da Sessão:**
+
+- Sessão continuação de: 04/02/2026 13:30 (CORRECAO_FORNECEDORES_DANFE_BOLETO)
+- Foco: Correção de alta prioridade - normalização de valores monetários com espaços OCR
+- Tempo total: ~45 minutos
+
+**Estado das Correções:**
+| # | Nome | Status | Arquivos Modificados | Categoria |
+|---|------|--------|---------------------|-----------|
+| 1 | Normalização OCR valores monetários | ✅ CONCLUÍDA | extractors/utils.py | Correção Extrator |
+| 2 | Ordem registry ComprovanteBancario | ✅ CONCLUÍDA | extractors/**init**.py | Correção Ordem |
+| 3 | Testes unitários utils | ✅ CONCLUÍDA | tests/test_extractor_utils.py (NOVO) | Testes |
+
+**Correção #1: Normalização OCR valores monetários** ✅ CONCLUÍDA
+
+- **Problema:** OCR inserindo espaços dentro de valores monetários (ex: `"R$ 2 2.396,17"`)
+- **Causa raiz:** Caracteres "colados" no PDF são separados pelo OCR como espaços
+- **Impacto:** ~R$ 50K em documentos PP EMPREENDIMENTOS LTDA (2 casos)
+- **Solução:** Nova função `normalize_ocr_money_string()` em `extractors/utils.py`:
+    - Remove espaços entre dígitos na parte inteira do valor
+    - Remove espaços ao redor de pontos/vírgulas decimais
+    - **Preserva espaços legítimos** entre valores completos (`,XX` indica fim de valor)
+    - Integrada automaticamente em `extract_br_money_values()`
+- **Arquivos:** `extractors/utils.py`
+- **Testes:** 47 novos testes em `tests/test_extractor_utils.py`
+
+**Correção #2: Ordem registry ComprovanteBancario** ✅ CONCLUÍDA
+
+- **Problema:** Comprovantes TED/PIX classificados erroneamente como UTILITY_ENERGY
+- **Causa raiz:** `UtilityBillExtractor` (posição 7) vinha antes de `ComprovanteBancarioExtractor` (posição 16)
+- **Solução:** Movido `ComprovanteBancarioExtractor` para posição 7 (antes de UtilityBillExtractor)
+- **Arquivos:** `extractors/__init__.py`
+
+**Correção #3: Testes unitários utils** ✅ CONCLUÍDA
+
+- **Problema:** Funções críticas de `extractors/utils.py` sem cobertura de testes
+- **Solução:** Novo arquivo `tests/test_extractor_utils.py` com 47 testes cobrindo:
+    - `normalize_ocr_money_string()` (11 testes)
+    - `parse_br_money()` (6 testes)
+    - `extract_br_money_values()` (5 testes)
+    - `extract_best_money_from_segment()` (3 testes)
+    - Funções auxiliares (CNPJ, datas, whitespace, etc.)
+    - Testes de integração com cenários reais de OCR
+
+**Métricas Finais:**
+
+| Métrica                            | Antes | Depois |
+| ---------------------------------- | ----- | ------ |
+| Testes passando                    | 589   | 636 ✅ |
+| Casos PP EMPREENDIMENTOS           | 2     | 0 ✅   |
+| Comprovantes TED mal classificados | 2     | 0 ✅   |
+| Severidade ALTA                    | 2     | 0 ✅   |
+
+**Nova ordem dos extratores (posições 1-10):**
+
+1. BoletoRepromaqExtractor
+2. BoletoGoxExtractor
+3. EmcFaturaExtractor
+4. NetCenterExtractor
+5. NfseCustomMontesClarosExtractor
+6. NfseCustomVilaVelhaExtractor
+7. **ComprovanteBancarioExtractor** ← MOVIDO (antes: posição 16)
+8. UtilityBillExtractor
+9. NfcomTelcablesExtractor
+10. AcimocExtractor
+
+**Testes:** Suite completa: **636 passed, 1 skipped**
+
+---
+
 ### Snapshot: 04/02/2026 - 13:30 - CORRECAO_FORNECEDORES_DANFE_BOLETO
 
 **Tipo:** CORRECAO_EXTRATORES
@@ -1233,10 +1307,14 @@ Baseado no README.md:
 
 - [x] Script para automatizar análise de logs (`scripts/analyze_logs.py`)
 - [x] Correções de tipos e qualidade de código (basedpyright/pyright) ✅
+- [x] Normalização de valores monetários com espaços OCR (`extractors/utils.py`) ✅ 05/02/2026
+- [x] Correção ordem registry ComprovanteBancario antes UtilityBill ✅ 05/02/2026
+- [x] Testes unitários para `extractors/utils.py` (47 testes) ✅ 05/02/2026
 - [ ] Verificar funcionamento em container Docker
 - [ ] Atualizar dados IMAP para e-mail da empresa (não de teste)
 - [ ] Pesquisar APIs da OpenAI para OCR e validação
 - [ ] Tratar casos de PDF não anexado (link de prefeitura/terceiros)
+- [ ] (Opcional) Considerar OCR Tesseract para PDFs escaneados (caso MERCES)
 
 ---
 

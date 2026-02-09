@@ -135,6 +135,27 @@ class NfseGenericExtractor(BaseExtractor):
         return f"{m.group(1)}.{m.group(2)}.{m.group(3)}/{m.group(4)}-{m.group(5)}"
 
     def _extract_valor(self, text: str):
+        # Padrões prioritários para valor do serviço (mais específicos primeiro)
+        patterns_prioritarios = [
+            # Valor do Serviço é o mais importante em NFS-e
+            r"(?i)Valor\s+do\s+Servi[çc]o\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            r"(?i)Valor\s+dos\s+Servi[çc]os\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # Valor Total da NFS-e
+            r"(?i)VALOR\s+TOTAL\s+DA\s+NFS-?E\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            r"(?i)Valor\s+Total\s+da\s+NFS-?e\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # Valor Líquido da NFS-e
+            r"(?i)Valor\s+L[ií]quido\s+da\s+NFS-?e\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+        ]
+
+        # Tenta padrões prioritários primeiro
+        for pattern in patterns_prioritarios:
+            match = re.search(pattern, text)
+            if match:
+                valor_str = match.group(1)
+                valor = parse_br_money(valor_str)
+                if valor > 0:
+                    return valor
+
         patterns = [
             r"(?i)Valor\s+Total\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
             r"(?i)Valor\s+da\s+Nota\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
@@ -146,6 +167,33 @@ class NfseGenericExtractor(BaseExtractor):
             r"\bR\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})\b",
         ]
 
+        # Contextos que indicam valores que NÃO são o valor principal da nota
+        # (tributos, impostos, descontos, etc.)
+        contextos_exclusao = [
+            "TRIBUTOS",
+            "APROXIMADO",
+            "IMPOSTO",
+            "ISSQN",
+            "ISS ",
+            "PIS",
+            "COFINS",
+            "CSLL",
+            "IRRF",
+            "INSS",
+            "ICMS",
+            "DESCONTO",
+            "DEDUCAO",
+            "DEDUÇÃO",
+            "RETIDO",
+            "RETENÇÃO",
+            "RETENCAO",
+            "BC ",
+            "BASE DE CALCULO",
+            "BASE DE CÁLCULO",
+            "ALIQUOTA",
+            "ALÍQUOTA",
+        ]
+
         # Primeiro, tenta encontrar valores com padrões específicos
         for pattern in patterns:
             match = re.search(pattern, text)
@@ -153,10 +201,17 @@ class NfseGenericExtractor(BaseExtractor):
                 valor_str = match.group(1)
                 valor = parse_br_money(valor_str)
                 if valor > 0:
-                    # Verifica se não está em contexto de múltiplos zeros (placeholder)
-                    context_start = max(0, match.start() - 50)
-                    context_end = min(len(text), match.end() + 50)
-                    context = text[context_start:context_end]
+                    # Verifica se não está em contexto de tributos/impostos
+                    context_start = max(0, match.start() - 80)
+                    context_end = min(len(text), match.end() + 30)
+                    context = text[context_start:context_end].upper()
+
+                    # Se está em contexto de tributos/impostos, pula este valor
+                    em_contexto_exclusao = any(
+                        excl in context for excl in contextos_exclusao
+                    )
+                    if em_contexto_exclusao:
+                        continue
 
                     # Conta quantos "R$ 0,00" há no contexto próximo
                     zeros_proximos = len(re.findall(r"R\$\s*0(?:,00)?", context))
@@ -166,6 +221,46 @@ class NfseGenericExtractor(BaseExtractor):
                         continue
 
                     return valor
+
+        # Contextos que indicam valores que NÃO são o valor principal da nota
+        contextos_exclusao_fallback = [
+            "TRIBUTOS",
+            "APROXIMADO",
+            "IMPOSTO",
+            "ISSQN",
+            "ISS ",
+            "PIS",
+            "COFINS",
+            "CSLL",
+            "IRRF",
+            "INSS",
+            "ICMS",
+            "DESCONTO",
+            "DEDUCAO",
+            "DEDUÇÃO",
+            "RETIDO",
+            "RETENÇÃO",
+            "RETENCAO",
+            "BC ",
+            "BASE DE CALCULO",
+            "BASE DE CÁLCULO",
+            "ALIQUOTA",
+            "ALÍQUOTA",
+        ]
+
+        # Labels que indicam valores prioritários (valor principal da nota)
+        labels_prioritarios = [
+            "VALOR DO SERVIÇO",
+            "VALOR DO SERVICO",
+            "VALOR DOS SERVIÇOS",
+            "VALOR DOS SERVICOS",
+            "VALOR TOTAL DA NFS",
+            "VALOR TOTAL",
+            "VALOR DA NOTA",
+            "TOTAL NOTA",
+            "VALOR LÍQUIDO DA NFS",
+            "VALOR LIQUIDO DA NFS",
+        ]
 
         # Fallback: coleta todos os valores R$ e prioriza não-zero
         todos_valores = re.findall(r"R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})", text)
@@ -178,7 +273,7 @@ class NfseGenericExtractor(BaseExtractor):
             valores_nao_zero = [v for v in valores_float if v > 0]
 
             if valores_nao_zero:
-                # Prioriza valores próximos a labels específicos
+                # Prioriza valores próximos a labels específicos (e não em contexto de exclusão)
                 for i, valor_str in enumerate(todos_valores):
                     valor_float = valores_float[i]
                     if valor_float > 0:
@@ -195,22 +290,47 @@ class NfseGenericExtractor(BaseExtractor):
                                 )
                                 context = text[context_start:context_end].upper()
 
-                                # Se está próximo de "VALOR TOTAL", "VALOR DA NOTA" ou similar, prioriza
-                                if any(
-                                    kw in context
-                                    for kw in [
-                                        "VALOR TOTAL",
-                                        "VALOR DA NOTA",
-                                        "TOTAL NOTA",
-                                        "VALOR LÍQUIDO",
-                                        "VALOR LIQUIDO",
-                                    ]
-                                ):
+                                # Se está em contexto de exclusão, pula
+                                em_contexto_exclusao = any(
+                                    excl in context
+                                    for excl in contextos_exclusao_fallback
+                                )
+                                if em_contexto_exclusao:
+                                    start_pos = start_pos + match.end()
+                                    continue
+
+                                # Se está próximo de labels prioritários, retorna
+                                if any(kw in context for kw in labels_prioritarios):
                                     return valor_float
 
                                 start_pos = start_pos + match.end()
 
-                # Fallback: retorna o maior valor não-zero
+                # Segundo passo: retorna o maior valor que não está em contexto de exclusão
+                for i, valor_str in enumerate(todos_valores):
+                    valor_float = valores_float[i]
+                    if valor_float > 0:
+                        start_pos = 0
+                        for _ in range(i + 1):
+                            match = re.search(
+                                rf"R\$\s*{re.escape(valor_str)}", text[start_pos:]
+                            )
+                            if match:
+                                context_start = max(0, start_pos + match.start() - 80)
+                                context_end = min(
+                                    len(text), start_pos + match.end() + 30
+                                )
+                                context = text[context_start:context_end].upper()
+
+                                em_contexto_exclusao = any(
+                                    excl in context
+                                    for excl in contextos_exclusao_fallback
+                                )
+                                if not em_contexto_exclusao:
+                                    return valor_float
+
+                                start_pos = start_pos + match.end()
+
+                # Último fallback: retorna o maior valor não-zero
                 return max(valores_nao_zero)
 
             # Se todos os valores são zero, verifica se são placeholders
@@ -577,6 +697,9 @@ class NfseGenericExtractor(BaseExtractor):
             r"(?i)Vencimento[:\s]+(\d{2}/\d{2}/\d{4})",
             r"(?i)Data\s+de\s+Vencimento[:\s]+(\d{2}/\d{2}/\d{4})",
             r"(?i)Venc[:\.\s]+(\d{2}/\d{2}/\d{4})",
+            # Padrão sem separador (texto grudado, comum em PDFs com OCR ruim)
+            # Ex: "VENCIMENTO19/01/2026" na descrição do serviço
+            r"(?i)VENCIMENTO(\d{2}/\d{2}/\d{4})",
         ]
 
         for pattern in patterns:

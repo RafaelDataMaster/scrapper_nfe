@@ -17,6 +17,7 @@ Princípios SOLID aplicados:
 - SRP: Classe focada apenas em resultados de lote
 - OCP: Extensível via composição sem modificar código existente
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ from core.models import (
     InvoiceData,
     OtherDocumentData,
 )
+from extractors.utils import normalize_entity_name
 
 if TYPE_CHECKING:
     from core.batch_result import CorrelationResult
@@ -52,6 +54,7 @@ class BatchResult:
         metadata_path: Caminho do metadata.json (se existir)
         source_folder: Pasta de origem do lote
     """
+
     batch_id: str
     documents: List[DocumentData] = field(default_factory=list)
     errors: List[Dict[str, Any]] = field(default_factory=list)
@@ -77,10 +80,7 @@ class BatchResult:
 
     def add_error(self, file_path: str, error_msg: str) -> None:
         """Registra um erro de processamento."""
-        self.errors.append({
-            'file': file_path,
-            'error': error_msg
-        })
+        self.errors.append({"file": file_path, "error": error_msg})
 
     @property
     def danfes(self) -> List[DanfeData]:
@@ -189,22 +189,22 @@ class BatchResult:
         # Prioridade 1: NFS-e
         for nfse in self.nfses:
             if nfse.valor_total and nfse.valor_total > 0:
-                return (nfse.valor_total, 'NFSE')
+                return (nfse.valor_total, "NFSE")
 
         # Prioridade 2: DANFE
         for danfe in self.danfes:
             if danfe.valor_total and danfe.valor_total > 0:
-                return (danfe.valor_total, 'DANFE')
+                return (danfe.valor_total, "DANFE")
 
         # Prioridade 3: Outros documentos
         for outro in self.outros:
             if outro.valor_total and outro.valor_total > 0:
-                return (outro.valor_total, 'OUTROS')
+                return (outro.valor_total, "OUTROS")
 
         # Fallback: Boleto
         for boleto in self.boletos:
             if boleto.valor_documento and boleto.valor_documento > 0:
-                return (boleto.valor_documento, 'BOLETO')
+                return (boleto.valor_documento, "BOLETO")
 
         return (0.0, None)
 
@@ -212,9 +212,9 @@ class BatchResult:
         """
         Normaliza nome do fornecedor removendo sujeiras comuns.
 
-        - Remove quebras de linha
-        - Remove espaços extras
-        - Remove prefixos como "CNPJ", "CPF", "RAZÃO SOCIAL"
+        Usa a função centralizada normalize_entity_name de extractors/utils.py
+        que remove prefixos (E-mail, Beneficiario), sufixos (CONTATO, CPF ou CNPJ),
+        e outros artefatos de OCR.
 
         Args:
             fornecedor: Nome original do fornecedor
@@ -225,19 +225,8 @@ class BatchResult:
         if not fornecedor:
             return ""
 
-        # Remove quebras de linha e espaços extras
-        normalized = " ".join(fornecedor.split())
-
-        # Remove prefixos comuns indesejados
-        prefixos_remover = ["CNPJ", "CPF", "RAZÃO SOCIAL", "RAZAO SOCIAL", "NOME:"]
-        for prefixo in prefixos_remover:
-            if normalized.upper().startswith(prefixo):
-                normalized = normalized[len(prefixo):].strip()
-                # Remove possível separador após prefixo
-                if normalized.startswith(":") or normalized.startswith("-"):
-                    normalized = normalized[1:].strip()
-
-        return normalized.strip()
+        # Usa função centralizada de normalização
+        return normalize_entity_name(fornecedor)
 
     def _get_primeiro_fornecedor(self) -> Optional[str]:
         """
@@ -251,25 +240,25 @@ class BatchResult:
         """
         # Prioridade 1: NFS-e
         for nfse in self.nfses:
-            fornecedor = getattr(nfse, 'fornecedor_nome', None)
+            fornecedor = getattr(nfse, "fornecedor_nome", None)
             if fornecedor:
                 return self._normalize_fornecedor(fornecedor)
 
         # Prioridade 2: DANFE
         for danfe in self.danfes:
-            fornecedor = getattr(danfe, 'fornecedor_nome', None)
+            fornecedor = getattr(danfe, "fornecedor_nome", None)
             if fornecedor:
                 return self._normalize_fornecedor(fornecedor)
 
         # Prioridade 3: Outros documentos
         for outro in self.outros:
-            fornecedor = getattr(outro, 'fornecedor_nome', None)
+            fornecedor = getattr(outro, "fornecedor_nome", None)
             if fornecedor:
                 return self._normalize_fornecedor(fornecedor)
 
         # Prioridade 4: Boletos
         for boleto in self.boletos:
-            fornecedor = getattr(boleto, 'fornecedor_nome', None)
+            fornecedor = getattr(boleto, "fornecedor_nome", None)
             if fornecedor:
                 return self._normalize_fornecedor(fornecedor)
 
@@ -287,25 +276,25 @@ class BatchResult:
         """
         # Prioridade 1: NFS-e
         for nfse in self.nfses:
-            vencimento = getattr(nfse, 'vencimento', None)
+            vencimento = getattr(nfse, "vencimento", None)
             if vencimento:
                 return vencimento
 
         # Prioridade 2: DANFE
         for danfe in self.danfes:
-            vencimento = getattr(danfe, 'vencimento', None)
+            vencimento = getattr(danfe, "vencimento", None)
             if vencimento:
                 return vencimento
 
         # Prioridade 3: Boletos (geralmente têm vencimento)
         for boleto in self.boletos:
-            vencimento = getattr(boleto, 'vencimento', None)
+            vencimento = getattr(boleto, "vencimento", None)
             if vencimento:
                 return vencimento
 
         # Prioridade 4: Outros documentos
         for outro in self.outros:
-            vencimento = getattr(outro, 'vencimento', None)
+            vencimento = getattr(outro, "vencimento", None)
             if vencimento:
                 return vencimento
 
@@ -324,43 +313,43 @@ class BatchResult:
         """
         # Primeira passada: prioriza NFSE com numero_nota
         for doc in self.nfses:
-            numero = getattr(doc, 'numero_nota', None)
+            numero = getattr(doc, "numero_nota", None)
             if numero:
                 return numero
 
         # Segunda passada: prioriza DANFE com numero_nota
         for doc in self.danfes:
-            numero = getattr(doc, 'numero_nota', None)
+            numero = getattr(doc, "numero_nota", None)
             if numero:
                 return numero
 
         # Terceira passada: fallback para numero_pedido ou numero_fatura em NFSE
         for doc in self.nfses:
-            numero_pedido = getattr(doc, 'numero_pedido', None)
+            numero_pedido = getattr(doc, "numero_pedido", None)
             if numero_pedido:
                 return numero_pedido
-            numero_fatura = getattr(doc, 'numero_fatura', None)
+            numero_fatura = getattr(doc, "numero_fatura", None)
             if numero_fatura:
                 return numero_fatura
 
         # Quarta passada: fallback para numero_pedido ou numero_fatura em DANFE
         for doc in self.danfes:
-            numero_pedido = getattr(doc, 'numero_pedido', None)
+            numero_pedido = getattr(doc, "numero_pedido", None)
             if numero_pedido:
                 return numero_pedido
-            numero_fatura = getattr(doc, 'numero_fatura', None)
+            numero_fatura = getattr(doc, "numero_fatura", None)
             if numero_fatura:
                 return numero_fatura
 
         # Quinta passada: outros documentos
         for doc in self.outros:
-            numero = getattr(doc, 'numero_documento', None)
+            numero = getattr(doc, "numero_documento", None)
             if numero:
                 return numero
 
         # Última opção: boletos
         for doc in self.boletos:
-            numero = getattr(doc, 'numero_documento', None)
+            numero = getattr(doc, "numero_documento", None)
             if numero:
                 return numero
 
@@ -380,29 +369,29 @@ class BatchResult:
         # Não aplica fallback - deixa vencimento vazio/nulo se não encontrado
 
         summary = {
-            'batch_id': self.batch_id,
-            'source_folder': self.source_folder,
-            'email_subject': self.email_subject,
-            'email_sender': self.email_sender,
-            'fornecedor': self._get_primeiro_fornecedor(),
-            'vencimento': vencimento,
-            'numero_nota': self.get_primeiro_numero_nota(),
-            'total_documents': self.total_documents,
-            'total_errors': self.total_errors,
-            'danfes': len(self.danfes),
-            'boletos': len(self.boletos),
-            'nfses': len(self.nfses),
-            'outros': len(self.outros),
-            'avisos': len(self.avisos),
-            'valor_compra': self.get_valor_compra(),
-            'valor_boleto': self.get_valor_total_boletos(),
+            "batch_id": self.batch_id,
+            "source_folder": self.source_folder,
+            "email_subject": self.email_subject,
+            "email_sender": self.email_sender,
+            "fornecedor": self._get_primeiro_fornecedor(),
+            "vencimento": vencimento,
+            "numero_nota": self.get_primeiro_numero_nota(),
+            "total_documents": self.total_documents,
+            "total_errors": self.total_errors,
+            "danfes": len(self.danfes),
+            "boletos": len(self.boletos),
+            "nfses": len(self.nfses),
+            "outros": len(self.outros),
+            "avisos": len(self.avisos),
+            "valor_compra": self.get_valor_compra(),
+            "valor_boleto": self.get_valor_total_boletos(),
         }
 
         # Adiciona dados de conciliação se disponível
         if self.correlation_result:
-            summary['status_conciliacao'] = self.correlation_result.status
-            summary['divergencia'] = self.correlation_result.divergencia
-            summary['diferenca_valor'] = self.correlation_result.diferenca
+            summary["status_conciliacao"] = self.correlation_result.status
+            summary["divergencia"] = self.correlation_result.divergencia
+            summary["diferenca_valor"] = self.correlation_result.diferenca
 
         return summary
 
@@ -533,7 +522,8 @@ class BatchResult:
                 return DanfeData(
                     arquivo_origem=doc_dict.get("arquivo_origem", ""),
                     fornecedor_nome=doc_dict.get("fornecedor_nome"),
-                    cnpj_emitente=doc_dict.get("cnpj_prestador") or doc_dict.get("fornecedor_cnpj"),
+                    cnpj_emitente=doc_dict.get("cnpj_prestador")
+                    or doc_dict.get("fornecedor_cnpj"),
                     valor_total=doc_dict.get("valor_total") or 0.0,
                     numero_nota=doc_dict.get("numero_nota"),
                     chave_acesso=doc_dict.get("chave_acesso"),
@@ -544,7 +534,8 @@ class BatchResult:
                 return InvoiceData(
                     arquivo_origem=doc_dict.get("arquivo_origem", ""),
                     fornecedor_nome=doc_dict.get("fornecedor_nome"),
-                    cnpj_prestador=doc_dict.get("cnpj_emitente") or doc_dict.get("fornecedor_cnpj"),
+                    cnpj_prestador=doc_dict.get("cnpj_emitente")
+                    or doc_dict.get("fornecedor_cnpj"),
                     valor_total=doc_dict.get("valor_total") or 0.0,
                     numero_nota=doc_dict.get("numero_nota"),
                     data_emissao=doc_dict.get("data_emissao"),
@@ -592,6 +583,7 @@ class CorrelationResult:
         valor_boleto: Valor do boleto
         diferenca: Diferença entre valores
     """
+
     batch_id: str
     status: str = "CONCILIADO"
     divergencia: Optional[str] = None
@@ -609,7 +601,9 @@ class CorrelationResult:
 
     # Flags de alerta
     sem_vencimento: bool = False
-    vencimento_alerta: Optional[str] = None  # Data de alerta quando vencimento não encontrado
+    vencimento_alerta: Optional[str] = (
+        None  # Data de alerta quando vencimento não encontrado
+    )
 
     def is_ok(self) -> bool:
         """Verifica se a conciliação está OK (CONCILIADO)."""

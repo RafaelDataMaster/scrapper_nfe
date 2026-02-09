@@ -5,12 +5,30 @@ from .boleto_repromaq import BoletoRepromaqExtractor
 from .boleto_gox import BoletoGoxExtractor  # Boleto GOX específico (antes do genérico)
 from .emc_fatura import EmcFaturaExtractor
 from .net_center import NetCenterExtractor
+
+# Extrator especializado para faturas TIM S.A.
+# CRÍTICO: deve vir ANTES de NfseCustomMontesClaros para evitar falso positivo
+# (faturas TIM para clientes em Montes Claros contêm "MONTES CLAROS" no endereço)
+# Também deve vir ANTES de UtilityBillExtractor para evitar detecção como LIGHT
+from .tim_fatura_extractor import TIMFaturaExtractor
+
 from .nfse_custom_montes_claros import NfseCustomMontesClarosExtractor
 from .nfse_custom_vila_velha import NfseCustomVilaVelhaExtractor
+
+# Extrator especializado para comprovantes bancários (TED, PIX, DOC)
+# CRÍTICO: deve vir ANTES de UtilityBillExtractor para evitar que comprovantes
+# de transferência sejam classificados erroneamente como contas de energia
+from .comprovante_bancario import ComprovanteBancarioExtractor
+
 from .utility_bill import (
     UtilityBillExtractor,
 )  # Extrator unificado para utilidades (energia, água)
 from .nfcom_telcables_extractor import NfcomTelcablesExtractor
+
+# Extrator especializado para NFCom (Nota Fiscal de Comunicação Eletrônica)
+# CRÍTICO: deve vir ANTES de BoletoExtractor para evitar que NFCom seja
+# classificada como boleto (NFCom pode ter linha digitável para pagamento)
+from .nfcom import NFComExtractor
 
 # Extrator especializado para boletos ACIMOC
 from .acimoc_extractor import AcimocExtractor
@@ -35,11 +53,6 @@ from .csc_nota_debito import CscNotaDebitoExtractor
 
 # Extrator especializado para documentos administrativos (deve vir antes dos genéricos)
 from .admin_document import AdminDocumentExtractor
-
-# Extrator especializado para comprovantes bancários (TED, PIX, DOC)
-# CRÍTICO: deve vir antes dos genéricos para evitar que comprovantes de R$ 1.6M+
-# sejam classificados como NFSe sem número
-from .comprovante_bancario import ComprovanteBancarioExtractor
 
 # Extrator de corpo de e-mail (não usa EXTRACTOR_REGISTRY, é chamado diretamente)
 from .email_body_extractor import (
@@ -78,6 +91,7 @@ __all__ = [
     "EmcFaturaExtractor",
     "NetCenterExtractor",
     "NfcomTelcablesExtractor",
+    "NFComExtractor",
     "OutrosExtractor",
     "SicoobExtractor",
     "BoletoGoxExtractor",
@@ -110,4 +124,6 @@ __all__ = [
     "extract_sabesp_from_email",
     # Extrator para Nota Débito/Recibo Fatura da CSC GESTAO
     "CscNotaDebitoExtractor",
+    # Extrator para faturas TIM S.A.
+    "TIMFaturaExtractor",
 ]

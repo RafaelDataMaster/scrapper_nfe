@@ -109,9 +109,44 @@ class BatchHealth:
                 "PAGAMENTO EFETUADO",
                 "SOLICITACAO DE PAGAMENTO",
                 "SOLICITAÇÃO DE PAGAMENTO",
+                "INFORMAÇÃO PAGAMENTO",
+                "INFORMACAO PAGAMENTO",
+                "COMP PGTO",
             ]
             if any(k in assunto_upper for k in comprovante_keywords):
                 return "COMPROVANTE_PAGAMENTO"
+
+            # Detectar pagamentos a pessoas físicas pelo nome do fornecedor
+            # Se o fornecedor parece ser nome de pessoa (3+ palavras, sem LTDA/SA)
+            # e o assunto menciona "consumo" ou "pagamento", é provável comprovante
+            palavras_forn = forn_upper.split()
+            eh_nome_pessoa = (
+                len(palavras_forn) >= 3
+                and not any(
+                    k in forn_upper for k in ["LTDA", "S.A.", "S/A", "EIRELI", "MEI"]
+                )
+                and all(p.isalpha() for p in palavras_forn)  # Só letras
+            )
+            if eh_nome_pessoa and any(
+                k in assunto_upper for k in ["CONSUMO", "PAGAMENTO", "PGTO"]
+            ):
+                return "COMPROVANTE_PAGAMENTO"
+
+            # Verificar também pelo nome do arquivo (ex: "COMP PGTO", "COMPROVANTE")
+            # Isso é útil quando o assunto não menciona comprovante mas o arquivo sim
+            if self.source_folder:
+                import os
+
+                try:
+                    for f in os.listdir(self.source_folder):
+                        f_upper = f.upper()
+                        if any(
+                            k in f_upper
+                            for k in ["COMP PGTO", "COMPROVANTE", "TED_", "PIX_"]
+                        ):
+                            return "COMPROVANTE_PAGAMENTO"
+                except (OSError, FileNotFoundError):
+                    pass
 
             # Detectar comprovante pelo subtipo no metadata (ex: COMPROVANTE_BANCARIO)
             # O subtipo é definido pelo extractor (ComprovanteBancarioExtractor)
@@ -122,7 +157,20 @@ class BatchHealth:
                     if subtipo in ["COMPROVANTE_BANCARIO", "TED", "DOC", "PIX"]:
                         return "COMPROVANTE_PAGAMENTO"
 
-            # Utilitários (energia, água)
+            # Detectar faturas de locação ANTES de utility
+            # Evita classificar "PP EMPREENDIMENTOS" como utility por causa de "Energia" no assunto
+            locacao_keywords = [
+                "EMPREENDIMENTOS",
+                "LOCAÇÃO",
+                "LOCACAO",
+                "ALUGUEL",
+                "IMOBILIARIA",
+                "IMOBILIÁRIA",
+            ]
+            if any(k in forn_upper for k in locacao_keywords):
+                return "OUTRO"  # Fatura de locação, não utility
+
+            # Utilitários (energia, água) - apenas concessionárias conhecidas
             if any(
                 u in forn_upper
                 for u in [
@@ -139,10 +187,17 @@ class BatchHealth:
                 return "UTILITY_ENERGY"
             if any(u in forn_upper for u in ["COPASA", "SABESP", "SANEPAR"]):
                 return "UTILITY_WATER"
-            if any(u in assunto_upper for u in ["ENERGIA", "LUZ", "ELETRIC"]):
-                return "UTILITY_ENERGY"
-            if any(u in assunto_upper for u in ["AGUA", "ÁGUA", "SANEAMENTO"]):
-                return "UTILITY_WATER"
+
+            # Classificar por assunto apenas se fornecedor não for pessoa física
+            # (evita classificar comprovantes de pagamento a pessoas como utility)
+            eh_pessoa_fisica = len(forn_upper.split()) <= 3 and not any(
+                k in forn_upper for k in ["LTDA", "S.A.", "S/A", "EIRELI", "MEI"]
+            )
+            if not eh_pessoa_fisica:
+                if any(u in assunto_upper for u in ["ENERGIA", "LUZ", "ELETRIC"]):
+                    return "UTILITY_ENERGY"
+                if any(u in assunto_upper for u in ["AGUA", "ÁGUA", "SANEAMENTO"]):
+                    return "UTILITY_WATER"
 
             return "OUTRO"
         else:
@@ -402,6 +457,8 @@ class BatchHealthAnalyzer:
                 )
 
         # === PROBLEMA 6: Nome de pessoa com valor muito alto (ALTO) ===
+        # Exceção: MEIs que emitem NF de comissões (representantes/vendedores)
+        # Esses são pagamentos legítimos a pessoas físicas com MEI
         if batch.valor_compra > 10000:
             nomes_pessoa = [
                 "marco",
@@ -413,12 +470,29 @@ class BatchHealthAnalyzer:
                 "raphaela",
             ]
             forn_lower = batch.fornecedor.lower()
-            if any(nome in forn_lower for nome in nomes_pessoa):
+            assunto_lower = batch.email_subject.lower()
+
+            # Verificar se é caso de comissões (MEI legítimo)
+            eh_comissao = any(
+                termo in assunto_lower
+                for termo in ["comissão", "comissões", "comissao", "comissoes"]
+            )
+
+            if any(nome in forn_lower for nome in nomes_pessoa) and not eh_comissao:
                 batch.problemas.append(
                     (
                         "FORNECEDOR_PESSOA_VALOR_ALTO",
                         f"Nome de pessoa com valor alto R$ {batch.valor_compra:,.2f}: '{batch.fornecedor}'",
                         self.SEV_ALTA,
+                    )
+                )
+            elif any(nome in forn_lower for nome in nomes_pessoa) and eh_comissao:
+                # Registrar como informativo - MEI de comissões é esperado
+                batch.problemas.append(
+                    (
+                        "MEI_COMISSAO_OK",
+                        f"MEI de comissões (esperado): R$ {batch.valor_compra:,.2f} ({batch.fornecedor[:30]})",
+                        self.SEV_INFO,
                     )
                 )
 

@@ -44,6 +44,77 @@ BR_DATE_RE = re.compile(r"\b(\d{2})[/\-](\d{2})[/\-](\d{2,4})\b")
 # =============================================================================
 
 
+def normalize_ocr_money_string(text: str) -> str:
+    """
+    Normaliza string monetária removendo espaços inseridos pelo OCR dentro de números.
+
+    OCR problemático frequentemente insere espaços dentro de valores numéricos:
+    - "R$ 2 2.396,17" -> "R$ 22.396,17"
+    - "1 2 3 4,56" -> "1234,56"
+    - "R$ 1 . 2 3 4 , 5 6" -> "R$ 1.234,56"
+
+    A função preserva espaços legítimos:
+    - Entre "R$" e o valor
+    - Entre valores monetários completos (ex: "0,00 0,00" permanece inalterado)
+
+    Args:
+        text: String com possíveis espaços incorretos em valores monetários
+
+    Returns:
+        String com espaços normalizados dentro de números
+
+    Examples:
+        >>> normalize_ocr_money_string("R$ 2 2.396,17")
+        'R$ 22.396,17'
+        >>> normalize_ocr_money_string("Total: 1 2 3 4,56")
+        'Total: 1234,56'
+        >>> normalize_ocr_money_string("R$ 1 . 2 3 4 , 5 6")
+        'R$ 1.234,56'
+        >>> normalize_ocr_money_string("0,00 0,00 22,16")
+        '0,00 0,00 22,16'
+    """
+    if not text:
+        return ""
+
+    # Passo 1: Remove espaços ao redor de pontos e vírgulas dentro de contexto numérico
+    # Ex: "1 . 2 3 4 , 5 6" -> "1.234,56"
+    text = re.sub(r"(\d)\s*\.\s*(\d)", r"\1.\2", text)
+    text = re.sub(r"(\d)\s*,\s*(\d)", r"\1,\2", text)
+
+    # Passo 2: Remove espaços entre dígitos APENAS na parte inteira (antes da vírgula).
+    # Valores monetários brasileiros têm formato: XXX.XXX,YY
+    # Após ,YY (vírgula + 2 dígitos) o valor está completo e o espaço é legítimo.
+    #
+    # Estratégia: processar segmentos entre valores completos (,\d\d) individualmente.
+    # Isso preserva "0,00 0,00" mas corrige "2 2.396,17".
+
+    def fix_segment(segment: str) -> str:
+        """Remove espaços entre dígitos em um segmento."""
+        prev = ""
+        result = segment
+        while prev != result:
+            prev = result
+            result = re.sub(r"(\d)\s+(\d)", r"\1\2", result)
+        return result
+
+    # Divide o texto em partes: valores completos (,\d\d) e o resto
+    # Padrão: captura grupos de (parte_antes_da_virgula + ,XX)
+    # Usamos split com grupo de captura para manter os delimitadores
+    parts = re.split(r"(,\d{2})(?=\s|$|[^\d])", text)
+
+    result_parts = []
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        # Aplica fix apenas em partes que NÃO são o final de valor (,XX)
+        if not re.match(r"^,\d{2}$", part):
+            part = fix_segment(part)
+        result_parts.append(part)
+        i += 1
+
+    return "".join(result_parts)
+
+
 def parse_br_money(value: str) -> float:
     """
     Converte valor monetário brasileiro para float.
@@ -81,6 +152,8 @@ def extract_br_money_values(text: str) -> List[float]:
     """
     Extrai todos os valores monetários de um texto.
 
+    Aplica normalização OCR para corrigir espaços inseridos dentro de números.
+
     Args:
         text: Texto contendo valores monetários
 
@@ -90,12 +163,17 @@ def extract_br_money_values(text: str) -> List[float]:
     Example:
         >>> extract_br_money_values("Total: R$ 1.234,56 + R$ 100,00")
         [1234.56, 100.0]
+        >>> extract_br_money_values("R$ 2 2.396,17")  # OCR com espaços
+        [22396.17]
     """
     if not text:
         return []
 
+    # Normaliza texto para corrigir espaços OCR dentro de números
+    normalized_text = normalize_ocr_money_string(text)
+
     values = []
-    for match in BR_MONEY_RE.findall(text):
+    for match in BR_MONEY_RE.findall(normalized_text):
         val = parse_br_money(match.replace(" ", ""))
         if val > 0:
             values.append(val)
@@ -444,6 +522,38 @@ def normalize_entity_name(raw: str) -> str:
         'CORREIOS E TELEGRAFOS'
     """
     name = (raw or "").strip()
+
+    # Remove prefixos genéricos que não são parte do nome da empresa
+    prefixes_to_remove = [
+        r"^E-mail\s+",
+        r"^Beneficiario\s+",
+        r"^Beneficiário\s+",
+        r"^Nome/NomeEmpresarial\s+",
+        r"^Nome\s+/\s*Nome\s+Empresarial\s+E-mail\s+",  # "Nome / Nome Empresarial E-mail"
+        r"^Nome\s+Empresarial\s+",
+        r"^Razão\s+Social\s+",
+        r"^Razao\s+Social\s+",
+    ]
+    for prefix_pattern in prefixes_to_remove:
+        name = re.sub(prefix_pattern, "", name, flags=re.IGNORECASE)
+
+    # Remove sufixos genéricos que não são parte do nome da empresa
+    suffixes_to_remove = [
+        r"\s+CONTATO\s*$",
+        r"\s+CONTATO@[^\s]+\s*$",
+        r"\s+CPF\s+ou\s+CNPJ\s*$",
+        r"\s+-\s+CNPJ\s*$",  # "- CNPJ" no final
+        r"\s+-\s+CNPJ\s+\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s*$",  # "- CNPJ XX.XXX.XXX/XXXX-XX"
+        r"\s+\|\s*CNPJ\s+-\s+CNPJ\s*$",  # "| CNPJ - CNPJ"
+        r"\s+\|\s*CNPJ\s*$",  # "| CNPJ" no final
+        r"\s+\|\s*$",  # "|" solto no final
+        r"\s+-\s+Endereço.*$",
+        r"\s+-\s+Município.*$",
+        r"\s+-\s+CEP.*$",
+        r"\s+Endereço\s+Município\s+CEP.*$",  # "Endereço Município CEP PARAIBA"
+    ]
+    for suffix_pattern in suffixes_to_remove:
+        name = re.sub(suffix_pattern, "", name, flags=re.IGNORECASE)
 
     # Remove artefatos OCR com colchetes (ex: "[dede", "[abc123", "Aeee [dede")
     # Colchetes não são comuns em nomes de empresas

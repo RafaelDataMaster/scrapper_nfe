@@ -23,6 +23,7 @@ Example:
     >>> dados = extractor.extract(texto)
     >>> print(f"Nota {dados['numero_nota']}: R$ {dados['valor_total']:.2f}")
 """
+
 import re
 from typing import Any, Dict, Optional
 
@@ -53,17 +54,18 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
         """
         # Extrai campos customizados específicos de Vila Velha
         data = {
-            'tipo_documento': 'NFSE',
-            'numero_nota': self._extract_numero_nota(text),
-            'valor_total': self._extract_valor(text),
-            'vencimento': self._extract_vencimento(text),
+            "tipo_documento": "NFSE",
+            "numero_nota": self._extract_numero_nota(text),
+            "valor_total": self._extract_valor(text),
+            "vencimento": self._extract_vencimento(text),
         }
 
         # Se conseguiu extrair os campos customizados, usa eles
         # Senão, delega para o genérico
-        if not data.get('numero_nota') or not data.get('valor_total'):
+        if not data.get("numero_nota") or not data.get("valor_total"):
             # Import lazy para evitar circular import
             from extractors.nfse_generic import NfseGenericExtractor
+
             generic = NfseGenericExtractor()
             generic_data = generic.extract(text)
 
@@ -74,14 +76,21 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
         else:
             # Preenche campos básicos que o genérico também extrai
             from extractors.nfse_generic import NfseGenericExtractor
+
             generic = NfseGenericExtractor()
             generic_data = generic.extract(text)
 
             # Pega campos não customizados do genérico
             campos_nao_customizados = [
-                'cnpj_prestador', 'fornecedor_nome', 'data_emissao',
-                'valor_ir', 'valor_inss', 'valor_csll', 'valor_iss',
-                'forma_pagamento', 'numero_pedido'
+                "cnpj_prestador",
+                "fornecedor_nome",
+                "data_emissao",
+                "valor_ir",
+                "valor_inss",
+                "valor_csll",
+                "valor_iss",
+                "forma_pagamento",
+                "numero_pedido",
             ]
 
             for campo in campos_nao_customizados:
@@ -100,13 +109,13 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
         # Padrão específico de Vila Velha: duas datas com horas seguidas do número
         match = re.search(
             r"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}\s+\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}\s+(\d+)",
-            text
+            text,
         )
         if match:
             return match.group(1)
 
         # Fallback: busca "Número" seguido de dígitos
-        match = re.search(r'N[úu]mero[:\s]+(\d+)', text, re.IGNORECASE)
+        match = re.search(r"N[úu]mero[:\s]+(\d+)", text, re.IGNORECASE)
         if match:
             return match.group(1)
 
@@ -133,7 +142,7 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
             if match:
                 valor_str = match.group(1)
                 # Converte formato brasileiro para float
-                return float(valor_str.replace('.', '').replace(',', '.'))
+                return float(valor_str.replace(".", "").replace(",", "."))
 
         return 0.0
 
@@ -144,13 +153,21 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
         Para NFS-e de serviços, se não houver vencimento explícito,
         usa a data de emissão como fallback.
         """
-        # Tenta padrão comum de vencimento
-        match = re.search(r'Vencimento[:\s]+(\d{2}/\d{2}/\d{4})', text, re.IGNORECASE)
-        if match:
-            data_str = match.group(1)
-            # Converte para formato ISO (YYYY-MM-DD)
-            dia, mes, ano = data_str.split('/')
-            return f"{ano}-{mes}-{dia}"
+        # Padrões de vencimento (incluindo texto grudado sem separador)
+        patterns = [
+            r"Vencimento[:\s]+(\d{2}/\d{2}/\d{4})",
+            # Padrão sem separador (texto grudado, comum em PDFs com OCR ruim)
+            # Ex: "VENCIMENTO19/01/2026" na descrição do serviço
+            r"VENCIMENTO(\d{2}/\d{2}/\d{4})",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data_str = match.group(1)
+                # Converte para formato ISO (YYYY-MM-DD)
+                dia, mes, ano = data_str.split("/")
+                return f"{ano}-{mes}-{dia}"
 
         # Fallback: usa data de emissão
         return self._extract_data_emissao(text)
@@ -159,9 +176,9 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
         """Extrai data de emissão."""
         # Padrão Vila Velha: "Emitida em ... 03/11/2025"
         patterns = [
-            r'Emitida\s+em[:\s]+[^\d]*(\d{2}/\d{2}/\d{4})',
-            r'Data\s+de\s+Emiss[ãa]o[:\s]+(\d{2}/\d{2}/\d{4})',
-            r'Emiss[ãa]o[:\s]+(\d{2}/\d{2}/\d{4})',
+            r"Emitida\s+em[:\s]+[^\d]*(\d{2}/\d{2}/\d{4})",
+            r"Data\s+de\s+Emiss[ãa]o[:\s]+(\d{2}/\d{2}/\d{4})",
+            r"Emiss[ãa]o[:\s]+(\d{2}/\d{2}/\d{4})",
         ]
 
         for pattern in patterns:
@@ -169,7 +186,7 @@ class NfseCustomVilaVelhaExtractor(BaseExtractor):
             if match:
                 data_str = match.group(1)
                 # Converte para formato ISO (YYYY-MM-DD)
-                dia, mes, ano = data_str.split('/')
+                dia, mes, ano = data_str.split("/")
                 return f"{ano}-{mes}-{dia}"
 
         return None

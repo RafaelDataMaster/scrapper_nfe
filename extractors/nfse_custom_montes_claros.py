@@ -46,12 +46,21 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
 
         t = (text or "").upper()
         # Indicadores fortes de Montes Claros
-        if "MONTES CLAROS" in t or "NOTA.MONTESCLAROS.MG.GOV.BR" in t or "NOTA.MONTESCLAROS" in t:
+        if (
+            "MONTES CLAROS" in t
+            or "NOTA.MONTESCLAROS.MG.GOV.BR" in t
+            or "NOTA.MONTESCLAROS" in t
+        ):
             # Evitar confundir com boletos
             if find_linha_digitavel(text):
                 return False
             # Confirma que é NFS-e
-            if "NFSE" in t or "NOTA FISCAL DE SERVIÇO" in t or "NFS-E" in t or "CÓDIGO DE VERIFICAÇÃO" in t:
+            if (
+                "NFSE" in t
+                or "NOTA FISCAL DE SERVIÇO" in t
+                or "NFS-E" in t
+                or "CÓDIGO DE VERIFICAÇÃO" in t
+            ):
                 return True
         return False
 
@@ -80,15 +89,19 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
     def _extract_cnpj(self, text: str) -> Optional[str]:
         # Procura o CNPJ do prestador (preferir próximo ao rótulo "Prestador" ou "PrestadorServico")
         # Padrão robusto, retorna formatado com pontos/ barra/ hífen
-        m = re.search(r"(?:PrestadorServico|Prestador|Prestador\s*:\s*|Prestador\s+Servico|Prestador\s+Serviço)?\s*.*?(?:CNPJ|CPF)\s*[:\-\s]*([0-9\.\-/\s]{14,20})", text, re.IGNORECASE)
+        m = re.search(
+            r"(?:PrestadorServico|Prestador|Prestador\s*:\s*|Prestador\s+Servico|Prestador\s+Serviço)?\s*.*?(?:CNPJ|CPF)\s*[:\-\s]*([0-9\.\-/\s]{14,20})",
+            text,
+            re.IGNORECASE,
+        )
         if m:
-            candidate = re.sub(r'\D', '', m.group(1))
+            candidate = re.sub(r"\D", "", m.group(1))
             if len(candidate) == 14:
                 return f"{candidate[:2]}.{candidate[2:5]}.{candidate[5:8]}/{candidate[8:12]}-{candidate[12:14]}"
         # Fallback: qualquer CNPJ no documento
         m2 = re.search(r"(\d{2}\D?\d{3}\D?\d{3}\D?\d{4}\D?\d{2})", text)
         if m2:
-            c = re.sub(r'\D', '', m2.group(1))
+            c = re.sub(r"\D", "", m2.group(1))
             if len(c) == 14:
                 return f"{c[:2]}.{c[2:5]}.{c[5:8]}/{c[8:12]}-{c[12:14]}"
         return None
@@ -97,7 +110,7 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
         # Padrões específicos observados em Montes Claros:
         # "Nº NFSe:202500000015059" ou "Nº NFSe: 202500000015059"
         patterns = [
-            r"N[º°o]?\s*NFSe\s*[:\-]?\s*([0-9]{12,20})",   # N° NFSe: 202500000015059
+            r"N[º°o]?\s*NFSe\s*[:\-]?\s*([0-9]{12,20})",  # N° NFSe: 202500000015059
             r"N[º°o]?\s*NFSe[:\s]*\b([0-9]{12,20})\b",
             r"N[º°o]?\s*NFSe[:\s]*N[º°o]?\s*[:\s]*([0-9]{12,20})",
             r"\bN[Ff][Ss][Ee]\b[^0-9]{0,10}([0-9]{12,20})",  # NFSe ... 2025...
@@ -115,7 +128,7 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
         if m2:
             candidate = m2.group(1)
             # evitar capturar datas/telefones curtos; exigir comprimento >= 12
-            if len(re.sub(r'\D', '', candidate)) >= 12:
+            if len(re.sub(r"\D", "", candidate)) >= 12:
                 return candidate
 
         # Por fim, tenta padrões compostos (ano/sequencial) como "2025/12" — só se não existir a forma longa
@@ -170,23 +183,38 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
         return 0.0
 
     def _extract_ir(self, text: str) -> float:
-        patterns = [r"Valor\s+IR[:\s]*R?\$?\s*([\d\.\,]{1,})", r"ValorIR[:\s]*R?\$?\s*([\d\.\,]{1,})"]
+        patterns = [
+            r"Valor\s+IR[:\s]*R?\$?\s*([\d\.\,]{1,})",
+            r"ValorIR[:\s]*R?\$?\s*([\d\.\,]{1,})",
+        ]
         return self._extract_valor_generico(patterns, text)
 
     def _extract_inss(self, text: str) -> float:
-        patterns = [r"Valor\s+INSS[:\s]*R?\$?\s*([\d\.\,]{1,})", r"ValorINSS[:\s]*R?\$?\s*([\d\.\,]{1,})"]
+        patterns = [
+            r"Valor\s+INSS[:\s]*R?\$?\s*([\d\.\,]{1,})",
+            r"ValorINSS[:\s]*R?\$?\s*([\d\.\,]{1,})",
+        ]
         return self._extract_valor_generico(patterns, text)
 
     def _extract_csll(self, text: str) -> float:
-        patterns = [r"Valor\s+CSLL[:\s]*R?\$?\s*([\d\.\,]{1,})", r"ValorCSLL[:\s]*R?\$?\s*([\d\.\,]{1,})"]
+        patterns = [
+            r"Valor\s+CSLL[:\s]*R?\$?\s*([\d\.\,]{1,})",
+            r"ValorCSLL[:\s]*R?\$?\s*([\d\.\,]{1,})",
+        ]
         return self._extract_valor_generico(patterns, text)
 
     def _extract_valor_icms(self, text: str) -> float:
-        patterns = [r"Valor\s+ICMS[:\s]*R?\$?\s*([\d\.\,]{1,})", r"ICMS[:\s]*R?\$?\s*([\d\.\,]{1,})"]
+        patterns = [
+            r"Valor\s+ICMS[:\s]*R?\$?\s*([\d\.\,]{1,})",
+            r"ICMS[:\s]*R?\$?\s*([\d\.\,]{1,})",
+        ]
         return self._extract_valor_generico(patterns, text)
 
     def _extract_base_calculo_icms(self, text: str) -> float:
-        patterns = [r"BaseCalculo[:\s]*R?\$?\s*([\d\.\,]{1,})", r"Base\s+de\s+C[aá]lculo[:\s]*R?\$?\s*([\d\.\,]{1,})"]
+        patterns = [
+            r"BaseCalculo[:\s]*R?\$?\s*([\d\.\,]{1,})",
+            r"Base\s+de\s+C[aá]lculo[:\s]*R?\$?\s*([\d\.\,]{1,})",
+        ]
         return self._extract_valor_generico(patterns, text)
 
     def _extract_data_emissao(self, text: str) -> Optional[str]:
@@ -205,44 +233,62 @@ class NfseCustomMontesClarosExtractor(BaseExtractor):
 
     def _extract_vencimento(self, text: str) -> Optional[str]:
         # Montes Claros NFS-e normalmente não trazem vencimento, manter como None
-        # Mas tenta capturar se houver "Vencimento: DD/MM/YYYY"
-        m = re.search(r"Vencimento[:\s]+(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
-        if m:
-            return parse_date_br(m.group(1))
+        # Mas tenta capturar se houver "Vencimento: DD/MM/YYYY" ou "VENCIMENTO19/01/2026" (grudado)
+        patterns = [
+            r"Vencimento[:\s]+(\d{2}/\d{2}/\d{4})",
+            # Padrão sem separador (texto grudado, comum em PDFs com OCR ruim)
+            r"VENCIMENTO(\d{2}/\d{2}/\d{4})",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                return parse_date_br(m.group(1))
         return None
 
     def _extract_fornecedor_nome(self, text: str) -> Optional[str]:
         text_upper = text.upper()
-        
+
         # Fornecedores conhecidos por CNPJ ou nome
         KNOWN_SUPPLIERS_BY_CNPJ = {
             "02.421.421": "TIM S.A.",
             "02421421": "TIM S.A.",
         }
-        
+
         # Verifica CNPJ conhecido
         for cnpj_key, supplier in KNOWN_SUPPLIERS_BY_CNPJ.items():
             if cnpj_key in text:
                 return supplier
-        
+
         # TIM S.A. específico
         if "TIM S.A" in text_upper or "TIMS.A" in text_upper:
             return "TIM S.A."
-        
+
         # Preferir RazaoSocial / NomeFantasia rótulos comuns em layout municipal
-        m = re.search(r"Raz[ãa]o\s+Social[:\s\-]*([A-ZÀ-ÿ0-9\-\.\&\s\/]{4,120})", text, re.IGNORECASE)
+        m = re.search(
+            r"Raz[ãa]o\s+Social[:\s\-]*([A-ZÀ-ÿ0-9\-\.\&\s\/]{4,120})",
+            text,
+            re.IGNORECASE,
+        )
         if m:
             nome = m.group(1).strip()
             if nome:
                 return re.sub(r"\s+", " ", nome).strip()
         # Padrão após "Prestador" ou "PrestadorServico"
-        m2 = re.search(r"(?:PrestadorServico|Prestador)[^\n\r]{0,80}\n?\s*([A-ZÀ-ÿ0-9\-\.\&\s\/]{4,120})", text, re.IGNORECASE)
+        m2 = re.search(
+            r"(?:PrestadorServico|Prestador)[^\n\r]{0,80}\n?\s*([A-ZÀ-ÿ0-9\-\.\&\s\/]{4,120})",
+            text,
+            re.IGNORECASE,
+        )
         if m2:
             nome = m2.group(1).strip()
             if nome:
                 return re.sub(r"\s+", " ", nome).strip()
         # Alternativa: texto anterior ao CNPJ
-        cnpj_m = re.search(r"([A-ZÀ-ÿ0-9\-\.\&\s\/]{5,120})\s+(?:CNPJ|CPF)\s*[:\-\s]*\d", text, re.IGNORECASE)
+        cnpj_m = re.search(
+            r"([A-ZÀ-ÿ0-9\-\.\&\s\/]{5,120})\s+(?:CNPJ|CPF)\s*[:\-\s]*\d",
+            text,
+            re.IGNORECASE,
+        )
         if cnpj_m:
             nome = cnpj_m.group(1).strip()
             return re.sub(r"\s+", " ", nome).strip()

@@ -7,6 +7,7 @@ Testa:
     - TesseractOcrStrategy: extração via OCR
     - Funções utilitárias de tratamento de senha
 """
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -16,15 +17,18 @@ class TestNativePdfStrategy(unittest.TestCase):
 
     def setUp(self):
         from strategies.native import NativePdfStrategy
+
         self.strategy = NativePdfStrategy()
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_success(self, mock_pdf_open):
         """Testa se a extração retorna texto quando o PDF é legível."""
         # Configura o Mock para simular um PDF com texto
         mock_pdf = MagicMock()
         mock_page = MagicMock()
-        mock_page.extract_text.return_value = "Nota Fiscal de Serviço Eletrônica - Valor R$ 100,00 - Prestador XYZ"
+        mock_page.extract_text.return_value = (
+            "Nota Fiscal de Serviço Eletrônica - Valor R$ 100,00 - Prestador XYZ"
+        )
         mock_pdf.pages = [mock_page]
         mock_pdf_open.return_value = mock_pdf
 
@@ -33,7 +37,7 @@ class TestNativePdfStrategy(unittest.TestCase):
         self.assertIn("Nota Fiscal", texto)
         self.assertIn("100,00", texto)
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_fallback_empty_text(self, mock_pdf_open):
         """Testa se retorna vazio (gatilho para OCR) quando o PDF tem pouco texto."""
         mock_pdf = MagicMock()
@@ -48,7 +52,7 @@ class TestNativePdfStrategy(unittest.TestCase):
         # Deve retornar string vazia para ativar o fallback
         self.assertEqual(texto, "")
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_file_error(self, mock_pdf_open):
         """Testa resiliência a erros de arquivo."""
         mock_pdf_open.side_effect = Exception("Arquivo corrompido")
@@ -56,14 +60,16 @@ class TestNativePdfStrategy(unittest.TestCase):
         texto = self.strategy.extract("arquivo_ruim.pdf")
         self.assertEqual(texto, "")
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_password_protected_success(self, mock_pdf_open):
         """Testa se consegue extrair de PDF protegido por senha conhecida."""
         # Primeira chamada falha com erro de senha
         # Segunda chamada (com senha) funciona
         mock_pdf = MagicMock()
         mock_page = MagicMock()
-        mock_page.extract_text.return_value = "Conteúdo do PDF protegido - Valor R$ 500,00 - Empresa XYZ"
+        mock_page.extract_text.return_value = (
+            "Conteúdo do PDF protegido - Valor R$ 500,00 - Empresa XYZ"
+        )
         mock_pdf.pages = [mock_page]
 
         def open_side_effect(path, password=None):
@@ -84,9 +90,10 @@ class TestTablePdfStrategy(unittest.TestCase):
 
     def setUp(self):
         from strategies.table import TablePdfStrategy
+
         self.strategy = TablePdfStrategy()
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_with_tables(self, mock_pdf_open):
         """Testa extração de PDF com tabelas estruturadas."""
         mock_pdf = MagicMock()
@@ -106,7 +113,7 @@ class TestTablePdfStrategy(unittest.TestCase):
         self.assertIn("CNPJ: 12.345.678/0001-90", texto)
         self.assertIn("Valor: 100,00", texto)
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_no_tables(self, mock_pdf_open):
         """Testa retorno vazio quando não há tabelas."""
         mock_pdf = MagicMock()
@@ -121,7 +128,7 @@ class TestTablePdfStrategy(unittest.TestCase):
         # Deve retornar vazio se não encontrou tabelas
         self.assertEqual(texto, "")
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_extract_password_protected(self, mock_pdf_open):
         """Testa extração de tabelas de PDF protegido por senha."""
         mock_pdf = MagicMock()
@@ -149,10 +156,13 @@ class TestTablePdfStrategy(unittest.TestCase):
 class TestGerarCandidatosSenha(unittest.TestCase):
     """Testes para a função de geração de candidatos de senha."""
 
-    @patch('strategies.pdf_utils.EMPRESAS_CADASTRO', {
-        "12345678000190": {"razao_social": "Empresa Teste"},
-        "98765432000155": {"razao_social": "Outra Empresa"},
-    })
+    @patch(
+        "strategies.pdf_utils.EMPRESAS_CADASTRO",
+        {
+            "12345678000190": {"razao_social": "Empresa Teste"},
+            "98765432000155": {"razao_social": "Outra Empresa"},
+        },
+    )
     def test_gerar_candidatos(self):
         """Testa geração de candidatos baseados em CNPJs."""
         from strategies.pdf_utils import gerar_candidatos_senha
@@ -175,7 +185,7 @@ class TestGerarCandidatosSenha(unittest.TestCase):
         self.assertIn("12345678", candidatos)
         self.assertIn("98765432", candidatos)
 
-    @patch('strategies.pdf_utils.EMPRESAS_CADASTRO', {})
+    @patch("strategies.pdf_utils.EMPRESAS_CADASTRO", {})
     def test_gerar_candidatos_vazio(self):
         """Testa que retorna lista vazia quando não há empresas."""
         from strategies.pdf_utils import gerar_candidatos_senha
@@ -188,13 +198,18 @@ class TestGerarCandidatosSenha(unittest.TestCase):
 class TestAbrirPdfplumberComSenha(unittest.TestCase):
     """Testes para a função de abertura de PDF com pdfplumber."""
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_abrir_sem_senha(self, mock_open):
         """Testa abertura de PDF sem senha."""
         from strategies.pdf_utils import abrir_pdfplumber_com_senha
 
         mock_pdf = MagicMock()
-        mock_pdf.pages = [MagicMock()]
+        # Simula páginas com texto extraído (necessário após correção de PDFs protegidos)
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = (
+            "Texto extraído do PDF com mais de 10 caracteres"
+        )
+        mock_pdf.pages = [mock_page]
         mock_open.return_value = mock_pdf
 
         result = abrir_pdfplumber_com_senha("teste.pdf")
@@ -202,20 +217,27 @@ class TestAbrirPdfplumberComSenha(unittest.TestCase):
         self.assertEqual(result, mock_pdf)
         mock_open.assert_called_once_with("teste.pdf")
 
-    @patch('strategies.pdf_utils.gerar_candidatos_senha')
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.gerar_candidatos_senha")
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_abrir_com_senha_conhecida(self, mock_open, mock_candidatos):
         """Testa desbloqueio com senha conhecida."""
         from strategies.pdf_utils import abrir_pdfplumber_com_senha
 
         mock_candidatos.return_value = ["1234", "5678", "senha_certa"]
         mock_pdf = MagicMock()
-        mock_pdf.pages = [MagicMock()]
+        # Simula páginas com texto extraído (necessário após correção de PDFs protegidos)
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = (
+            "Texto extraído do PDF com mais de 10 caracteres"
+        )
+        mock_pdf.pages = [mock_page]
 
         def open_side_effect(path, password=None):
             if password == "senha_certa":
                 return mock_pdf
-            raise Exception("password required" if password is None else "wrong password")
+            raise Exception(
+                "password required" if password is None else "wrong password"
+            )
 
         mock_open.side_effect = open_side_effect
 
@@ -223,8 +245,8 @@ class TestAbrirPdfplumberComSenha(unittest.TestCase):
 
         self.assertEqual(result, mock_pdf)
 
-    @patch('strategies.pdf_utils.gerar_candidatos_senha')
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.gerar_candidatos_senha")
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_abrir_senha_desconhecida(self, mock_open, mock_candidatos):
         """Testa falha quando nenhuma senha funciona."""
         from strategies.pdf_utils import abrir_pdfplumber_com_senha
@@ -236,7 +258,7 @@ class TestAbrirPdfplumberComSenha(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch('strategies.pdf_utils.pdfplumber.open')
+    @patch("strategies.pdf_utils.pdfplumber.open")
     def test_abrir_erro_nao_relacionado_senha(self, mock_open):
         """Testa que erros não relacionados a senha retornam None."""
         from strategies.pdf_utils import abrir_pdfplumber_com_senha
@@ -251,7 +273,7 @@ class TestAbrirPdfplumberComSenha(unittest.TestCase):
 class TestAbrirPypdfiumComSenha(unittest.TestCase):
     """Testes para a função de abertura de PDF com pypdfium2."""
 
-    @patch('strategies.pdf_utils.pdfium.PdfDocument')
+    @patch("strategies.pdf_utils.pdfium.PdfDocument")
     def test_abrir_sem_senha(self, mock_pdf_class):
         """Testa abertura de PDF sem senha."""
         from strategies.pdf_utils import abrir_pypdfium_com_senha
@@ -264,8 +286,8 @@ class TestAbrirPypdfiumComSenha(unittest.TestCase):
         self.assertEqual(result, mock_pdf)
         mock_pdf_class.assert_called_once_with("teste.pdf")
 
-    @patch('strategies.pdf_utils.gerar_candidatos_senha')
-    @patch('strategies.pdf_utils.pdfium')
+    @patch("strategies.pdf_utils.gerar_candidatos_senha")
+    @patch("strategies.pdf_utils.pdfium")
     def test_abrir_com_senha_conhecida(self, mock_pdfium, mock_candidatos):
         """Testa desbloqueio com senha conhecida."""
         from strategies.pdf_utils import abrir_pypdfium_com_senha
@@ -294,9 +316,10 @@ class TestSmartExtractionStrategy(unittest.TestCase):
 
     def setUp(self):
         from strategies.fallback import SmartExtractionStrategy
+
         self.strategy = SmartExtractionStrategy()
 
-    @patch('strategies.fallback.NativePdfStrategy.extract')
+    @patch("strategies.fallback.NativePdfStrategy.extract")
     def test_native_success(self, mock_native):
         """Testa que usa estratégia nativa quando funciona."""
         mock_native.return_value = "Texto extraído com sucesso - valor de 100,00 em 01/01/2025 CNPJ 12.345.678/0001-90"
@@ -306,9 +329,9 @@ class TestSmartExtractionStrategy(unittest.TestCase):
         self.assertIn("Texto extraído", texto)
         mock_native.assert_called_once()
 
-    @patch('strategies.fallback.TesseractOcrStrategy.extract')
-    @patch('strategies.fallback.TablePdfStrategy.extract')
-    @patch('strategies.fallback.NativePdfStrategy.extract')
+    @patch("strategies.fallback.TesseractOcrStrategy.extract")
+    @patch("strategies.fallback.TablePdfStrategy.extract")
+    @patch("strategies.fallback.NativePdfStrategy.extract")
     def test_fallback_to_ocr(self, mock_native, mock_table, mock_ocr):
         """Testa fallback para OCR quando outras estratégias falham."""
         mock_native.return_value = ""
@@ -323,5 +346,5 @@ class TestSmartExtractionStrategy(unittest.TestCase):
         mock_ocr.assert_called_once()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
