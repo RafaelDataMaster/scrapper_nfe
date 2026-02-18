@@ -246,6 +246,30 @@ class AdminDocumentExtractor(BaseExtractor):
                 "Documento de contrato",
             ),
             (r"MINUTA\s+DE\s+CONTRATO", "Documento de contrato"),
+            (r"CONTRATO\s+DE\s+ALUGUEL", "Documento de contrato"),
+            (r"CONTRATO\s+DE\s+LOCA[ÇC][AÃ]O", "Documento de contrato"),
+            (r"CONTRATO\s+DE\s+PRESTA[ÇC][AÃ]O", "Documento de contrato"),
+            (r"CONTRATO\s+DE\s+SERVI[ÇC]O", "Documento de contrato"),
+            # 7b. Demonstrativos (não são notas fiscais)
+            # NOTA: Excluímos "DEMONSTRATIVO DE LOCAÇÃO" pois é documento fiscal (recibo de aluguel)
+            (r"DEMONSTRATIVO\s+DE\s+PAGAMENTO", "Demonstrativo"),
+            (r"DEMONSTRATIVO\s+DE\s+FATURAMENTO", "Demonstrativo"),
+            (r"DEMONSTRATIVO\s+DE\s+SERVI[ÇC]OS(?!\s+DE\s+LOCA)", "Demonstrativo"),
+            (r"DEMONSTRATIVO\s+FINANCEIRO", "Demonstrativo"),
+            (r"DEMONSTRATIVO\s+MENSAL", "Demonstrativo"),
+            (r"DEMONSTRATIVO\s+DETALHADO", "Demonstrativo"),
+            # 7c. Propostas comerciais
+            (r"PROPOSTA\s+COMERCIAL", "Proposta comercial"),
+            (r"PROPOSTA\s+DE\s+SERVI[ÇC]O", "Proposta comercial"),
+            (r"PROPOSTA\s+T[ÉE]CNICA", "Proposta técnica"),
+            (r"OR[ÇC]AMENTO", "Orçamento/proposta"),
+            # 7d. Termos e acordos
+            (r"TERMO\s+DE\s+ACEITE", "Termo/acordo"),
+            (r"TERMO\s+DE\s+ADES[AÃ]O", "Termo/acordo"),
+            (r"TERMO\s+DE\s+COMPROMISSO", "Termo/acordo"),
+            (r"TERMO\s+DE\s+RESPONSABILIDADE", "Termo/acordo"),
+            (r"ACORDO\s+DE\s+N[ÍI]VEL\s+DE\s+SERVI[ÇC]O", "SLA/Acordo"),
+            (r"\bSLA\b", "SLA/Acordo"),
             # 8. Invoices internacionais vazias
             (
                 r"(DECEMBER|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|"
@@ -289,9 +313,16 @@ class AdminDocumentExtractor(BaseExtractor):
             (r"COBRAN[ÇC]A\s+INDEVIDA", "Reclamação de cobrança"),
             # 18. Comprovantes administrativos
             (r"COMPROVANTE\s+DE\s+SOLICITA[ÇC][AÃ]O", "Comprovante administrativo"),
-            # 19. Documentos informativos de serviços públicos
+            # 19. Atestados e declarações
+            (r"ATESTADO\s+DE\s+CAPACIDADE", "Atestado/declaração"),
+            (r"ATESTADO\s+T[ÉE]CNICO", "Atestado/declaração"),
+            (r"DECLARA[ÇC][AÃ]O\s+DE\s+SERVI[ÇC]OS", "Atestado/declaração"),
+            # 20. Relatórios diversos
+            (r"RELAT[ÓO]RIO\s+DE\s+ATIVIDADES", "Relatório"),
+            (r"RELAT[ÓO]RIO\s+MENSAL", "Relatório"),
+            (r"RELAT[ÓO]RIO\s+T[ÉE]CNICO", "Relatório técnico"),
+            # 21. Documentos informativos de serviços públicos
             (r"INFORMATIVO\s+IMPORTANTE", "Documento informativo de serviço público"),
-            (r"COPASA", "Documento informativo de serviço público (água/esgoto)"),
             (
                 r"C[ÂA]MBIO\s+(MTV|HBO|GLOBOSAT|BAND|SBT|RECORD|PROGRAMADORA)",
                 "Documento de programação/câmbio",

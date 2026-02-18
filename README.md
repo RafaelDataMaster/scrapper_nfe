@@ -45,6 +45,39 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 18/02/2026
+
+- [x] **Fix NFCom Century Telecom**: Extrator `nfcom.py` não reconhecia variante de layout da Century
+    - Novos padrões para número da nota: `Número\s*[:\s]*(\d+[\.\d]*)`
+    - Novos padrões para valor: `Valor Total da Nota\s*[:\s]*([\d\.,]+)`
+    - Novos padrões para CNPJ/fornecedor específicos da Century
+    - **Resultado**: ~40 casos Century agora extraem corretamente
+- [x] **Agregação de NFs para Pareamento**: Novo algoritmo em `document_pairing.py`
+    - Quando há múltiplas NFs órfãs + 1 boleto órfão, tenta agregar NFs
+    - Se soma dos valores das NFs bate com boleto, cria par agregado
+    - **Exemplo**: Email com NF R$360 + NF R$240 + Boleto R$600 → Par agregado CONCILIADO
+    - **Resultado**: +14 casos CONCILIADO
+- [x] **Limpeza de Fornecedores (Segunda Rodada)**: ~70+ casos problemáticos corrigidos
+    - **`extractors/boleto.py`** - `_looks_like_header_or_label()` expandido com ~50 novos tokens:
+        - Frases: `VALOR DA CAUSA`, `NO INTERNET BANKING`, `FAVORECIDO:`, `NOME FANTASIA`, `NOTA DE DÉBITO`
+        - Emails colados: `JOAOPMSOARES`, `JANAINA.CAMPOS`, `@GMAIL`, `WWW.`
+        - Endereços: `CENTRO NOVO HAMBURGO`, `PC PRESIDENTE`, `/ RS`, `/ RJ`, `ENDEREÇO MUNICÍPIO CEP`
+        - Labels: `CONTAS A RECEBER`, `INSCRITA NO CNPJ`, `TAXID`, `MUDOU-SE`, `INSCRIÇÃO MUNICIPAL`
+    - **`extractors/utils.py`** - `normalize_entity_name()` com ~40 novos padrões:
+        - Sufixos: `joaopmsoares`, `financeiro`, `comercial`, `www.site.com.br`, `Nome Fantasia ...`
+        - Sufixos: `, inscrita no CNPJ/MF`, `CNPJ/CPF`, `- Endereço Município CEP PARAIBA`
+        - Sufixos: `/ -1 1 ( ) Mudou-se`, `TAXID95-`, `Florida33134USA`
+        - Rejeição completa: domínios `.com.br`, `Contas a Receber`, `Valor da causa`, UFs sozinhas
+    - **Casos corrigidos**:
+        - `EMPRESALTDA joaopmsoares` → `EMPRESALTDA`
+        - `EMPRESA - Endereço Município CEP PARAIBA` → `EMPRESA`
+        - `EMPRESA, inscrita no CNPJ/MF sob o nº` → `EMPRESA`
+        - `Florida33134USA TAXID95-` → Rejeitado
+        - `DOCUMENTO AUXILIAR DA NOTA FISCAL...` → Rejeitado (21 casos)
+        - `Contas a Receber` → Rejeitado
+        - `CENTRO NOVO HAMBURGO/ RS` → Rejeitado
+- [x] **Documentação**: Atualizado `docs/context/sessao_2026_02_18_fixes_alta_prioridade.md` e `docs/context/README.md`
+
 ### 09/02/2026
 
 - [x] **Análise de Saúde do `relatorio_lotes.csv`**: Diagnóstico completo de qualidade das extrações

@@ -194,6 +194,8 @@ class NFComExtractor(BaseExtractor):
             r"(?i)NFCOM\s+N[ºO°]?\s*[:\s]*(\d+)",
             # Número: 53011
             r"(?i)N[úu]mero\s*[:\s]+(\d{3,})",
+            # Layout Century Telecom: "N. 7.731 - SÉRIE 1"
+            r"(?i)\bN\.\s*(\d+(?:\.\d+)*)\s*-\s*S[ÉE]RIE",
         ]
 
         for pattern in patterns:
@@ -232,6 +234,10 @@ class NFComExtractor(BaseExtractor):
             r"(?i)Valor\s+Total\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
             # Vencimento: 20/01/2026 Total: R$ 360,00
             r"(?i)Vencimento.*?Total\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # Layout Century Telecom: "TOTAL A PAGAR 483,38" (sem R$)
+            r"(?i)TOTAL\s+A\s+PAGAR\s+(\d{1,3}(?:\.\d{3})*,\d{2})",
+            # Layout Century Telecom: "VALOR TOTAL DA NOTA" seguido de valores
+            r"(?i)VALOR\s+TOTAL\s+DA\s+NOTA\s+[\d,]+\s+[\d,]+\s+(\d{1,3}(?:\.\d{3})*,\d{2})",
         ]
 
         for pattern in patterns:
@@ -293,6 +299,10 @@ class NFComExtractor(BaseExtractor):
             r"(?i)CNPJ\s*[:\s]*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
             # Formato compacto
             r"(?i)CNPJ\s*[:\s]*(\d{14})",
+            # Layout Century Telecom: CNPJ após "CNPJ/CPF INSCRIÇÃO ESTADUAL"
+            r"(?i)CNPJ/CPF\s+INSCRI[ÇC][ÃA]O\s+ESTADUAL\s*\n?\s*(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
+            # CNPJ no formato XX.XXX.XXX/XXXX-XX em qualquer posição (fallback)
+            r"(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
         ]
 
         for pattern in patterns:
@@ -315,10 +325,12 @@ class NFComExtractor(BaseExtractor):
             r"(?i)RAZ[ÃA]O\s+SOCIAL\s*[:\s]*([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\.]+?(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))",
             # Empresa: WN TELECOM LTDA
             r"(?i)Empresa\s*[:\s]*([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\.]+?(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))",
+            # Layout Century Telecom: Nome LTDA na primeira linha do documento
+            r"^([A-ZÀ-Ú][A-Za-zÀ-ú0-9\s\-\.]+(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))\s*$",
         ]
 
         for pattern in patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.MULTILINE)
             if match:
                 nome = match.group(1).strip()
                 # Limpa e normaliza

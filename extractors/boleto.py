@@ -380,13 +380,287 @@ class BoletoExtractor(BaseExtractor):
             "FORMA,",
             "DESSA FORMA",
             "CPF OU CNPJ",
+            "CPF/CNPJ",
             "CONTATO CNPJ",
             "E-MAIL",
             "ENDEREÇO",
             "MUNICÍPIO",
             "CEP ",
+            # Cabeçalhos de documentos capturados erroneamente
+            "DOCUMENTO AUXILIAR",
+            "NOTA FISCAL FATURA",
+            "FATURA DE SERVIÇOS DE COMUNICAÇÃO",
+            "DADOS DA CONTRATANTE",
+            "DADOS DA CONTRATADA",
+            "QUALIFICAÇÃO DA CONTRATADA",
+            "RAZÃO SOCIAL",
+            "ESTE DOCUMENTO NÃO",
+            "NÃO QUITA",
+            "DÉBITOS ANTERIORES",
+            "SERVIÇO ALÉM DA GARANTIA",
+            "CRECI:",
+            "INSCRITA NO CNPJ",
+            "INSCRITO NO CNPJ",
+            "UTILIDADE",
+            "NOME EMPRESARIAL",
+            "INSCRIÇÃO MUNICIPAL",
+            "INSCRICAO MUNICIPAL",
+            # Padrões de endereço capturados erroneamente
+            "ENDEREÇO MUNICÍPIO CEP",
+            "ENDERECO MUNICIPIO CEP",
+            "- ENDEREÇO",
+            "- ENDERECO",
+            "MUNICÍPIO CEP",
+            "MUNICIPIO CEP",
+            # Padrões americanos/internacionais
+            "TAXID",
+            "TAX ID",
+            "USA ",
+            "33134USA",
+            "FLORIDA",
+            # Padrões de mudança/status
+            "MUDOU-SE",
+            "MUDOU SE",
+            "/ -1 1 (",
+            ") MUDOU",
+            # Padrões de documentos web
+            ".COM.BR ",
+            ".NET.BR ",
+            # Códigos/hashes OCR
+            "F50C0E532",
+            "CC14E2BBF",
+            # Avisos de cobrança/suspensão (não são nomes de fornecedor)
+            "DIAS VENCIDO",
+            "SERÁ SUSPENSO",
+            "SERVIÇO SERÁ",
+            "INCLUSÃO NOS",
+            "ÓRGÃOS DE PROTEÇÃO",
+            "ORGAOS DE PROTECAO",
+            "SPC/SERASA",
+            "SERASA",
+            "PROTESTO",
+            "COBRANÇA JUDICIAL",
+            "APÓS VENCIMENTO",
+            "APOS VENCIMENTO",
+            "MULTA DE",
+            "JUROS DE",
+            # Labels simples que não são nomes
+            "BENEFICIÁRIO",
+            "BENEFICIARIO",
+            "CEDENTE",
+            "SACADO",
+            "PAGADOR",
+            "RECIBO DO",
+            "FICHA DE COMPENSAÇÃO",
+            "FICHA DE COMPENSACAO",
+            "AUTENTICAÇÃO MECÂNICA",
+            "AUTENTICACAO MECANICA",
+            # Endereços capturados erroneamente
+            "RUA ",
+            "AVENIDA ",
+            "AV. ",
+            "AV ",
+            "TRAVESSA ",
+            "PRAÇA ",
+            "PRACA ",
+            "ALAMEDA ",
+            "RODOVIA ",
+            "ESTRADA ",
+            "Nº ",
+            "N° ",
+            " - CENTRO",
+            " - BAIRRO",
+            "/MG)",
+            "/SP)",
+            "/RJ)",
+            "/PR)",
+            "/SC)",
+            "/RS)",
+            "/BA)",
+            "/GO)",
+            "/DF)",
+            # Padrões de CEP
+            "CEP -",
+            "CEP:",
+            "CEP -908",
+            "CEP -325",
+            # Padrões de complemento/bairro
+            "COMPLEMENTO BAIRRO",
+            "PRAIA DO FUTURO",
+            "17 ANDAR",
+            "EDIF ",
+            "EDIFICIO ",
+            # Códigos de autenticidade
+            "COD. DE AUTENTICIDADE",
+            "CÓD. DE AUTENTICIDADE",
+            "CODIGO DE AUTENTICIDADE",
+            "0F6C6302D",
+            # Frases genéricas que não são nomes de fornecedor
+            "VALOR DA CAUSA",
+            "NO INTERNET BANKING",
+            "DDA O SACADO",
+            "SERA PJBANK",
+            "PARA PAGAMENTO:",
+            "FAVORECIDO:",
+            "NOME FANTASIA",
+            "NOTA DE DÉBITO",
+            "NOTA DE DEBITO",
+            "UTILIDADE",
+            "SISTEMAS LTDA",  # muito genérico, provavelmente truncado
+            "CONEXAOIDEALMG",
+            # Emails/usernames colados
+            "JOAOPMSOARES",
+            "JANAINA.CAMPOS",
+            "@GMAIL",
+            "@HOTMAIL",
+            "@OUTLOOK",
+            "@YAHOO",
+            # Sites www
+            "WWW.",
+            # Padrões "inscrita no CNPJ"
+            "INSCRITA NO CNPJ",
+            "INSCRITO NO CNPJ",
+            "CNPJ/MF SOB",
+            # Departamentos (não são fornecedores)
+            "CONTAS A RECEBER",
+            "CONTAS A PAGAR",
+            # Endereços com cidade/UF
+            "CENTRO NOVO HAMBURGO",
+            "PC PRESIDENTE",
+            "PRAÇA PRESIDENTE",
+            "PRACA PRESIDENTE",
+            "/ RS",
+            "/ RJ",
+            "/ MG",
+            "/ SP",
+            "/ PR",
+            "/ SC",
+            "/ BA",
+            "/ GO",
+            "/ DF",
+            # Padrões OCR corrompidos
+            "= CNPJ",
+            "| CNPJ",
+            "- CNPJ",
+            # Frases de assinatura/contrato
+            "AO ASSINAR",
+            "ASSINATURA",
+            "DECLARO QUE",
+            "CONCORDO COM",
         ]
-        return any(t in s_up for t in bad_tokens)
+        if any(t in s_up for t in bad_tokens):
+            return True
+
+        # Padrão: string muito curta com apenas UF + "CNPJ" (ex: "MG CNPJ")
+        if re.match(r"^[A-Z]{2}\s+CNPJ\s*$", s_up.strip()):
+            return True
+
+        # Padrão: começa com "Beneficiário" colado (ex: "BeneficiárioREPROMAQ")
+        if re.match(r"(?i)^benefici[aá]rio\S", s):
+            return True
+
+        # Padrão: apenas "CNPJ" ou "CPF/CNPJ" sozinho
+        if re.match(r"^\s*(CNPJ|CPF|CPF/CNPJ)\s*$", s_up.strip()):
+            return True
+
+        # Padrão: termina com "CPF/CNPJ" ou "CNPJ" solto
+        if re.search(r"\s+CPF/CNPJ\s*$|\s+CNPJ\s*$", s_up):
+            return True
+
+        # Padrão: contém "inscrita no CNPJ" ou similar
+        if re.search(r"INSCRIT[AO]\s+NO\s+CNPJ", s_up):
+            return True
+
+        # Padrão: contém "Nome Empresarial" ou "razão social" no meio
+        if re.search(r"NOME\s+EMPRESARIAL|RAZÃO\s+SOCIAL|RAZAO\s+SOCIAL", s_up):
+            return True
+
+        # Padrão: contém "Inscrição Municipal" ou variantes
+        if re.search(r"INSCRI[CÇ][AÃ]O\s+MUNICIPAL", s_up):
+            return True
+
+        # Padrão: contém email/username colado (ex: "EMPRESALTDA financeiro")
+        if re.search(
+            r"LTDA\s+(financeiro|comercial|joaopmsoares|janaina|conexaoidealmg)\s*$",
+            s_up,
+            re.IGNORECASE,
+        ):
+            return True
+
+        # Padrão: frases genéricas que não são nomes de fornecedor
+        if re.search(r"^VALOR\s+DA\s+CAUSA\s*$", s_up):
+            return True
+        if re.search(r"^NO\s+INTERNET\s+BANKING", s_up):
+            return True
+        if re.search(r"^PARA\s+PAGAMENTO:", s_up):
+            return True
+        if re.search(r"^FAVORECIDO:", s_up):
+            return True
+
+        # Padrão: contém "Nome Fantasia" (lixo OCR colado)
+        if "NOME FANTASIA" in s_up:
+            return True
+
+        # Padrão: contém "NOTA DE DÉBITO" no meio (lixo OCR)
+        if re.search(r"NOTA\s+DE\s+D[ÉE]BITO", s_up):
+            return True
+
+        # Padrão: muito genérico (ex: "SISTEMAS LTDA" sem nome da empresa)
+        if re.match(r"^SISTEMAS\s+LTDA\s*$", s_up):
+            return True
+
+        # Padrão: contém www. (site colado)
+        if "WWW." in s_up:
+            return True
+
+        # Padrão: é apenas uma UF (MG, SP, RJ, etc.) ou "CNPJ"/"CPF" sozinho
+        if re.match(
+            r"^(MG|SP|RJ|PR|SC|RS|BA|GO|DF|ES|PE|CE|PA|MA|MT|MS|CNPJ|CPF|CEP|DESO|LIGHT)$",
+            s_up.strip(),
+        ):
+            return True
+
+        # Padrão: "Contas a Receber" ou "Contas a Pagar" (departamento)
+        if re.search(r"CONTAS\s+A\s+(RECEBER|PAGAR)", s_up):
+            return True
+
+        # Padrão: endereço com cidade/UF no final (ex: "CENTRO NOVO HAMBURGO/ RS")
+        if re.search(r"CENTRO\s+NOVO\s+", s_up):
+            return True
+
+        # Padrão: contém "Endereço Município CEP" (cabeçalho de endereço)
+        if re.search(r"ENDERE[CÇ]O\s+MUNIC[IÍ]PIO\s+CEP", s_up):
+            return True
+
+        # Padrão: contém TAXID (identificação fiscal americana)
+        if "TAXID" in s_up or "TAX ID" in s_up:
+            return True
+
+        # Padrão: termina com "Mudou-se" ou similar
+        if re.search(r"MUDOU[- ]?SE\s*$", s_up):
+            return True
+
+        # Padrão: contém padrão de lixo "/ -1 1 ( )"
+        if re.search(r"/\s*-?\d+\s+\d+\s*\(", s_up):
+            return True
+
+        # Padrão: domínio de email no meio do nome (ex: "dcadvogados.com.br F50C0E532")
+        if re.search(r"\.[a-z]{2,3}\.br\s+[A-F0-9]{6,}", s_up, re.IGNORECASE):
+            return True
+
+        # Padrão: string muito longa (>80 chars) provavelmente é texto corrido, não nome
+        if len(s.strip()) > 80:
+            return True
+
+        # Padrão: termina com "CNPJ" ou "CNPJ/CPF" (ex: "Rede Mulher de Televisao Ltda CNPJ")
+        if re.search(r"\s+CNPJ(/CPF)?\s*$", s_up):
+            return True
+
+        # Padrão: contém ", inscrita no" ou ", inscrito no"
+        if re.search(r",\s*INSCRIT[AO]\s+NO", s_up):
+            return True
+
+        return False
 
     def _looks_like_currency_or_amount_line(self, s: str) -> bool:
         """Verifica se a linha parece conter valores monetários.
@@ -612,20 +886,56 @@ class BoletoExtractor(BaseExtractor):
 
     def _extract_cnpj_beneficiario(self, text: str) -> Optional[str]:
         """
-        Extrai CNPJ do beneficiário (quem está recebendo o pagamento).
+        Extrai CNPJ ou CPF do beneficiário (quem está recebendo o pagamento).
         Busca próximo a palavras como "Beneficiário" ou "Cedente".
+        Suporta tanto CNPJ (pessoa jurídica) quanto CPF (pessoa física).
         """
         # Padrão: Procura CNPJ após "Beneficiário" ou "Cedente"
-        patterns = [
+        cnpj_patterns = [
             r"(?i)Benefici[aá]rio.*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
             r"(?i)Cedente.*?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
-            r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}",  # Fallback: qualquer CNPJ
         ]
 
-        for pattern in patterns:
+        for pattern in cnpj_patterns:
             match = re.search(pattern, text)
             if match:
                 return match.group(1) if match.lastindex else match.group(0)
+
+        # Tenta CPF após "Beneficiário" ou "Cedente" (pessoa física)
+        cpf_patterns = [
+            r"(?i)Benefici[aá]rio.*?(\d{3}\.\d{3}\.\d{3}-\d{2})",
+            r"(?i)Cedente.*?(\d{3}\.\d{3}\.\d{3}-\d{2})",
+        ]
+
+        for pattern in cpf_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1) if match.lastindex else match.group(0)
+
+        # Fallback: qualquer CNPJ no documento
+        cnpj_match = re.search(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", text)
+        if cnpj_match:
+            return cnpj_match.group(0)
+
+        return None
+
+    def _extract_cpf_beneficiario(self, text: str) -> Optional[str]:
+        """
+        Extrai CPF do beneficiário pessoa física.
+        Usado quando não há CNPJ no documento.
+        """
+        # Procura CPF após "Beneficiário" ou "Cedente"
+        cpf_patterns = [
+            r"(?i)Benefici[aá]rio.*?(\d{3}\.\d{3}\.\d{3}-\d{2})",
+            r"(?i)Cedente.*?(\d{3}\.\d{3}\.\d{3}-\d{2})",
+            r"(?i)CPF[:\s]+(\d{3}\.\d{3}\.\d{3}-\d{2})",
+        ]
+
+        for pattern in cpf_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+
         return None
 
     def _extract_valor(self, text: str) -> float:
@@ -1224,7 +1534,11 @@ class BoletoExtractor(BaseExtractor):
                 )
                 if m_same:
                     cand = self._normalize_entity_name(m_same.group(1))
-                    if len(cand) >= 5 and not self._looks_like_header_or_label(cand):
+                    if (
+                        len(cand) >= 5
+                        and not self._looks_like_header_or_label(cand)
+                        and not self._looks_like_address(cand)
+                    ):
                         return cand
 
                 # tenta na(s) próxima(s) linhas
@@ -1239,8 +1553,10 @@ class BoletoExtractor(BaseExtractor):
                     )
                     if m:
                         cand = self._normalize_entity_name(m.group(1))
-                        if len(cand) >= 5 and not self._looks_like_header_or_label(
-                            cand
+                        if (
+                            len(cand) >= 5
+                            and not self._looks_like_header_or_label(cand)
+                            and not self._looks_like_address(cand)
                         ):
                             return cand
 
@@ -1250,13 +1566,9 @@ class BoletoExtractor(BaseExtractor):
                         len(cand2) >= 8
                         and not self._looks_like_header_or_label(cand2)
                         and not self._looks_like_currency_or_amount_line(next_ln)
+                        and not self._looks_like_address(cand2)
                     ):
-                        # evita capturar linhas óbvias de endereço/UF/CEP
-                        if not re.search(
-                            r"(?i)\bCEP\b|\bMG\b|\bSP\b|\bRJ\b|\bBAIRRO\b|\bAVENIDA\b|\bRUA\b",
-                            cand2,
-                        ):
-                            return cand2
+                        return cand2
 
         # 2) "Beneficiário final <NOME> <CNPJ>" (bem comum em ficha de compensação)
         m = re.search(
@@ -1265,7 +1577,11 @@ class BoletoExtractor(BaseExtractor):
         )
         if m:
             cand = self._normalize_entity_name(m.group(1))
-            if len(cand) >= 5 and not self._looks_like_header_or_label(cand):
+            if (
+                len(cand) >= 5
+                and not self._looks_like_header_or_label(cand)
+                and not self._looks_like_address(cand)
+            ):
                 return cand
 
         # Fallback: busca texto após CNPJ do beneficiário
@@ -1281,9 +1597,120 @@ class BoletoExtractor(BaseExtractor):
             if nome_match:
                 nome = self._normalize_entity_name(nome_match.group(1))
                 if len(nome) >= 5 and not self._looks_like_header_or_label(nome):
+                    if not self._looks_like_address(nome):
+                        return nome
+
+        # Fallback para pessoa física: busca nome antes/após CPF
+        cpf_benef = self._extract_cpf_beneficiario(text)
+        if cpf_benef:
+            # Busca nome na mesma linha do CPF
+            for ln in (text or "").splitlines():
+                if cpf_benef in ln:
+                    # Tenta extrair nome antes do CPF
+                    idx = ln.find(cpf_benef)
+                    if idx > 0:
+                        before = ln[:idx].strip()
+                        # Remove labels comuns
+                        before = re.sub(
+                            r"(?i)^.*?(Benefici[aá]rio|Cedente|CPF|Nome)[:\s]*",
+                            "",
+                            before,
+                        )
+                        before = before.strip(" -:|")
+                        if len(before) >= 5:
+                            nome = self._normalize_entity_name(before)
+                            if (
+                                len(nome) >= 5
+                                and not self._looks_like_header_or_label(nome)
+                                and not self._looks_like_address(nome)
+                            ):
+                                return nome
+
+            # Busca padrão "Beneficiário <NOME> CPF <cpf>"
+            m = re.search(
+                r"(?i)Benefici[aá]rio\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s]{5,60}?)\s+(?:CPF|CPF/CNPJ)[:\s]*\d{3}\.\d{3}\.\d{3}-\d{2}",
+                text,
+            )
+            if m:
+                nome = self._normalize_entity_name(m.group(1))
+                if (
+                    len(nome) >= 5
+                    and not self._looks_like_header_or_label(nome)
+                    and not self._looks_like_address(nome)
+                ):
+                    return nome
+
+            # Busca padrão "Cedente <NOME> <cpf>"
+            m2 = re.search(
+                r"(?i)Cedente\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s]{5,60}?)\s+\d{3}\.\d{3}\.\d{3}-\d{2}",
+                text,
+            )
+            if m2:
+                nome = self._normalize_entity_name(m2.group(1))
+                if (
+                    len(nome) >= 5
+                    and not self._looks_like_header_or_label(nome)
+                    and not self._looks_like_address(nome)
+                ):
                     return nome
 
         return None
+
+    def _looks_like_address(self, s: str) -> bool:
+        """Verifica se string parece ser um endereço e não um nome de empresa.
+
+        Usado para filtrar falsos positivos onde endereços são capturados
+        como nome de fornecedor.
+
+        Args:
+            s: String a verificar.
+
+        Returns:
+            True se parece ser um endereço.
+        """
+        if not s:
+            return False
+        s_up = s.upper()
+
+        # Padrões de início de endereço
+        address_prefixes = [
+            r"^RUA\s+",
+            r"^R\.\s+",
+            r"^AVENIDA\s+",
+            r"^AV\.?\s+",
+            r"^ALAMEDA\s+",
+            r"^AL\.?\s+",
+            r"^TRAVESSA\s+",
+            r"^TV\.?\s+",
+            r"^PRAÇA\s+",
+            r"^PÇA\.?\s+",
+            r"^PRACA\s+",
+            r"^RODOVIA\s+",
+            r"^ROD\.?\s+",
+            r"^ESTRADA\s+",
+            r"^EST\.?\s+",
+            r"^LARGO\s+",
+        ]
+        for prefix in address_prefixes:
+            if re.match(prefix, s_up):
+                return True
+
+        # Padrões de endereço no meio/fim
+        address_patterns = [
+            r"\bCEP\s*:?\s*\d",
+            r"\b\d{5}-?\d{3}\b",  # CEP
+            r"\bNº?\s*\d+",  # Número
+            r"\bN°?\s*\d+",
+            r"\s+-\s+CENTRO\b",
+            r"\s+-\s+BAIRRO\b",
+            r"\([\w\s]+/[A-Z]{2}\)",  # (CIDADE/UF)
+            r"/[A-Z]{2}\)$",  # /MG) no final
+        ]
+        for pattern in address_patterns:
+            if re.search(pattern, s_up):
+                return True
+
+        return False
 
     def _extract_banco_nome(
         self, text: str, linha_digitavel: Optional[str]

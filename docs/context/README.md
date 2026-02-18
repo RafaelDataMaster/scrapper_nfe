@@ -474,6 +474,62 @@ if CscNotaDebitoExtractor.can_handle(texto):
 
 **Sessão completa:** `docs/context/sessao_2026_02_09_saude_extracao.md`
 
+### Correções de Alta Prioridade + Limpeza de Fornecedores (18/02/2026)
+
+**Sessão:** `docs/context/sessao_2026_02_18_fixes_alta_prioridade.md`
+
+#### Fix 1: NFCom Century Telecom
+
+Extrator `nfcom.py` não reconhecia variante de layout da Century Telecom.
+
+**Correções:**
+
+- Novos padrões para número da nota: `Número\s*[:\s]*(\d+[\.\d]*)`
+- Novos padrões para valor: `Valor Total da Nota\s*[:\s]*([\d\.,]+)`
+- Novos padrões para CNPJ/fornecedor específicos da Century
+
+#### Fix 2: Agregação de NFs
+
+Novo algoritmo em `document_pairing.py` que agrega múltiplas NFs órfãs para parear com boleto único quando a soma dos valores bate.
+
+**Exemplo:** Email com NF R$360 + NF R$240 + Boleto R$600 → Par agregado CONCILIADO.
+
+#### Fix 3: Limpeza de Fornecedores (Segunda Rodada)
+
+~70+ casos de fornecedores com lixo corrigidos via `normalize_entity_name()` e `_looks_like_header_or_label()`:
+
+| Padrão Problemático                                | Resultado     |
+| -------------------------------------------------- | ------------- |
+| `EMPRESALTDA joaopmsoares`                         | `EMPRESALTDA` |
+| `EMPRESALTDA financeiro`                           | `EMPRESALTDA` |
+| `EMPRESA - Endereço Município CEP PARAIBA`         | `EMPRESA`     |
+| `EMPRESA / -1 1 ( ) Mudou-se`                      | `EMPRESA`     |
+| `EMPRESA, inscrita no CNPJ/MF sob o nº`            | `EMPRESA`     |
+| `EMPRESA CNPJ`                                     | `EMPRESA`     |
+| `EMPRESA www.site.com.br`                          | `EMPRESA`     |
+| `EMPRESA Nome Fantasia OUTRO`                      | `EMPRESA`     |
+| `Florida33134USA TAXID95-`                         | Rejeitado     |
+| `dcadvogados.com.br F50C0E532 Inscrição Municipal` | Rejeitado     |
+| `Contas a Receber`                                 | Rejeitado     |
+| `CENTRO NOVO HAMBURGO/ RS`                         | Rejeitado     |
+| `Valor da causa`                                   | Rejeitado     |
+| `No Internet Banking ou DDA...`                    | Rejeitado     |
+| `SISTEMAS LTDA` (muito genérico)                   | Rejeitado     |
+| `MG`, `CNPJ`, `CPF` (sozinhos)                     | Rejeitado     |
+| `DOCUMENTO AUXILIAR DA NOTA FISCAL...`             | Rejeitado     |
+
+**Arquivos modificados:**
+
+- `extractors/nfcom.py` - Suporte a Century Telecom
+- `extractors/boleto.py` - `_looks_like_header_or_label()` expandido
+- `extractors/utils.py` - `normalize_entity_name()` com ~40 novos padrões
+- `core/document_pairing.py` - Agregação de NFs
+
+**Resultados após reprocessamento:**
+
+- CONCILIADO: 131 → 145 (+14 casos)
+- PAREADO_FORCADO: 19 → 16 (-3 casos)
+
 ---
 
 > 💡 **Dica:** Guarde este README como favorito. Ele é o mapa para navegar toda a documentação!

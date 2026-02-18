@@ -708,10 +708,17 @@ class DocumentPairingService:
     ) -> List[DocumentPair]:
         """
         Pareia grupos de notas com grupos de boletos.
+
+        Estratégias de pareamento (em ordem):
+        1. Pareamento por número da nota
+        2. Pareamento por valor exato
+        3. NOVO: Agregação de múltiplas NFs quando soma bate com boleto
         """
         pairs = []
         boletos_usados: Set[str] = set()
+        notas_usadas: Set[str] = set()
 
+        # Fase 1: Pareamento individual (número ou valor exato)
         for _nota_key, nota_grupo in notas.items():
             valor_nf = nota_grupo["valor"]
             numero_nota = nota_grupo["numero"]
@@ -743,6 +750,7 @@ class DocumentPairingService:
 
             if boleto_match and boleto_key_match:
                 boletos_usados.add(boleto_key_match)
+                notas_usadas.add(_nota_key)
 
             # Fallback: se nota não tem número, usa o número do boleto
             numero_final = numero_nota
@@ -762,7 +770,32 @@ class DocumentPairingService:
             )
             pairs.append(pair)
 
-        # Boletos órfãos (sem nota correspondente)
+        # Fase 2: Agregação de múltiplas NFs para boletos órfãos
+        # Se temos boletos sem match e notas sem match, tenta agregar NFs
+        notas_orfas = {k: v for k, v in notas.items() if k not in notas_usadas}
+        boletos_orfaos = {k: v for k, v in boletos.items() if k not in boletos_usados}
+
+        if notas_orfas and boletos_orfaos:
+            aggregated_pairs = self._try_aggregate_nfs_for_boleto(
+                notas_orfas, boletos_orfaos, batch
+            )
+            if aggregated_pairs:
+                # Marca os boletos usados na agregação
+                for agg_pair in aggregated_pairs:
+                    pairs.append(agg_pair)
+                    # Encontra qual boleto foi usado
+                    for bol_key, bol_grupo in boletos_orfaos.items():
+                        if (
+                            abs(bol_grupo["valor"] - agg_pair.valor_boleto)
+                            <= self.TOLERANCIA_VALOR
+                        ):
+                            boletos_usados.add(bol_key)
+                            break
+                # Marca notas usadas na agregação
+                for nota_key in notas_orfas.keys():
+                    notas_usadas.add(nota_key)
+
+        # Boletos órfãos (sem nota correspondente) - atualiza lista
         for bol_key, bol_grupo in boletos.items():
             if bol_key not in boletos_usados:
                 pair = self._create_pair(
@@ -779,6 +812,76 @@ class DocumentPairingService:
                 pairs.append(pair)
 
         return pairs
+
+    def _try_aggregate_nfs_for_boleto(
+        self,
+        notas_orfas: Dict[str, Dict[str, Any]],
+        boletos_orfaos: Dict[str, Dict[str, Any]],
+        batch: "BatchResult",
+    ) -> List[DocumentPair]:
+        """
+        Tenta agregar múltiplas NFs para parear com um boleto único.
+
+        Caso de uso: Email com NF de R$360 + NF de R$240 e boleto de R$600.
+        A soma das NFs (360+240=600) bate com o boleto.
+
+        Args:
+            notas_orfas: Notas sem pareamento individual
+            boletos_orfaos: Boletos sem pareamento individual
+            batch: Lote de processamento
+
+        Returns:
+            Lista de DocumentPair agregados, ou lista vazia se não houver match
+        """
+        if len(notas_orfas) < 2 or len(boletos_orfaos) != 1:
+            # Agregação só faz sentido com 2+ notas e exatamente 1 boleto
+            return []
+
+        # Pega o único boleto órfão
+        bol_key, bol_grupo = next(iter(boletos_orfaos.items()))
+        valor_boleto = bol_grupo["valor"]
+
+        # Calcula soma de todas as NFs órfãs
+        soma_nfs = sum(n["valor"] for n in notas_orfas.values())
+
+        # Verifica se a soma bate com o boleto
+        if abs(soma_nfs - valor_boleto) <= self.TOLERANCIA_VALOR:
+            # Agregação bem-sucedida!
+            # Coleta todos os documentos das NFs
+            all_docs_nf = []
+            numeros_notas = []
+            for nota_grupo in notas_orfas.values():
+                all_docs_nf.extend(nota_grupo["docs"])
+                if nota_grupo["numero"]:
+                    numeros_notas.append(nota_grupo["numero"])
+
+            # Cria número combinado (ex: "NF1+NF2")
+            numero_combinado = "+".join(numeros_notas) if numeros_notas else None
+
+            # Cria par agregado
+            pair = self._create_pair(
+                batch=batch,
+                numero_nota=numero_combinado,
+                valor_nf=soma_nfs,
+                valor_boleto=valor_boleto,
+                docs_nf=all_docs_nf,
+                docs_boleto=bol_grupo["docs"],
+                suffix="_agregado",
+            )
+
+            # Adiciona nota na divergência indicando agregação
+            if pair.divergencia:
+                pair.divergencia = (
+                    f"[NFs AGREGADAS: {len(notas_orfas)} notas] {pair.divergencia}"
+                )
+            else:
+                pair.divergencia = (
+                    f"NFs agregadas: {len(notas_orfas)} notas somando R$ {soma_nfs:.2f}"
+                )
+
+            return [pair]
+
+        return []
 
     def _create_fallback_pair(
         self,

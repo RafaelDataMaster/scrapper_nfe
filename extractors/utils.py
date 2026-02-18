@@ -533,6 +533,8 @@ def normalize_entity_name(raw: str) -> str:
         r"^Nome\s+Empresarial\s+",
         r"^Razão\s+Social\s+",
         r"^Razao\s+Social\s+",
+        r"^CNPJ\s*[:\s]*",  # "CNPJ" ou "CNPJ:" sozinho no início
+        r"^CPF\s*[:\s]*",  # "CPF" ou "CPF:" sozinho no início
     ]
     for prefix_pattern in prefixes_to_remove:
         name = re.sub(prefix_pattern, "", name, flags=re.IGNORECASE)
@@ -542,18 +544,141 @@ def normalize_entity_name(raw: str) -> str:
         r"\s+CONTATO\s*$",
         r"\s+CONTATO@[^\s]+\s*$",
         r"\s+CPF\s+ou\s+CNPJ\s*$",
+        r"\s+CPF/CNPJ\s*$",
         r"\s+-\s+CNPJ\s*$",  # "- CNPJ" no final
         r"\s+-\s+CNPJ\s+\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\s*$",  # "- CNPJ XX.XXX.XXX/XXXX-XX"
         r"\s+\|\s*CNPJ\s+-\s+CNPJ\s*$",  # "| CNPJ - CNPJ"
         r"\s+\|\s*CNPJ\s*$",  # "| CNPJ" no final
+        r"\s+\|\s+CNL\.\s*$",  # "| CNL." no final (ex: VERO S.A. CNL.)
+        r"\s+CNL\.\s*$",  # "CNL." solto no final
         r"\s+\|\s*$",  # "|" solto no final
+        r"\s+=\s+CNPJ\s*$",  # "= CNPJ" no final
         r"\s+-\s+Endereço.*$",
         r"\s+-\s+Município.*$",
         r"\s+-\s+CEP.*$",
         r"\s+Endereço\s+Município\s+CEP.*$",  # "Endereço Município CEP PARAIBA"
+        r"\s+-\s+Endereço\s+Município\s+CEP.*$",  # "- Endereço Município CEP PARAIBA"
+        r"\s+Endereço\s*$",
+        r"\s+CNPJ:\s*Al\s+.*$",  # "CNPJ: Al Vicente" texto truncado
+        r"\s+CNPJ:\s*$",  # "CNPJ:" solto no final
+        r"\s+ao\s+assinar\s*$",  # "ao assinar" no final
+        r"\s+Gerente\s+de\s+conta:.*$",  # "Gerente de conta:NOME"
+        r"\s+\*{4,}/\*{4,}\s*$",  # "******/********" (CNPJ mascarado)
+        r"\s+\d{3,4}[-/]?\d*\s*$",  # Códigos de agência soltos no final (ex: "393", "401-301")
+        r"\s+CPF/CNPJ\s*$",  # "CPF/CNPJ" solto no final
+        r"\s+CPF\s*$",  # "CPF" solto no final
+        r"\s+CNPJ\s+\.\s*\.\d*\s*$",  # "CNPJ . .61" lixo OCR
+        r"\s+CNPJ\s*\.\s*\.\s*\d*\s*$",  # variação do padrão anterior
+        r"\s+Nome\s+Empresarial\s*$",  # "Nome Empresarial" no final
+        r"\s+Nome\s+/\s*Nome\s+Empresarial.*$",  # "Nome / Nome Empresarial..."
+        r"\s+Nome\s+Fantasia\s+.*$",  # "Nome Fantasia NEW CONT..."
+        # Emails/usernames colados ao nome da empresa
+        r"\s+[a-z]+\.[a-z]+@.*$",  # "janaina.campos@..."
+        r"\s+[a-z]+@.*$",  # "financeiro@..."
+        r"\s+joaopmsoares\s*$",  # username colado
+        r"\s+janaina\.campos\s*$",
+        r"\s+financeiro\s*$",  # departamento colado (minúsculo)
+        r"\s+comercial\s*$",  # departamento colado (minúsculo)
+        r"\s+COMERCIAL\s*$",  # departamento colado (maiúsculo)
+        r"\s+JOAOPMSOARES\s*$",
+        r"\s+CONEXAOIDEALMG\s*$",  # username colado
+        r"\s+[A-Z]+MG\s*$",  # usernames tipo "EMPRESAMG"
+        # Sites www colados
+        r"\s+www\.[a-z0-9\-]+\.[a-z\.]+\s*$",  # "www.voicecorp.com.br"
+        # Padrões "inscrita no CNPJ"
+        r",?\s+inscrita?\s+no\s+CNPJ.*$",  # ", inscrita no CNPJ/MF sob o nº"
+        r"\s+CNPJ/MF\s+sob.*$",
+        r"\s+CNPJ/CPF\s*$",  # "LTDA CNPJ/CPF"
+        r"\s+CNPJ\s*$",  # "LTDA CNPJ" no final
+        # Padrões de endereços/lixo que aparecem colados ao nome da empresa
+        r"\s+ENDEREÇO\s+AV\.?.*$",  # "ENDEREÇO AV. AMAZONAS"
+        r"\s+ENDERECO\s+AV\.?.*$",  # sem acento
+        r"\s+/\s*-?\d*\s*\d*\s*\(\s*\)\s*Mudou-se.*$",  # "/ -1 1 ( ) Mudou-se"
+        r"\s+Mudou-se.*$",  # "Mudou-se" no final
+        r"\s+TAXID\d*-?.*$",  # "TAXID95-" e variações
+        r"\s+Inscrição\s+Municipal.*$",  # "Inscrição Municipal" no final
+        r"\s+Inscricao\s+Municipal.*$",  # sem acento
+        r"\s+[A-F0-9]{8,}\s+Inscrição\s+Municipal.*$",  # "F50C0E532 Inscrição Municipal"
+        r"\s+[A-F0-9]{8,}\s+Inscricao\s+Municipal.*$",  # sem acento
+        r"\s+Florida\d+USA.*$",  # "Florida33134USA"
+        r"\s+FINANCEIRO\s*$",  # "FINANCEIRO" solto no final
+        r"\s+R\s+vel\s+pela\s+Ret.*$",  # "R vel pela Retoncã" OCR corrompido
+        r"\s+Cod\.\s+de\s+Autenticidade.*$",  # "Cod. de Autenticidade"
+        r"\s+\d+\s+ANDAR.*$",  # "17 ANDAR" endereço
+        r"\s+EDIF\s+.*$",  # "EDIF PALACIO DA AGRICULTURA"
+        # Endereços com cidade/UF
+        r"\s+-\s+[A-Z]{2}\s+-\s+[A-Z][a-zA-Z\s]+$",  # "- CE - FORTALEZA"
+        r"\s+-\s+[A-Z][a-zA-Z\s]+/\s*[A-Z]{2}\s*$",  # "- CARMO/ RJ"
+        r"\s+CENTRO\s+NOVO\s+.*$",  # "CENTRO NOVO HAMBURGO/ RS"
+        r"\s+PC\s+PRESIDENTE\s+.*$",  # "PC PRESIDENTE GETULIO VARGAS..."
+        # Frases genéricas que não são nomes
+        r"^Valor\s+da\s+causa\s*$",  # "Valor da causa"
+        r"^No\s+Internet\s+Banking.*$",  # "No Internet Banking ou DDA..."
+        r"^para\s+pagamento:.*$",  # "para pagamento: FAVORECIDO:..."
+        r"^FAVORECIDO:.*$",  # "FAVORECIDO: EMPRESA"
+        # "NOTA DE DÉBITO" no meio do nome (lixo OCR)
+        r"\s+NOTA\s+DE\s+D[ÉE]BITO\s+",  # remove do meio
+        # Strings muito genéricas que não são nomes de empresa
+        r"^SISTEMAS\s+LTDA\s*$",  # "SISTEMAS LTDA" sozinho
+        r"^UTILIDADE\s*$",  # "UTILIDADE" sozinho
+        # Domínios de email/web no início ou como nome completo
+        r"^[a-z0-9\-]+\.[a-z]{2,3}\.br\s*.*$",  # "dcadvogados.com.br ..."
+        r"^[a-z0-9\-]+\.net\.br\s*.*$",  # "comunix.net.br ..."
+        # CEP solto como nome
+        r"^CEP[:\s].*$",  # "CEP: -325 - PRAIA..."
     ]
     for suffix_pattern in suffixes_to_remove:
         name = re.sub(suffix_pattern, "", name, flags=re.IGNORECASE)
+
+    # Remove domínios .com.br / .net.br que aparecem como "nome" da empresa
+    # Esses são OCR de rodapés de documentos, não nomes de fornecedor
+    if re.match(r"^[a-z0-9\-]+\.(com|net|org)\.br\b", name, re.IGNORECASE):
+        # Se começa com domínio, provavelmente é lixo - limpa tudo
+        name = ""
+
+    # Se começa com "Florida" + dígitos (endereço americano), é lixo
+    if re.match(r"^Florida\d+", name, re.IGNORECASE):
+        name = ""
+
+    # Se começa com "CEP" ou "CEP:", é endereço, não fornecedor
+    if re.match(r"^CEP[:\s]", name, re.IGNORECASE):
+        name = ""
+
+    # Se é frase genérica (não nome de empresa)
+    if re.match(r"^Valor\s+da\s+causa\s*$", name, re.IGNORECASE):
+        name = ""
+    if re.match(r"^No\s+Internet\s+Banking", name, re.IGNORECASE):
+        name = ""
+    if re.match(r"^para\s+pagamento:", name, re.IGNORECASE):
+        name = ""
+    if re.match(r"^FAVORECIDO:", name, re.IGNORECASE):
+        name = ""
+
+    # Se é "SISTEMAS LTDA" ou "UTILIDADE" sozinho (muito genérico)
+    if re.match(r"^SISTEMAS\s+LTDA\s*$", name, re.IGNORECASE):
+        name = ""
+    if re.match(r"^UTILIDADE\s*$", name, re.IGNORECASE):
+        name = ""
+
+    # Se é "Contas a Receber" ou similar (departamento, não fornecedor)
+    if re.match(r"^Contas\s+a\s+(Receber|Pagar)\s*$", name, re.IGNORECASE):
+        name = ""
+
+    # Se é apenas UF (MG, SP, RJ, etc.) ou "CNPJ" sozinho
+    if re.match(
+        r"^(MG|SP|RJ|PR|SC|RS|BA|GO|DF|ES|PE|CE|PA|MA|MT|MS|CNPJ|CPF|CEP)$",
+        name.strip(),
+        re.IGNORECASE,
+    ):
+        name = ""
+
+    # Se começa com "CENTRO NOVO" (endereço)
+    if re.match(r"^CENTRO\s+NOVO\s+", name, re.IGNORECASE):
+        name = ""
+
+    # Se começa com "PC PRESIDENTE" ou "PRAÇA" (endereço)
+    if re.match(r"^(PC|PRAÇA|PRACA)\s+PRESIDENTE\s+", name, re.IGNORECASE):
+        name = ""
 
     # Remove artefatos OCR com colchetes (ex: "[dede", "[abc123", "Aeee [dede")
     # Colchetes não são comuns em nomes de empresas
@@ -569,6 +694,9 @@ def normalize_entity_name(raw: str) -> str:
 
     # Remove sufixos truncados como "..." ou ".." (em qualquer posição)
     name = re.sub(r"\.{2,}", " ", name)
+
+    # Remove prefixo "Beneficiário" colado (ex: "BeneficiárioREPROMAQ" -> "REPROMAQ")
+    name = re.sub(r"(?i)^benefici[aá]rio\s*", "", name)
 
     # Normaliza espaços
     name = re.sub(r"\s+", " ", name)
@@ -600,6 +728,107 @@ def normalize_entity_name(raw: str) -> str:
 
     # Remove sufixos residuais após limpeza (ex: "// -- // --77")
     name = re.sub(r"[\s/\-]+\d*\s*$", "", name)
+
+    # Remove código de agência/conta no final (3-4 dígitos após nome)
+    # Ex: "Skymail LTDA 393" -> "Skymail LTDA"
+    name = re.sub(r"\s+\d{3,4}\s*$", "", name)
+
+    # Remove CNPJ mascarado no final (ex: "******/********")
+    name = re.sub(r"\s+\*+/\*+\s*$", "", name)
+
+    # Remove padrão "| CNPJ - CNPJ XX.XXX..." no final
+    name = re.sub(r"\s*\|\s*CNPJ.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove padrão "= CNPJ" no final
+    name = re.sub(r"\s*=\s*CNPJ.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "CNL." ou "| CNL." no final
+    name = re.sub(r"\s*\|?\s*CNL\.\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove padrões de endereço internacional (Florida, USA, TAXID)
+    name = re.sub(r"\s+Florida\d+USA.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+TAXID\d*-?.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "/ -1 1 ( ) Mudou-se" e variações
+    name = re.sub(
+        r"\s*/\s*-?\d*\s*\d*\s*\(\s*\)\s*Mudou-se.*$", "", name, flags=re.IGNORECASE
+    )
+    name = re.sub(r"\s+Mudou-se.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "Inscrição Municipal" e variações com hash
+    name = re.sub(
+        r"\s+[A-Fa-f0-9]{6,}\s+Inscri[cç][aã]o\s+Municipal.*$",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    name = re.sub(r"\s+Inscri[cç][aã]o\s+Municipal.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "- Endereço Município CEP" e variações
+    name = re.sub(
+        r"\s+-\s+Endereço\s+Município\s+CEP.*$", "", name, flags=re.IGNORECASE
+    )
+    name = re.sub(r"\s+Endereço\s+Município\s+CEP.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "FINANCEIRO" solto no final
+    name = re.sub(r"\s+FINANCEIRO\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove OCR corrompido tipo "R vel pela Retoncã"
+    name = re.sub(r"\s+R\s+vel\s+pela\s+Ret.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+Q?comunix\.net\.br.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+dcadvogados\.com\.br.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+repromaq\.com\.br.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "ENDEREÇO AV." e variações
+    name = re.sub(r"\s+ENDERE[CÇ]O\s+AV\.?.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove endereços com EDIF/ANDAR
+    name = re.sub(r"\s+EDIF\s+.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+\d+\s+ANDAR.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "Cod. de Autenticidade" e similares
+    name = re.sub(r"\s+Cod\.?\s+de\s+Autenticidade.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove emails/usernames colados no final
+    name = re.sub(r"\s+[a-z]+\.[a-z]+@[^\s]*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+[a-z]+@[^\s]*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(
+        r"\s+(joaopmsoares|janaina\.campos|conexaoidealmg)\s*$",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    name = re.sub(r"\s+(financeiro|comercial)\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "Nome Fantasia ..." colado no final
+    name = re.sub(r"\s+Nome\s+Fantasia\s+.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "NOTA DE DÉBITO" do meio do nome (lixo OCR) - mantém espaço
+    name = re.sub(r"\s+NOTA\s+DE\s+D[ÉE]BITO\s+", " DE ", name, flags=re.IGNORECASE)
+
+    # Remove www. colado no final
+    name = re.sub(r"\s+www\.[a-z0-9\-\.]+\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove ", inscrita no CNPJ" e variações
+    name = re.sub(r",?\s+inscrita?\s+no\s+CNPJ.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CNPJ/MF\s+sob.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove "CNPJ/CPF" ou "CNPJ" solto no final (após nome da empresa)
+    name = re.sub(r"\s+CNPJ/CPF\s*$", "", name, flags=re.IGNORECASE)
+    # Já existe regex para CNPJ solto, mas reforçando:
+    name = re.sub(r"\s+CNPJ\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove padrões de cidade/UF no final
+    name = re.sub(r"\s+-\s+[A-Z]{2}\s+-\s+[A-Z][a-zA-Z\s]+$", "", name)
+    name = re.sub(r"\s+-\s+[A-Z][a-zA-Z]+/\s*[A-Z]{2}\s*$", "", name)
+
+    # Remove "CPF/CNPJ" ou "CNPJ" solto no final
+    name = re.sub(r"\s+CPF/CNPJ\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CNPJ\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CPF\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove lixo OCR tipo "CNPJ . .61"
+    name = re.sub(r"\s+CNPJ\s*\.\s*\.\s*\d*\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove palavras soltas no final que parecem lixo OCR
     # (palavras muito curtas ou com padrões estranhos após empresa válida)
