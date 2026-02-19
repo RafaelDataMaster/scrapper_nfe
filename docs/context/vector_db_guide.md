@@ -84,12 +84,12 @@ scrapper/
 
 Transforma texto em vetores numéricos usando o modelo `all-MiniLM-L6-v2`.
 
-| Propriedade | Valor |
-|-------------|-------|
-| Modelo | `all-MiniLM-L6-v2` |
-| Tamanho | ~80MB (baixado na 1ª execução) |
-| Dimensões | 384 números por texto |
-| Cache | `~/.cache/huggingface/` |
+| Propriedade | Valor                          |
+| ----------- | ------------------------------ |
+| Modelo      | `all-MiniLM-L6-v2`             |
+| Tamanho     | ~80MB (baixado na 1ª execução) |
+| Dimensões   | 384 números por texto          |
+| Cache       | `~/.cache/huggingface/`        |
 
 ```python
 from scripts.context_db.embeddings import EmbeddingManager
@@ -104,6 +104,7 @@ print(len(vetor))  # 384
 Lê arquivos `.md`, divide em **chunks** (pedaços de ~500 palavras) e armazena no ChromaDB.
 
 **Por que dividir em chunks?**
+
 - Documentos grandes são difíceis de buscar com precisão
 - Chunks menores permitem encontrar trechos específicos
 - Overlap de 50 palavras evita que informação seja cortada
@@ -149,12 +150,12 @@ doc = cq.get_full_document("troubleshooting.md")
    # Tratamento de PDFs Protegidos por Senha...
 ```
 
-| Campo | Significado |
-|-------|-------------|
-| **Título** | Extraído do primeiro `# heading` do documento |
-| **Fonte** | Nome do arquivo de origem |
+| Campo          | Significado                                    |
+| -------------- | ---------------------------------------------- |
+| **Título**     | Extraído do primeiro `# heading` do documento  |
+| **Fonte**      | Nome do arquivo de origem                      |
 | **Relevância** | `1 / (1 + distância)` — maior = mais relevante |
-| **Chunk** | Índice do pedaço no documento (0 = início) |
+| **Chunk**      | Índice do pedaço no documento (0 = início)     |
 
 ---
 
@@ -165,7 +166,27 @@ Execute `python scripts/ctx.py --reindex` quando:
 - ✅ Adicionar novo arquivo em `docs/context/`
 - ✅ Modificar conteúdo de arquivo existente
 - ✅ Remover arquivos
+- ✅ **Após sessões de desenvolvimento** que criam/modificam arquivos de contexto
 - ❌ Não precisa re-indexar para buscas normais
+
+### Após Sessões de Desenvolvimento
+
+Quando uma sessão de desenvolvimento cria ou modifica arquivos em `docs/context/`, execute:
+
+```powershell
+# Re-indexar para atualizar a memória vetorizada
+python scripts/ctx.py --reindex
+
+# Verificar se os novos documentos foram indexados
+python scripts/ctx.py --list
+```
+
+**Exemplo:** Após a sessão de 19/02/2026 que criou:
+
+- `sessao_2026_02_19_pendencias.md`
+- `sessao_2026_02_19_normalizacao_final.md`
+
+Esses arquivos só estarão disponíveis para busca semântica após re-indexação.
 
 ---
 

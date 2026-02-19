@@ -319,14 +319,45 @@ class NFComExtractor(BaseExtractor):
         return None
 
     def _extract_fornecedor_nome(self, text: str) -> Optional[str]:
-        """Extrai razão social do emitente/fornecedor."""
+        """Extrai razão social do emitente/fornecedor.
+
+        Para NFCom, o layout típico é:
+        - Linha 1: "DOCUMENTO AUXILIAR DA NOTA FISCAL FATURA DE SERVIÇOS DE COMUNICAÇÃO ELETRÔNICA"
+        - Linha 2: Nome do fornecedor (ex: "AGYONET LTDA")
+        - Linha 3: Endereço
+        - Linha 4: CNPJ
+
+        Devemos extrair o nome da linha 2, não concatenar com o cabeçalho.
+        """
+        # Prefixo do cabeçalho NFCom que deve ser removido/ignorado
+        header_prefixes = [
+            r"DOCUMENTO\s+AUXILIAR\s+DA\s+NOTA\s+FISCAL\s+FATURA\s+DE\s+SERVI[CÇ]OS\s+DE\s+COMUNICA[CÇ][AÃ]O\s+ELETR[OÔ]NICA\s*",
+            r"DOC\.?\s+AUXILIAR\s+DA\s+NOTA\s+FISCAL\s+FATURA\s+DE\s+SERVI[CÇ]OS\s+DE\s+COMUNICA[CÇ][AÃ]O\s+ELETR[OÔ]NICA\s*",
+            r"NOTA\s+FISCAL\s+FATURA\s+DE\s+SERVI[CÇ]OS\s+DE\s+COMUNICA[CÇ][AÃ]O\s+ELETR[OÔ]NICA\s*",
+        ]
+
+        # Estratégia 1: Procurar nome na segunda linha após cabeçalho NFCom
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            line_upper = line.strip().upper()
+            # Verifica se é linha de cabeçalho NFCom
+            if "DOCUMENTO AUXILIAR" in line_upper and "NOTA FISCAL" in line_upper:
+                # Próxima linha não-vazia é o fornecedor
+                for j in range(i + 1, min(i + 5, len(lines))):
+                    next_line = lines[j].strip()
+                    if not next_line:
+                        continue
+                    # Valida que parece um nome de empresa (não é endereço, não é CNPJ)
+                    if self._is_valid_supplier_name(next_line):
+                        return normalize_entity_name(next_line)
+                break
+
+        # Estratégia 2: Padrões tradicionais
         patterns = [
-            # RAZÃO SOCIAL: WN TELECOM LTDA (para antes de ENDEREÇO ou quebra de linha)
+            # RAZÃO SOCIAL: WN TELECOM LTDA
             r"(?i)RAZ[ÃA]O\s+SOCIAL\s*[:\s]*([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\.]+?(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))",
             # Empresa: WN TELECOM LTDA
             r"(?i)Empresa\s*[:\s]*([A-ZÀ-Ú][A-ZÀ-Ú0-9\s\-\.]+?(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))",
-            # Layout Century Telecom: Nome LTDA na primeira linha do documento
-            r"^([A-ZÀ-Ú][A-Za-zÀ-ú0-9\s\-\.]+(?:LTDA|S\.?A\.?|ME|EPP|EIRELI))\s*$",
         ]
 
         for pattern in patterns:
@@ -354,7 +385,89 @@ class NFComExtractor(BaseExtractor):
                 if len(nome) > 3:
                     return normalize_entity_name(nome)
 
+        # Estratégia 3: Fallback - primeira linha que parece nome de empresa
+        # (mas NÃO é o cabeçalho)
+        for line in lines[:10]:
+            line = line.strip()
+            if not line:
+                continue
+            line_upper = line.upper()
+            # Pula cabeçalhos
+            if "DOCUMENTO AUXILIAR" in line_upper or "NOTA FISCAL FATURA" in line_upper:
+                continue
+            if self._is_valid_supplier_name(line):
+                return normalize_entity_name(line)
+
         return None
+
+    def _is_valid_supplier_name(self, text: str) -> bool:
+        """Verifica se o texto parece ser um nome de fornecedor válido."""
+        text = text.strip()
+        text_upper = text.upper()
+
+        # Muito curto
+        if len(text) < 3:
+            return False
+
+        # É um cabeçalho NFCom
+        if "DOCUMENTO AUXILIAR" in text_upper:
+            return False
+        if "NOTA FISCAL FATURA" in text_upper and "SERVIÇO" in text_upper:
+            return False
+        if (
+            "COMUNICAÇÃO ELETRÔNICA" in text_upper
+            or "COMUNICACAO ELETRONICA" in text_upper
+        ):
+            return False
+
+        # É um endereço (começa com RUA, AV, etc.)
+        address_starts = [
+            "RUA ",
+            "AV ",
+            "AV.",
+            "AVENIDA ",
+            "RODOVIA ",
+            "BR ",
+            "ESTRADA ",
+            "PRAÇA ",
+            "PRACA ",
+        ]
+        for addr in address_starts:
+            if text_upper.startswith(addr):
+                return False
+
+        # É um CNPJ
+        if re.match(r"^\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}$", text):
+            return False
+        if re.match(
+            r"^\d{14,}$", text.replace(".", "").replace("/", "").replace("-", "")
+        ):
+            return False
+
+        # Parece ser um nome de empresa (tem sufixo ou palavras típicas)
+        company_indicators = [
+            "LTDA",
+            "S.A",
+            "S/A",
+            "SA ",
+            "ME ",
+            "EPP",
+            "EIRELI",
+            "TELECOM",
+            "COMUNICAC",
+            "SERVICO",
+            "TECNOLOGIA",
+        ]
+        for indicator in company_indicators:
+            if indicator in text_upper:
+                return True
+
+        # Se tem pelo menos 2 palavras e não é endereço/CNPJ, pode ser nome
+        words = text.split()
+        if len(words) >= 2 and len(text) >= 5:
+            return True
+
+        return False
 
     def _extract_chave_acesso(self, text: str) -> Optional[str]:
         """Extrai chave de acesso de 44 dígitos."""

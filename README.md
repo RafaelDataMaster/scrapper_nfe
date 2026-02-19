@@ -45,6 +45,33 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 19/02/2026
+
+- [x] **Correções Finais de Normalização de Fornecedor**: Resolvido problema de ordem de operações em `normalize_entity_name()`
+    - **Problema**: Verificações de padrões inválidos eram feitas **antes** da remoção de números
+        - `Florida 33134 USA` → verificação de `^Florida\s+USA$` falhava → números removidos → `Florida USA` passava
+        - `Rede Mulher... CNPJ: -8` → após limpar números, sobrava `CNPJ` no final
+    - **Solução em `extractors/utils.py`**:
+        - **Limpeza final de sufixos** (linhas 916-922): Remove `CNPJ`, `CPF`, `CEP` que sobraram após toda normalização
+        - **Verificações finais** (linhas 928-961): Rejeita `Florida USA`, strings curtas (<3 chars), siglas genéricas (MG, SP, USA, etc.)
+    - **Casos corrigidos**:
+        - `Florida 33134 USA` → `""` (rejeitado)
+        - `Rede Mulher de Televisao Ltda CNPJ: -8` → `Rede Mulher de Televisao Ltda`
+        - `Empresa XYZ CPF: 123` → `Empresa XYZ`
+    - **Resultado**: 2 casos `Florida USA` e 4 casos sufixo `CNPJ` corrigidos
+- [x] **Testes Adicionais**: Novos casos em `tests/test_extractor_utils.py::TestNormalizeEntityName`
+    - `Florida 33134 USA` → `""`
+    - `Rede Mulher de Televisao Ltda CNPJ: -8` → sem sufixo
+    - **Total**: 661 testes passando, 1 pulado
+- [x] **Documentação de Contexto**: Atualização para memória vetorizada
+    - Atualizado `docs/context/sessao_2026_02_19_pendencias.md` com correções finais
+    - Criado `docs/context/sessao_2026_02_19_normalizacao_final.md` (novo)
+    - Atualizado `docs/context/README.md` com índice e seção de correções
+    - Atualizado `docs/context/vector_db_guide.md` com nota sobre re-indexação
+- [x] **Re-indexação do Banco Vetorial**: `python scripts/ctx.py --reindex`
+    - 34 arquivos, 122 chunks indexados
+    - Novos documentos disponíveis para busca semântica
+
 ### 18/02/2026
 
 - [x] **Fix NFCom Century Telecom**: Extrator `nfcom.py` não reconhecia variante de layout da Century

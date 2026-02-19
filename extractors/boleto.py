@@ -547,6 +547,21 @@ class BoletoExtractor(BaseExtractor):
             "ASSINATURA",
             "DECLARO QUE",
             "CONCORDO COM",
+            # Padrões de "Comprovante de Entrega" (formulário de correios)
+            "( ) MUDOU-SE",
+            "( ) AUSENTE",
+            "( ) NÃO EXISTE",
+            "( ) NAO EXISTE",
+            "( ) RECUSADO",
+            "( ) NÃO PROCURADO",
+            "( ) NAO PROCURADO",
+            "( ) ENDEREÇO INSUFICIENTE",
+            "( ) ENDERECO INSUFICIENTE",
+            "( ) DESCONHECIDO",
+            "( ) FALECIDO",
+            "( ) OUTROS",
+            "COMPROVANTE DE ENTREGA",
+            "RECIBO DO PAGADOR",
         ]
         if any(t in s_up for t in bad_tokens):
             return True
@@ -559,8 +574,16 @@ class BoletoExtractor(BaseExtractor):
         if re.match(r"(?i)^benefici[aá]rio\S", s):
             return True
 
-        # Padrão: apenas "CNPJ" ou "CPF/CNPJ" sozinho
-        if re.match(r"^\s*(CNPJ|CPF|CPF/CNPJ)\s*$", s_up.strip()):
+        # Padrão: apenas "CNPJ" ou "CPF/CNPJ" sozinho (case-insensitive)
+        if re.match(r"^\s*(CNPJ|cnpj|CPF|cpf|CPF/CNPJ|cpf/cnpj)\s*$", s.strip()):
+            return True
+
+        # Padrão: "( ) Ausente" ou variantes de formulário de entrega
+        if re.match(
+            r"^\s*\(\s*\)\s*(Ausente|Mudou-se|Recusado|Desconhecido|Falecido)",
+            s,
+            re.IGNORECASE,
+        ):
             return True
 
         # Padrão: termina com "CPF/CNPJ" ou "CNPJ" solto

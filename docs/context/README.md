@@ -227,29 +227,33 @@ automation_orchestrator.md (engloba todos os outros)
 
 ## 🗂️ Índice Completo (Alfabético)
 
-| #   | Documento                                                                        | Categoria    | Descrição                                  |
-| --- | -------------------------------------------------------------------------------- | ------------ | ------------------------------------------ |
-| 1   | [`automation_orchestrator.md`](./automation_orchestrator.md)                     | Fluxo        | Orquestrar correções em lote               |
-| 2   | [`coding_standards.md`](./coding_standards.md)                                   | Referência   | Type hints, SOLID, DRY                     |
-| 3   | [`commands_reference.md`](./commands_reference.md)                               | Referência   | Unix vs PowerShell                         |
-| 4   | [`correction_tracking.md`](./correction_tracking.md)                             | Snapshot     | Rastrear correções entre sessões           |
-| 5   | [`creation.md`](./creation.md)                                                   | Fluxo        | Criar novo extrator                        |
-| 6   | [`diagnosis.md`](./diagnosis.md)                                                 | Fluxo        | Diagnóstico rápido de caso                 |
-| 7   | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md)     | Exemplo      | Análise real de priorização                |
-| 8   | [`improvements_analysis.md`](./improvements_analysis.md)                         | Conhecimento | Lições da primeira orquestração            |
-| 9   | [`log_correlation.md`](./log_correlation.md)                                     | Fluxo        | Analisar logs vs CSV                       |
-| 10  | [`logging_guide.md`](./logging_guide.md)                                         | Referência   | Como adicionar logs                        |
-| 11  | [`prioritization.md`](./prioritization.md)                                       | Fluxo        | Priorizar erros por recorrência            |
-| 12  | [`project_overview.md`](./project_overview.md)                                   | Conhecimento | Arquitetura e estrutura                    |
-| 13  | [`project_status_template.md`](./project_status_template.md)                     | Snapshot     | Template de snapshot                       |
-| 14  | [`review.md`](./review.md)                                                       | Fluxo        | Análise aprofundada de caso                |
-| 15  | [`troubleshooting.md`](./troubleshooting.md)                                     | Referência   | Resolver erros comuns                      |
-| 16  | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md) | Referência   | Problemas específicos da sessão 30/01/2026 |
-| 17  | [`validation.md`](./validation.md)                                               | Fluxo        | Validar correções                          |
-| 18  | [`logging_standards.md`](./logging_standards.md)                                 | Referência   | Evitar falsos positivos nos logs           |
-| 19  | [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md) | Snapshot     | Sessão 30/01 - NFSE sem número             |
-| 20  | [`ANALISE_ERROS_REAL_2026_01_30.md`](./ANALISE_ERROS_REAL_2026_01_30.md)         | Análise      | Análise de erros reais vs falsos positivos |
-| 21  | [`analise_2026_01_29.md`](./analise_2026_01_29.md)                               | Análise      | Primeira análise de saúde detalhada        |
+| #   | Documento                                                                                    | Categoria    | Descrição                                    |
+| --- | -------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------- |
+| 1   | [`automation_orchestrator.md`](./automation_orchestrator.md)                                 | Fluxo        | Orquestrar correções em lote                 |
+| 2   | [`coding_standards.md`](./coding_standards.md)                                               | Referência   | Type hints, SOLID, DRY                       |
+| 3   | [`commands_reference.md`](./commands_reference.md)                                           | Referência   | Unix vs PowerShell                           |
+| 4   | [`correction_tracking.md`](./correction_tracking.md)                                         | Snapshot     | Rastrear correções entre sessões             |
+| 5   | [`creation.md`](./creation.md)                                                               | Fluxo        | Criar novo extrator                          |
+| 6   | [`diagnosis.md`](./diagnosis.md)                                                             | Fluxo        | Diagnóstico rápido de caso                   |
+| 7   | [`example_prioritization_analysis.md`](./example_prioritization_analysis.md)                 | Exemplo      | Análise real de priorização                  |
+| 8   | [`improvements_analysis.md`](./improvements_analysis.md)                                     | Conhecimento | Lições da primeira orquestração              |
+| 9   | [`log_correlation.md`](./log_correlation.md)                                                 | Fluxo        | Analisar logs vs CSV                         |
+| 10  | [`logging_guide.md`](./logging_guide.md)                                                     | Referência   | Como adicionar logs                          |
+| 11  | [`prioritization.md`](./prioritization.md)                                                   | Fluxo        | Priorizar erros por recorrência              |
+| 12  | [`project_overview.md`](./project_overview.md)                                               | Conhecimento | Arquitetura e estrutura                      |
+| 13  | [`project_status_template.md`](./project_status_template.md)                                 | Snapshot     | Template de snapshot                         |
+| 14  | [`review.md`](./review.md)                                                                   | Fluxo        | Análise aprofundada de caso                  |
+| 15  | [`troubleshooting.md`](./troubleshooting.md)                                                 | Referência   | Resolver erros comuns                        |
+| 16  | [`troubleshooting_sessao_30_01_2026.md`](./troubleshooting_sessao_30_01_2026.md)             | Referência   | Problemas específicos da sessão 30/01/2026   |
+| 17  | [`validation.md`](./validation.md)                                                           | Fluxo        | Validar correções                            |
+| 18  | [`logging_standards.md`](./logging_standards.md)                                             | Referência   | Evitar falsos positivos nos logs             |
+| 19  | [`sessao_2026_01_30_nfse_sem_numero.md`](./sessao_2026_01_30_nfse_sem_numero.md)             | Snapshot     | Sessão 30/01 - NFSE sem número               |
+| 20  | [`ANALISE_ERROS_REAL_2026_01_30.md`](./ANALISE_ERROS_REAL_2026_01_30.md)                     | Análise      | Análise de erros reais vs falsos positivos   |
+| 21  | [`analise_2026_01_29.md`](./analise_2026_01_29.md)                                           | Análise      | Primeira análise de saúde detalhada          |
+| 22  | [`sessao_2026_02_18_fixes_alta_prioridade.md`](./sessao_2026_02_18_fixes_alta_prioridade.md) | Snapshot     | Fixes alta prioridade + limpeza fornecedores |
+| 23  | [`sessao_2026_02_18_nfcom_century_telecom.md`](./sessao_2026_02_18_nfcom_century_telecom.md) | Snapshot     | NFCom Century Telecom fix                    |
+| 24  | [`sessao_2026_02_19_pendencias.md`](./sessao_2026_02_19_pendencias.md)                       | Snapshot     | Pendências e correções finais 19/02          |
+| 25  | [`sessao_2026_02_19_normalizacao_final.md`](./sessao_2026_02_19_normalizacao_final.md)       | Snapshot     | Normalização final: Florida USA, CNPJ sufixo |
 
 ---
 
@@ -529,6 +533,51 @@ Novo algoritmo em `document_pairing.py` que agrega múltiplas NFs órfãs para p
 
 - CONCILIADO: 131 → 145 (+14 casos)
 - PAREADO_FORCADO: 19 → 16 (-3 casos)
+
+### Correções Finais de Normalização de Fornecedor (19/02/2026)
+
+**Sessão:** `docs/context/sessao_2026_02_19_normalizacao_final.md`
+**Pendências:** `docs/context/sessao_2026_02_19_pendencias.md`
+
+#### Problema: Ordem de Operações na Normalização
+
+A função `normalize_entity_name()` aplicava verificações de padrões inválidos **antes** da remoção de números:
+
+- `Florida 33134 USA` → verificação de `^Florida\s+USA$` falhava
+- Números removidos → `Florida USA` passava incorretamente
+- `Rede Mulher... CNPJ: -8` → após limpar números, sobrava `CNPJ` no final
+
+#### Solução: Limpeza e Verificações Finais
+
+Adicionadas duas novas etapas **no final** de `normalize_entity_name()`:
+
+1. **Limpeza final de sufixos** (linhas 916-922):
+
+    ```python
+    name = re.sub(r"\s+CNPJ\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CPF\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CEP\s*$", "", name, flags=re.IGNORECASE)
+    ```
+
+2. **Verificações finais** (linhas 928-961):
+    - Rejeita `Florida USA` após limpeza de números
+    - Rejeita strings muito curtas (< 3 caracteres)
+    - Rejeita siglas genéricas sozinhas (MG, SP, CNPJ, USA, etc.)
+    - Rejeita padrões de endereço americano
+
+| Entrada                                  | Saída                           |
+| ---------------------------------------- | ------------------------------- |
+| `Florida 33134 USA`                      | `""` (rejeitado)                |
+| `Rede Mulher de Televisao Ltda CNPJ: -8` | `Rede Mulher de Televisao Ltda` |
+| `Empresa XYZ CPF: 123`                   | `Empresa XYZ`                   |
+| `CNPJ`                                   | `""` (rejeitado)                |
+
+**Arquivos modificados:**
+
+- `extractors/utils.py` - Limpeza final + verificações finais
+- `tests/test_extractor_utils.py` - 7 testes para `TestNormalizeEntityName`
+
+**Testes:** 661 passed, 1 skipped
 
 ---
 

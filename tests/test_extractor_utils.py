@@ -284,6 +284,56 @@ class TestNormalizeEntityName(unittest.TestCase):
         """String vazia retorna vazia."""
         self.assertEqual(normalize_entity_name(""), "")
 
+    def test_rejeita_ausente_formulario_entrega(self):
+        """Rejeita '( ) Ausente' de formulário de entrega de correios."""
+        self.assertEqual(normalize_entity_name("( ) Ausente"), "")
+        self.assertEqual(normalize_entity_name("( ) Mudou-se"), "")
+        self.assertEqual(normalize_entity_name("( ) Recusado"), "")
+        self.assertEqual(normalize_entity_name("( ) Desconhecido"), "")
+        self.assertEqual(normalize_entity_name("( ) Falecido"), "")
+
+    def test_remove_sufixo_cnpj(self):
+        """Remove sufixo 'CNPJ' colado no final do nome."""
+        self.assertEqual(
+            normalize_entity_name("Rede Mulher de Televisao Ltda CNPJ"),
+            "Rede Mulher de Televisao Ltda",
+        )
+        self.assertEqual(
+            normalize_entity_name("EMPRESA XYZ LTDA CNPJ"),
+            "EMPRESA XYZ LTDA",
+        )
+        # Caso real OCR: "CNPJ: -8" vira "CNPJ" após limpeza de números
+        self.assertEqual(
+            normalize_entity_name("Rede Mulher de Televisao Ltda CNPJ: -8"),
+            "Rede Mulher de Televisao Ltda",
+        )
+        # CPF no final também
+        self.assertEqual(
+            normalize_entity_name("Empresa XYZ CPF: 123"),
+            "Empresa XYZ",
+        )
+
+    def test_rejeita_cnpj_sozinho(self):
+        """Rejeita 'CNPJ' ou 'cnpj' sozinho como fornecedor."""
+        self.assertEqual(normalize_entity_name("CNPJ"), "")
+        self.assertEqual(normalize_entity_name("cnpj"), "")
+        self.assertEqual(normalize_entity_name("CPF"), "")
+
+    def test_rejeita_florida_usa(self):
+        """Rejeita 'Florida USA' como endereço americano."""
+        self.assertEqual(normalize_entity_name("Florida USA"), "")
+        self.assertEqual(normalize_entity_name("Florida33134USA"), "")
+        # Caso real: após remover números, sobra "Florida USA"
+        self.assertEqual(normalize_entity_name("Florida 33134 USA"), "")
+
+    def test_mantem_nomes_validos(self):
+        """Mantém nomes de empresa válidos intactos."""
+        self.assertIn("SKYMAIL", normalize_entity_name("Skymail LTDA").upper())
+        self.assertIn(
+            "OBVIO",
+            normalize_entity_name("OBVIO BRASIL SOFTWARE E SERVICOS S.A.").upper(),
+        )
+
 
 class TestIntegracaoOcrMoney(unittest.TestCase):
     """Testes de integração: fluxo completo de extração com OCR problemático."""

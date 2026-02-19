@@ -523,6 +523,15 @@ def normalize_entity_name(raw: str) -> str:
     """
     name = (raw or "").strip()
 
+    # VERIFICAÇÃO ANTECIPADA: Formulário de entrega (antes de qualquer processamento)
+    # "( ) Ausente", "( ) Mudou-se", etc. devem ser rejeitados completamente
+    if re.match(
+        r"^\s*\(\s*\)\s*(Ausente|Mudou-se|Mudou|Recusado|Desconhecido|Falecido|N[ãa]o\s+existe|N[ãa]o\s+procurado|Endere[çc]o\s+insuficiente|Outros)",
+        name,
+        re.IGNORECASE,
+    ):
+        return ""
+
     # Remove prefixos genéricos que não são parte do nome da empresa
     prefixes_to_remove = [
         r"^E-mail\s+",
@@ -590,11 +599,24 @@ def normalize_entity_name(raw: str) -> str:
         r"\s+CNPJ/MF\s+sob.*$",
         r"\s+CNPJ/CPF\s*$",  # "LTDA CNPJ/CPF"
         r"\s+CNPJ\s*$",  # "LTDA CNPJ" no final
+        r"\bCNPJ\s*$",  # "Ltda CNPJ" - CNPJ colado no final (word boundary)
         # Padrões de endereços/lixo que aparecem colados ao nome da empresa
         r"\s+ENDEREÇO\s+AV\.?.*$",  # "ENDEREÇO AV. AMAZONAS"
         r"\s+ENDERECO\s+AV\.?.*$",  # sem acento
         r"\s+/\s*-?\d*\s*\d*\s*\(\s*\)\s*Mudou-se.*$",  # "/ -1 1 ( ) Mudou-se"
         r"\s+Mudou-se.*$",  # "Mudou-se" no final
+        # Padrões de "Comprovante de Entrega" (formulário de correios)
+        r"^\s*\(\s*\)\s*Ausente.*$",  # "( ) Ausente"
+        r"^\s*\(\s*\)\s*Mudou-se.*$",  # "( ) Mudou-se"
+        r"^\s*\(\s*\)\s*Recusado.*$",  # "( ) Recusado"
+        r"^\s*\(\s*\)\s*Desconhecido.*$",  # "( ) Desconhecido"
+        r"^\s*\(\s*\)\s*Falecido.*$",  # "( ) Falecido"
+        r"^\s*\(\s*\)\s*N[ãa]o\s+existe.*$",  # "( ) Não existe"
+        r"^\s*\(\s*\)\s*N[ãa]o\s+procurado.*$",  # "( ) Não procurado"
+        r"^\s*\(\s*\)\s*Endere[çc]o\s+insuficiente.*$",  # "( ) Endereço insuficiente"
+        r"^\s*\(\s*\)\s*Outros.*$",  # "( ) Outros"
+        # "Florida USA" sem números (padrão de endereço americano)
+        r"^Florida\s+USA\s*$",  # "Florida USA" sozinho
         r"\s+TAXID\d*-?.*$",  # "TAXID95-" e variações
         r"\s+Inscrição\s+Municipal.*$",  # "Inscrição Municipal" no final
         r"\s+Inscricao\s+Municipal.*$",  # sem acento
@@ -664,12 +686,16 @@ def normalize_entity_name(raw: str) -> str:
     if re.match(r"^Contas\s+a\s+(Receber|Pagar)\s*$", name, re.IGNORECASE):
         name = ""
 
-    # Se é apenas UF (MG, SP, RJ, etc.) ou "CNPJ" sozinho
+    # Se é apenas UF (MG, SP, RJ, etc.) ou "CNPJ"/"cnpj" sozinho
     if re.match(
         r"^(MG|SP|RJ|PR|SC|RS|BA|GO|DF|ES|PE|CE|PA|MA|MT|MS|CNPJ|CPF|CEP)$",
         name.strip(),
         re.IGNORECASE,
     ):
+        name = ""
+
+    # Se é "Florida USA" (endereço americano)
+    if re.match(r"^Florida\s+USA\s*$", name, re.IGNORECASE):
         name = ""
 
     # Se começa com "CENTRO NOVO" (endereço)
@@ -747,7 +773,12 @@ def normalize_entity_name(raw: str) -> str:
 
     # Remove padrões de endereço internacional (Florida, USA, TAXID)
     name = re.sub(r"\s+Florida\d+USA.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+Florida\s+USA\s*$", "", name, flags=re.IGNORECASE)
     name = re.sub(r"\s+TAXID\d*-?.*$", "", name, flags=re.IGNORECASE)
+
+    # Remove sufixo "CNPJ" que ficou colado no final após outras limpezas
+    # Ex: "Rede Mulher de Televisao Ltda CNPJ" -> "Rede Mulher de Televisao Ltda"
+    name = re.sub(r"\s+CNPJ\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove "/ -1 1 ( ) Mudou-se" e variações
     name = re.sub(
@@ -881,7 +912,52 @@ def normalize_entity_name(raw: str) -> str:
     # Limpa espaços e pontuação residual
     name = re.sub(r"\s+", " ", name).strip(" -:;/")
 
-    return name.strip()
+    # ============================================================
+    # LIMPEZA FINAL DE SUFIXOS (após toda normalização)
+    # Remove sufixos que só aparecem após limpeza de números/pontuação
+    # ============================================================
+
+    # Remove CNPJ/CPF que ficou no final após limpeza (ex: "Empresa CNPJ: -8" -> "Empresa CNPJ")
+    name = re.sub(r"\s+CNPJ\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CPF\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+CEP\s*$", "", name, flags=re.IGNORECASE)
+
+    # ============================================================
+    # VERIFICAÇÕES FINAIS (após toda a limpeza)
+    # Rejeita padrões que só se tornam visíveis após normalização
+    # ============================================================
+
+    final_name = name.strip()
+
+    # Rejeita "Florida USA" (endereço americano resultante de limpeza de números)
+    if re.match(r"^Florida\s+USA\s*$", final_name, re.IGNORECASE):
+        return ""
+
+    # Rejeita strings muito curtas (menos de 3 caracteres) - provavelmente lixo OCR
+    if len(final_name) < 3:
+        return ""
+
+    # Rejeita se é apenas UF ou sigla genérica após toda limpeza
+    if re.match(
+        r"^(MG|SP|RJ|PR|SC|RS|BA|GO|DF|ES|PE|CE|PA|MA|MT|MS|CNPJ|CPF|CEP|USA|BR)$",
+        final_name.strip(),
+        re.IGNORECASE,
+    ):
+        return ""
+
+    # Rejeita padrões de endereço americano genéricos
+    if re.match(
+        r"^(Florida|California|Texas|New York)\s+(USA|US)?\s*$",
+        final_name,
+        re.IGNORECASE,
+    ):
+        return ""
+
+    # Rejeita "CNPJ" ou "CPF" que sobrou após limpeza
+    if re.match(r"^(CNPJ|CPF|CEP)\s*$", final_name, re.IGNORECASE):
+        return ""
+
+    return final_name
 
 
 def normalize_digits(value: str) -> str:
