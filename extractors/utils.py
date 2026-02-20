@@ -506,6 +506,8 @@ def normalize_entity_name(raw: str) -> str:
     - Sufixos truncados como "..."
     - Caracteres duplicados de OCR
     - Artefatos de OCR corrompido (ex: "Aeee [dede", "[dede", etc.)
+    - Headers/labels de documentos (ex: "DOCUMENTO(S)", "EMITENTE DA NFS-e")
+    - Nomes colados (tenta separar palavras quando possível)
 
     Args:
         raw: Nome bruto extraído
@@ -520,8 +522,104 @@ def normalize_entity_name(raw: str) -> str:
         'LOCALIZA RENT A CAR'
         >>> normalize_entity_name("CORREIOS E TELEGRAFOS Aeee [dede")
         'CORREIOS E TELEGRAFOS'
+        >>> normalize_entity_name("DOCUMENTO(S)")
+        ''
+        >>> normalize_entity_name("RSMBRASILAUDITORIAECONSULTORIALTDA")
+        'RSM BRASIL AUDITORIA E CONSULTORIA LTDA'
     """
     name = (raw or "").strip()
+
+    # ============================================================
+    # BLACKLIST DE HEADERS/LABELS (rejeitar completamente)
+    # Padrões que NUNCA são nomes de fornecedor válidos
+    # ============================================================
+    blacklist_exact = [
+        # Labels de boleto
+        "DOCUMENTO(S)",
+        "DOCUMENTOS",
+        "DOCUMENTO",
+        "BENEFICIÁRIO",
+        "BENEFICIARIO",
+        "CEDENTE",
+        "SACADO",
+        "PAGADOR",
+        "RECEBEDOR",
+        "NOME DO RECEBEDOR",
+        # Labels de NFSe
+        "EMITENTE DA NFS-E",
+        "EMITENTE DA NFSE",
+        "PRESTADOR DE SERVIÇOS",
+        "PRESTADOR DE SERVICOS",
+        "PRESTADOR DO SERVIÇO",
+        "PRESTADOR DO SERVICO",
+        "TOMADOR DO SERVIÇO",
+        "TOMADOR DO SERVICO",
+        "TOMADOR DE SERVIÇOS",
+        "TOMADOR DE SERVICOS",
+        # Labels genéricos
+        "RAZÃO SOCIAL",
+        "RAZAO SOCIAL",
+        "NOME EMPRESARIAL",
+        "NOME FANTASIA",
+        "CNPJ",
+        "CPF",
+        "CEP",
+        "CNPJ/CPF",
+        "CPF/CNPJ",
+        # Outros
+        "VENCIMENTO",
+        "VALOR",
+        "CARTEIRA",
+        "ESPÉCIE",
+        "ESPECIE",
+        "ACEITE",
+        "AGÊNCIA",
+        "AGENCIA",
+        "CONTA",
+    ]
+
+    name_upper_stripped = name.upper().strip()
+    if name_upper_stripped in blacklist_exact:
+        return ""
+
+    # Blacklist de padrões (regex)
+    blacklist_patterns = [
+        # Headers de boleto concatenados
+        r"^Cedente\s+N[úu]mero\s+do\s+Documento",
+        r"^N[úu]mero\s+do\s+Documento\s+Esp[ée]cie",
+        r"^Esp[ée]cie\s+Quantidade.*Valor",
+        r"^Valor\s+do\s+Documento",
+        # DOCUMENTO(S) com ou sem número
+        r"^DOCUMENTO\(S\)\s*:?\s*[\d\s]*$",
+        r"^DOCUMENTO\s*\(S\)\s*:?\s*[\d\s]*$",
+        r"^DOCUMENTOS?\s*:?\s*[\d\s]*$",
+        # Headers de NFSe concatenados
+        r"^EMITENTE\s+DA\s+NFS-?E\s+Prestador",
+        r"^Prestador\s+de\s+servi[çc]o\s+Nome",
+        r"^PRESTADOR\s+DE\s+SERVI[ÇC]OS?\s+[A-Z0-9\-]+\s+\d+",  # "PRESTADOR DE SERVIÇOS HCJQ-5R1R 20260202..."
+        r"^\w{4,8}-\w{4,8}\s+\d+u\d+\s+PRESTADOR",  # "HCJQ-5R1R 20260202u13114403000103 PRESTADOR..."
+        # Padrões de código + label
+        r"^[A-Z0-9\-]{6,12}\s+\d{8,}u?\d*\s+PRESTADOR",
+        # Nome/Nome Empresarial colado
+        r"^Nome\s*/?\s*Nome\s+Empresarial",
+        # Formulário de entrega
+        r"^\s*\(\s*\)\s*(Ausente|Mudou-se|Mudou|Recusado|Desconhecido|Falecido)",
+        r"^\s*\(\s*\)\s*N[ãa]o\s+(existe|procurado)",
+        r"^\s*\(\s*\)\s*Endere[çc]o\s+insuficiente",
+        r"^\s*\(\s*\)\s*Outros",
+        # Frases genéricas
+        r"^Valor\s+da\s+causa\s*$",
+        r"^No\s+Internet\s+Banking",
+        r"^para\s+pagamento:",
+        r"^FAVORECIDO:",
+        r"^Contas\s+a\s+(Receber|Pagar)",
+        # nome do recebedor (case insensitive)
+        r"^nome\s+do\s+recebedor\s*$",
+    ]
+
+    for pattern in blacklist_patterns:
+        if re.match(pattern, name, re.IGNORECASE):
+            return ""
 
     # VERIFICAÇÃO ANTECIPADA: Formulário de entrega (antes de qualquer processamento)
     # "( ) Ausente", "( ) Mudou-se", etc. devem ser rejeitados completamente
@@ -705,6 +803,13 @@ def normalize_entity_name(raw: str) -> str:
     # Se começa com "PC PRESIDENTE" ou "PRAÇA" (endereço)
     if re.match(r"^(PC|PRAÇA|PRACA)\s+PRESIDENTE\s+", name, re.IGNORECASE):
         name = ""
+
+    # ============================================================
+    # TRATAMENTO DE NOMES COLADOS (sem espaços)
+    # Detecta e tenta separar palavras em nomes concatenados
+    # Ex: "RSMBRASILAUDITORIAECONSULTORIALTDA" -> "RSM BRASIL AUDITORIA E CONSULTORIA LTDA"
+    # ============================================================
+    name = _fix_concatenated_name(name)
 
     # Remove artefatos OCR com colchetes (ex: "[dede", "[abc123", "Aeee [dede")
     # Colchetes não são comuns em nomes de empresas
@@ -960,14 +1065,230 @@ def normalize_entity_name(raw: str) -> str:
     return final_name
 
 
-def normalize_digits(value: str) -> str:
+def _fix_concatenated_name(name: str) -> str:
+    """
+    Tenta separar palavras em nomes concatenados (sem espaços).
+
+    Ex: "RSMBRASILAUDITORIAECONSULTORIALTDA" -> "RSM BRASIL AUDITORIA E CONSULTORIA LTDA"
+
+    Args:
+        name: Nome possivelmente concatenado
+
+    Returns:
+        Nome com espaços inseridos ou original se não for caso de concatenação
+    """
+    if not name or " " in name:
+        # Já tem espaços, não é nome colado
+        return name
+
+    # Não processa strings com quebras de linha (serão normalizadas depois)
+    if "\n" in name or "\r" in name:
+        return name
+
+    # Só processa se for string longa sem espaços (provável OCR colado)
+    if len(name) < 15:
+        return name
+
+    name_upper = name.upper()
+
+    # Dicionário de palavras conhecidas em nomes de empresas brasileiras
+    # Ordenado do mais longo para o mais curto para evitar matches parciais
+    # IMPORTANTE: Palavras curtas (1-2 chars) como "A", "E", "DE" são tratadas separadamente
+    known_words = [
+        # Palavras longas primeiro (ordem decrescente de tamanho)
+        "TELECOMUNICACOES",
+        "TELECOMUNICAÇÕES",
+        "TELECOMUNICACAO",
+        "TELECOMUNICAÇÃO",
+        "DESENVOLVIMENTO",
+        "COMPARTILHADOS",
+        "COMPARTILHADO",
+        "INTERMEDIACAO",
+        "INTERMEDIAÇÃO",
+        "ADMINISTRACAO",
+        "ADMINISTRAÇÃO",
+        "ADMINISTRADORA",
+        "INVESTIMENTOS",
+        "INVESTIMENTO",
+        "PARTICIPACOES",
+        "PARTICIPAÇÕES",
+        "PARTICIPACAO",
+        "PARTICIPAÇÃO",
+        "INTELIGENCIA",
+        "INTELIGÊNCIA",
+        "COMUNICACOES",
+        "COMUNICAÇÕES",
+        "COMUNICACAO",
+        "COMUNICAÇÃO",
+        "ESTRATEGICA",
+        "ESTRATÉGICA",
+        "ESTRATEGICO",
+        "ESTRATÉGICO",
+        "ESCRITORIOS",
+        "ESCRITÓRIO",
+        "ESCRITORIO",
+        "CONSULTORIA",
+        "PERFORMANCE",
+        "PERFOMANCE",
+        "INFORMATICA",
+        "INFORMÁTICA",
+        "AUDIOVISUAL",
+        "TECNOLOGIA",
+        "TECHNOLOGY",
+        "ARTIFICIAL",
+        "ASSESSORIA",
+        "AUDITORIA",
+        "ASSOCIADOS",
+        "ASSOCIADO",
+        "ADVOGADOS",
+        "ADVOGADO",
+        "INTERFOCUS",
+        "CONCEITOS",
+        "CONCEITO",
+        "SOFTWARE",
+        "SERVICOS",
+        "SERVIÇOS",
+        "SERVICO",
+        "SERVIÇO",
+        "SOLUCOES",
+        "SOLUÇÕES",
+        "SOLUCAO",
+        "SOLUÇÃO",
+        "SISTEMAS",
+        "SISTEMA",
+        "PROJETOS",
+        "PROJETO",
+        "INTERNET",
+        "PARTNERS",
+        "OLIVEIRA",
+        "WALQUIRIA",
+        "CRISTINA",
+        "FERNANDO",
+        "DENYSON",
+        "BARBOSA",
+        "RIBEIRO",
+        "RODOLFO",
+        "SUPORTE",
+        "DIGITAL",
+        "CONEXAO",
+        "CONEXÃO",
+        "SERVICE",
+        "GESTAO",
+        "GESTÃO",
+        "BRASIL",
+        "NEWERT",
+        "CAMPOS",
+        "SOARES",
+        "GLAUCO",
+        "MENDES",
+        "BRITO",
+        "NEWER",
+        "CESAR",
+        "SILVA",
+        "REGUS",
+        "FOCUS",
+        "APOIO",
+        "IDEAL",
+        "BENS",
+    ]
+
+    # Sufixos empresariais (tratados separadamente)
+    company_suffixes = ["LTDA", "EIRELI", "S.A.", "S.A", "S/A", "EPP"]
+
+    # Tenta encontrar e separar palavras conhecidas usando abordagem greedy
+    result = name_upper
+
+    # Primeiro, encontra todas as palavras conhecidas (greedy, do mais longo para mais curto)
+    remaining = result
+    offset = 0
+    found_words = []
+
+    for word in known_words:
+        idx = 0
+        while True:
+            pos = remaining.find(word, idx)
+            if pos == -1:
+                break
+            # Verifica se não sobrepõe com palavra já encontrada
+            actual_pos = pos + offset
+            overlap = False
+            for fw_start, fw_end, _ in found_words:
+                if not (actual_pos + len(word) <= fw_start or actual_pos >= fw_end):
+                    overlap = True
+                    break
+            if not overlap:
+                found_words.append((actual_pos, actual_pos + len(word), word))
+            idx = pos + 1
+
+    # Ordena por posição
+    found_words.sort(key=lambda x: x[0])
+
+    if found_words:
+        # Reconstroi a string com espaços
+        result_parts = []
+        last_end = 0
+        for start, end, word in found_words:
+            # Adiciona o que veio antes (pode ser sigla ou prefixo)
+            if start > last_end:
+                prefix = name_upper[last_end:start]
+                if prefix:
+                    result_parts.append(prefix)
+            result_parts.append(word)
+            last_end = end
+
+        # Adiciona o que sobrou no final
+        if last_end < len(name_upper):
+            suffix = name_upper[last_end:]
+            if suffix:
+                result_parts.append(suffix)
+
+        result = " ".join(result_parts)
+        result = re.sub(r"\s+", " ", result).strip()
+
+    # Trata sufixos empresariais no final
+    for suffix in company_suffixes:
+        # Verifica se termina com sufixo colado
+        if result.endswith(suffix) and not result.endswith(" " + suffix):
+            # Encontra onde o sufixo começa
+            suffix_start = len(result) - len(suffix)
+            if suffix_start > 0:
+                result = result[:suffix_start] + " " + suffix
+
+    # Se conseguiu separar (tem espaços agora), retorna
+    if " " in result and len(result.split()) >= 2:
+        return result
+
+    # Fallback: tenta separar apenas o sufixo empresarial
+    suffixes_patterns = [
+        (r"(LTDA)$", r" \1"),
+        (r"(S\.A\.?)$", r" \1"),
+        (r"(S/A)$", r" \1"),
+        (r"(EIRELI)$", r" \1"),
+        (r"(EPP)$", r" \1"),
+    ]
+
+    result = name_upper
+    for pattern, replacement in suffixes_patterns:
+        if re.search(pattern, result):
+            result = re.sub(pattern, replacement, result)
+            result = re.sub(r"\s+", " ", result).strip()
+
+    # Se conseguiu separar pelo menos o sufixo, retorna
+    if result != name_upper and " " in result:
+        return result
+
+    # Não conseguiu separar, retorna original
+    return name
+
+
+def normalize_digits(raw: str) -> str:
     """
     Remove todos os caracteres não-numéricos.
 
     Útil para comparar CNPJs, CPFs, chaves de acesso.
 
     Args:
-        value: String com possíveis não-dígitos
+        raw: String com possíveis não-dígitos
 
     Returns:
         Apenas os dígitos
@@ -976,7 +1297,7 @@ def normalize_digits(value: str) -> str:
         >>> normalize_digits("12.345.678/0001-90")
         '12345678000190'
     """
-    return re.sub(r"\D", "", value or "")
+    return re.sub(r"\D", "", raw or "")
 
 
 # =============================================================================

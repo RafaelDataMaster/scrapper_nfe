@@ -356,6 +356,7 @@ class BoletoExtractor(BaseExtractor):
             "CÓDIGO",
             "CARTEIRA",
             "ESPÉCIE",
+            "ESPECIE",
             "ACEITE",
             "PROCESSAMENTO",
             "NOSSO NÚMERO",
@@ -363,6 +364,19 @@ class BoletoExtractor(BaseExtractor):
             "AGÊNCIA",
             "AGENCIA",
             "CONTA",
+            # Padrões de boleto que são headers, não fornecedores
+            "DOCUMENTO(S)",
+            "DOCUMENTO(S):",
+            "DOCUMENTOS",
+            "DOCUMENTOS:",
+            "NÚMERO DO DOCUMENTO",
+            "NUMERO DO DOCUMENTO",
+            "CEDENTE NÚMERO",
+            "CEDENTE NUMERO",
+            "QUANTIDADE (=) VALOR",
+            "QUANTIDADE VALOR",
+            "ESPÉCIE QUANTIDADE",
+            "ESPECIE QUANTIDADE",
             # Padrões de linha de descontos/abatimentos (cabeçalho de tabela)
             "DESCONTO",
             "ABATIMENTO",
@@ -423,6 +437,17 @@ class BoletoExtractor(BaseExtractor):
             "MUDOU SE",
             "/ -1 1 (",
             ") MUDOU",
+            # Padrões de NFSe capturados erroneamente
+            "EMITENTE DA NFS-E",
+            "EMITENTE DA NFSE",
+            "PRESTADOR DE SERVIÇOS",
+            "PRESTADOR DE SERVICOS",
+            "PRESTADOR DO SERVIÇO",
+            "PRESTADOR DO SERVICO",
+            "TOMADOR DO SERVIÇO",
+            "TOMADOR DO SERVICO",
+            "NOME DO RECEBEDOR",
+            "RECEBEDOR",
             # Padrões de documentos web
             ".COM.BR ",
             ".NET.BR ",
@@ -681,6 +706,34 @@ class BoletoExtractor(BaseExtractor):
 
         # Padrão: contém ", inscrita no" ou ", inscrito no"
         if re.search(r",\s*INSCRIT[AO]\s+NO", s_up):
+            return True
+
+        # Padrão: "DOCUMENTO(S)" sozinho ou com número
+        if re.match(r"^DOCUMENTO\(S\)\s*:?\s*\d*\s*$", s_up):
+            return True
+
+        # Padrão: "Cedente Número do Documento Espécie..."
+        if re.search(r"CEDENTE\s+N[ÚU]MERO\s+DO\s+DOCUMENTO", s_up):
+            return True
+
+        # Padrão: "Número do Documento Espécie Quantidade..."
+        if re.search(r"N[ÚU]MERO\s+DO\s+DOCUMENTO\s+ESP[ÉE]CIE", s_up):
+            return True
+
+        # Padrão: "Espécie Quantidade (=) Valor..."
+        if re.search(r"ESP[ÉE]CIE\s+QUANTIDADE.*VALOR", s_up):
+            return True
+
+        # Padrão: "EMITENTE DA NFS-e Prestador..."
+        if re.search(r"EMITENTE\s+DA\s+NFS-?E\s+PRESTADOR", s_up):
+            return True
+
+        # Padrão: código + "PRESTADOR DE SERVIÇOS" (ex: "HCJQ-5R1R 20260202u... PRESTADOR")
+        if re.search(r"[A-Z0-9\-]{4,}\s+\d+u?\d*\s+PRESTADOR", s_up):
+            return True
+
+        # Padrão: "nome do recebedor" (minúsculo comum em comprovantes)
+        if re.match(r"^NOME\s+DO\s+RECEBEDOR\s*$", s_up):
             return True
 
         return False

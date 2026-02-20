@@ -334,6 +334,101 @@ class TestNormalizeEntityName(unittest.TestCase):
             normalize_entity_name("OBVIO BRASIL SOFTWARE E SERVICOS S.A.").upper(),
         )
 
+    def test_rejeita_documento_s_header(self):
+        """Rejeita 'DOCUMENTO(S)' que é header de boleto."""
+        self.assertEqual(normalize_entity_name("DOCUMENTO(S)"), "")
+        self.assertEqual(normalize_entity_name("DOCUMENTO(S): 558109 1"), "")
+        self.assertEqual(normalize_entity_name("DOCUMENTOS"), "")
+
+    def test_rejeita_cedente_header(self):
+        """Rejeita header de boleto concatenado."""
+        self.assertEqual(
+            normalize_entity_name(
+                "Cedente Número do Documento Espécie Quantidade (=) Valor do Documento"
+            ),
+            "",
+        )
+
+    def test_rejeita_emitente_nfse_header(self):
+        """Rejeita header de NFSe concatenado."""
+        self.assertEqual(
+            normalize_entity_name("EMITENTE DA NFS-e Prestador de serviço Nome"),
+            "",
+        )
+        self.assertEqual(normalize_entity_name("PRESTADOR DE SERVIÇOS"), "")
+
+    def test_rejeita_codigo_prestador(self):
+        """Rejeita código + PRESTADOR DE SERVIÇOS."""
+        self.assertEqual(
+            normalize_entity_name(
+                "HCJQ-5R1R 20260202u13114403000103 PRESTADOR DE SERVIÇOS"
+            ),
+            "",
+        )
+        self.assertEqual(
+            normalize_entity_name(
+                "RLP-FSX6 20260105u13114403000103 PRESTADOR DE SERVIÇOS"
+            ),
+            "",
+        )
+
+    def test_rejeita_nome_do_recebedor(self):
+        """Rejeita 'nome do recebedor' que é label."""
+        self.assertEqual(normalize_entity_name("nome do recebedor"), "")
+
+    def test_rejeita_labels_simples(self):
+        """Rejeita labels simples como BENEFICIÁRIO, CNPJ, etc."""
+        self.assertEqual(normalize_entity_name("BENEFICIÁRIO"), "")
+        self.assertEqual(normalize_entity_name("BENEFICIARIO"), "")
+        self.assertEqual(normalize_entity_name("CEDENTE"), "")
+        self.assertEqual(normalize_entity_name("PAGADOR"), "")
+        self.assertEqual(normalize_entity_name("VENCIMENTO"), "")
+        self.assertEqual(normalize_entity_name("VALOR"), "")
+
+    def test_separa_nomes_colados(self):
+        """Separa nomes de empresa concatenados (OCR sem espaços)."""
+        # RSM BRASIL
+        result = normalize_entity_name("RSMBRASILAUDITORIAECONSULTORIALTDA")
+        self.assertIn(" ", result)
+        self.assertIn("RSM", result)
+        self.assertIn("BRASIL", result)
+        self.assertIn("LTDA", result)
+
+        # REGUS DO BRASIL
+        result = normalize_entity_name("REGUSDOBRASILLTDA")
+        self.assertIn(" ", result)
+        self.assertIn("REGUS", result)
+        self.assertIn("BRASIL", result)
+
+        # INTERFOCUS TECNOLOGIA
+        result = normalize_entity_name("INTERFOCUSTECNOLOGIALTDA")
+        self.assertIn(" ", result)
+        self.assertIn("INTERFOCUS", result)
+        self.assertIn("TECNOLOGIA", result)
+
+    def test_nao_altera_nomes_com_espacos(self):
+        """Não altera nomes que já têm espaços."""
+        original = "RSM BRASIL AUDITORIA E CONSULTORIA LTDA"
+        self.assertEqual(normalize_entity_name(original), original)
+
+        original = "CEMIG DISTRIBUIÇÃO S.A."
+        self.assertEqual(normalize_entity_name(original), original)
+
+        original = "GOX S.A."
+        self.assertEqual(normalize_entity_name(original), original)
+
+    def test_separa_nomes_pessoas_colados(self):
+        """Separa nomes de pessoas físicas concatenados."""
+        result = normalize_entity_name("RODOLFOCESARBARBOSACAMPOS")
+        self.assertIn(" ", result)
+        self.assertIn("RODOLFO", result)
+        self.assertIn("CESAR", result)
+
+        result = normalize_entity_name("WALQUIRIACRISTINASILVA")
+        self.assertIn(" ", result)
+        self.assertIn("WALQUIRIA", result)
+        self.assertIn("CRISTINA", result)
+
 
 class TestIntegracaoOcrMoney(unittest.TestCase):
     """Testes de integração: fluxo completo de extração com OCR problemático."""

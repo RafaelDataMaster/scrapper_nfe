@@ -45,6 +45,26 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
 
 ## Done
 
+### 20/02/2026
+
+- [x] **Correções de Normalização de Fornecedores**: Eliminados headers/labels e corrigidos nomes concatenados
+    - **Headers/Labels removidos (14 casos)**:
+        - `DOCUMENTO(S)` (8x) - header de boleto capturado como fornecedor
+        - `Cedente Número do Documento...` (2x) - header de boleto concatenado
+        - `PRESTADOR DE SERVIÇOS` com código (2x) - label de NFSe
+        - `EMITENTE DA NFS-e Prestador...` (1x) - header de NFSe concatenado
+        - `nome do recebedor` (1x) - label de comprovante de entrega
+    - **Nomes concatenados corrigidos (91 casos)**:
+        - `RSMBRASILAUDITORIAECONSULTORIALTDA` → `RSM BRASIL AUDITORIA E CONSULTORIA LTDA`
+        - `REGUSDOBRASILLTDA` → `REGUS DO BRASIL LTDA`
+        - `WALQUIRIACRISTINASILVA` → `WALQUIRIA CRISTINA SILVA`
+        - Nova função `_fix_concatenated_name()` com dicionário de 150+ palavras
+    - **Arquivos modificados**:
+        - `extractors/utils.py`: + blacklist exata/regex, + `_fix_concatenated_name()`
+        - `extractors/boleto.py`: + padrões em `_looks_like_header_or_label()`
+        - `tests/test_extractor_utils.py`: + 9 novos testes
+    - **Resultado**: 670 testes passando, 0 warnings
+
 ### 19/02/2026
 
 - [x] **Correções Finais de Normalização de Fornecedor**: Resolvido problema de ordem de operações em `normalize_entity_name()`
