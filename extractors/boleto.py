@@ -1535,6 +1535,50 @@ class BoletoExtractor(BaseExtractor):
         if not text:
             return None
 
+        # 0-pre) Padrão especial: Boleto com "Cedente" como label separado
+        # Layout típico:
+        #   Cedente                 <- label na linha X
+        #   001-9                   <- código banco
+        #   Autenticação mecânica   <- texto fixo
+        #   00190.00009...          <- linha digitável
+        #   EMPRESA LTDA            <- nome do cedente (fornecedor)
+        # Ou layout alternativo onde "Cedente" está logo antes do nome
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            # Procura linha que é apenas "Cedente" (label isolado)
+            if re.match(r"^Cedente\s*$", line_stripped, re.IGNORECASE):
+                # Busca nas próximas linhas por um nome de empresa válido
+                for j in range(i + 1, min(i + 8, len(lines))):
+                    candidate = lines[j].strip()
+                    # Pula linhas que são claramente não-nomes
+                    if not candidate:
+                        continue
+                    if re.match(r"^\d{3}-\d$", candidate):  # código banco ex: 001-9
+                        continue
+                    if re.match(r"^Autentica", candidate, re.IGNORECASE):
+                        continue
+                    if re.match(r"^\d{5}\.\d{5}", candidate):  # linha digitável
+                        continue
+                    if self._looks_like_header_or_label(candidate):
+                        continue
+                    if self._looks_like_currency_or_amount_line(candidate):
+                        continue
+                    if len(candidate) < 5:
+                        continue
+                    # Verifica se parece um nome de empresa
+                    if re.search(r"(?i)(LTDA|S\.?A\.?|S/A|EIRELI|ME|EPP)", candidate):
+                        cand = self._normalize_entity_name(candidate)
+                        if len(cand) >= 5 and not self._looks_like_address(cand):
+                            return cand
+                    # Se tem maiúsculas e não é endereço, pode ser nome
+                    if re.match(
+                        r"^[A-ZÀ-ÿ]", candidate
+                    ) and not self._looks_like_address(candidate):
+                        cand = self._normalize_entity_name(candidate)
+                        if len(cand) >= 5:
+                            return cand
+
         # 0) Caso "intermediador a serviço de <fornecedor> - CNPJ <cnpj>"
         # Ex: "Yapay a serviço de Locaweb S/A - CNPJ 02..."
         m = re.search(

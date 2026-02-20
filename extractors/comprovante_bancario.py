@@ -457,6 +457,8 @@ class ComprovanteBancarioExtractor(BaseExtractor):
             # Padrão específico Santander: "Nome/Razão Social do Beneficiário Original CPF/CNPJ do Beneficiário EMPRESA Original - CNPJ"
             # O "Original" é um watermark que aparece entre os campos
             r"Nome/Raz[ãa]o\s+Social\s+do\s+Benefici[aá]rio\s+Original\s+CPF/CNPJ\s+do\s+Benefici[aá]rio\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+?)(?:\s+Original|\s+-\s*CNPJ)",
+            # Padrão "nome do recebedor:" (comum em comprovantes PIX Itaú)
+            r"nome\s+do\s+recebedor\s*:\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+?)(?:\s*\n|CPF|CNPJ|$)",
             # Padrões genéricos
             r"Nome\s+do\s+benefici[aá]rio\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+?)(?:\s*\n|Documento|CPF|CNPJ|$)",
             r"Favorecido\s*[:\-]?\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9\s\.\-&]+(?:LTDA|S/?A|ME|EPP)?)",

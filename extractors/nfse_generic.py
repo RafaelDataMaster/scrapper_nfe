@@ -490,6 +490,73 @@ class NfseGenericExtractor(BaseExtractor):
     def _extract_fornecedor_nome(self, text: str) -> Optional[str]:
         text = self._normalize_text(text or "")
 
+        # Padrão 0-pre: NFSe São Paulo - PRESTADOR DE SERVIÇOS seguido de Nome/Razão Social
+        # Layout típico:
+        #   PRESTADOR DE SERVIÇOS
+        #   CPF/CNPJ:
+        #   Nome/Razão Social:
+        #   Endereço:
+        #   Município:
+        #   13.114.403/0001-03      <- CNPJ
+        #   Inscrição Municipal:
+        #   4.209.159-4
+        #   OBVIO BRASIL SOFTWARE E SERVIÇOS S.A   <- Nome do prestador
+        #   PRAÇA GAL GENTIL FALCAO...             <- Endereço
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            # Procura seção "PRESTADOR DE SERVIÇOS"
+            if re.match(
+                r"^PRESTADOR\s+DE\s+SERVI[ÇC]OS\s*$", line_stripped, re.IGNORECASE
+            ):
+                # Busca "Nome/Razão Social:" nas próximas linhas
+                for j in range(i + 1, min(i + 10, len(lines))):
+                    if re.match(
+                        r"^Nome/Raz[ãa]o\s+Social\s*:\s*$",
+                        lines[j].strip(),
+                        re.IGNORECASE,
+                    ):
+                        # Encontrou o label, agora busca o valor (nome da empresa)
+                        # O valor pode estar algumas linhas depois, após CNPJ e Inscrição
+                        for k in range(j + 1, min(j + 10, len(lines))):
+                            candidate = lines[k].strip()
+                            # Pula linhas que são claramente labels ou valores de outros campos
+                            if not candidate:
+                                continue
+                            if re.match(
+                                r"^(Endere[çc]o|Munic[íi]pio|UF|CPF|CNPJ|Inscri[çc][ãa]o|E-?mail|Telefone)\s*:",
+                                candidate,
+                                re.IGNORECASE,
+                            ):
+                                continue
+                            if re.match(r"^\d{2}\.\d{3}\.\d{3}[/-]", candidate):  # CNPJ
+                                continue
+                            if re.match(
+                                r"^\d[\d\.\-]+$", candidate
+                            ):  # Inscrição Municipal
+                                continue
+                            # Verifica se parece nome de empresa (tem sufixo ou é maiúsculo)
+                            if re.search(
+                                r"(?i)(LTDA|S\.?A\.?|S/A|EIRELI|ME|EPP)$", candidate
+                            ):
+                                if not self._is_empresa_propria(candidate):
+                                    return candidate
+                            # Se é uma linha em maiúsculas com palavras, pode ser nome
+                            if (
+                                re.match(r"^[A-ZÀ-ÿ][A-ZÀ-ÿ\s&\.\-]+$", candidate)
+                                and len(candidate) >= 10
+                            ):
+                                # Verifica se não é endereço
+                                if not re.match(
+                                    r"^(RUA|AV|AVENIDA|PRAÇA|PRACA|RODOVIA|ESTRADA)\s",
+                                    candidate,
+                                    re.IGNORECASE,
+                                ):
+                                    if not self._is_empresa_propria(candidate):
+                                        return candidate
+                        break
+                break
+
         # Padrão 0A: Nome/Razão social: EMPRESA LTDA (formato de prefeituras como Divinópolis, Nepomuceno)
         # Ex: "Nome/Razão social:ULUHUB TREINAMENTO E DESENVOLVIMENTO LTDA Inscrição estadual:"
         m_nome_razao = re.search(
@@ -555,6 +622,54 @@ class NfseGenericExtractor(BaseExtractor):
             nome = re.split(r"\s+[a-zA-Z0-9_.+-]+@", nome)[0].strip()
             if len(nome) >= 5 and not self._is_empresa_propria(nome):
                 return nome
+
+        # Padrão 0B4: DANFSe portal nacional (fitz) - Nome em múltiplas linhas após "Nome / Nome empresarial"
+        # Layout típico:
+        #   EMITENTE DA NFS-e
+        #   Prestador de serviço
+        #   Nome / Nome empresarial
+        #   52.677.763 WILIAN SANTOS MENDES    <- linha 1 do nome (pode ter CNPJ parcial no início)
+        #   ARAUJO                              <- linha 2 do nome (continuação)
+        #   CNPJ / CPF / NIF                   <- próximo label
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            # Procura "Nome / Nome empresarial" ou variação
+            if re.match(r"(?i)^Nome\s*/\s*Nome\s+empresarial\s*$", line_stripped):
+                # Verifica se estamos na seção EMITENTE (não TOMADOR)
+                # Olha as linhas anteriores para confirmar
+                is_emitente_section = False
+                for j in range(max(0, i - 5), i):
+                    if "EMITENTE" in lines[j].upper():
+                        is_emitente_section = True
+                        break
+                    if "TOMADOR" in lines[j].upper():
+                        # Já passou para seção TOMADOR, não usar
+                        is_emitente_section = False
+                        break
+
+                if is_emitente_section and i + 1 < len(lines):
+                    # Próxima linha é o nome (pode ter CNPJ parcial no início)
+                    nome_linha1 = lines[i + 1].strip()
+
+                    # Remove CNPJ parcial do início (ex: "52.677.763 WILIAN" -> "WILIAN")
+                    nome_linha1 = re.sub(r"^[\d\.]+\s+", "", nome_linha1)
+
+                    # Verifica se a linha seguinte é continuação do nome (não é um label)
+                    nome_completo = nome_linha1
+                    if i + 2 < len(lines):
+                        proxima = lines[i + 2].strip()
+                        # Se não é um label conhecido, é continuação do nome
+                        if proxima and not re.match(
+                            r"(?i)^(CNPJ|CPF|NIF|Inscri[çc][ãa]o|Telefone|Endere[çc]o|E-?mail|Munic[íi]pio|CEP|Simples|Regime|TOMADOR|INTERMEDIÁRIO)",
+                            proxima,
+                        ):
+                            nome_completo = f"{nome_linha1} {proxima}"
+
+                    if len(nome_completo) >= 5 and not self._is_empresa_propria(
+                        nome_completo
+                    ):
+                        return nome_completo
 
         # Padrão 0C: DANFSe alternativo - Nome fantasia seguido do nome real
         # Ex: "Nome fantasia: AGYONET\nNome/Razão social:AGYONET LTDA"

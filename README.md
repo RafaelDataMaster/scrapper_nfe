@@ -51,18 +51,23 @@ Avaliar criação de um RAG de melhorias constantes, com context prompt e automa
     - **Headers/Labels removidos (14 casos)**:
         - `DOCUMENTO(S)` (8x) - header de boleto capturado como fornecedor
         - `Cedente Número do Documento...` (2x) - header de boleto concatenado
-        - `PRESTADOR DE SERVIÇOS` com código (2x) - label de NFSe
-        - `EMITENTE DA NFS-e Prestador...` (1x) - header de NFSe concatenado
-        - `nome do recebedor` (1x) - label de comprovante de entrega
+        - `PRESTADOR DE SERVIÇOS` com código (2x) - label de NFSe São Paulo
+        - `EMITENTE DA NFS-e Prestador...` (1x) - header de DANFSe
+        - `nome do recebedor` (1x) - label de comprovante PIX
     - **Nomes concatenados corrigidos (91 casos)**:
         - `RSMBRASILAUDITORIAECONSULTORIALTDA` → `RSM BRASIL AUDITORIA E CONSULTORIA LTDA`
         - `REGUSDOBRASILLTDA` → `REGUS DO BRASIL LTDA`
         - `WALQUIRIACRISTINASILVA` → `WALQUIRIA CRISTINA SILVA`
         - Nova função `_fix_concatenated_name()` com dicionário de 150+ palavras
-    - **Arquivos modificados**:
-        - `extractors/utils.py`: + blacklist exata/regex, + `_fix_concatenated_name()`
-        - `extractors/boleto.py`: + padrões em `_looks_like_header_or_label()`
-        - `tests/test_extractor_utils.py`: + 9 novos testes
+- [x] **Melhorias em Extratores**: Novos padrões para layouts específicos
+    - **Boleto** (`extractors/boleto.py`): + padrão "Cedente" como label isolado
+    - **NFSe** (`extractors/nfse_generic.py`): + padrão São Paulo (PRESTADOR DE SERVIÇOS), + padrão DANFSe multi-linha
+    - **Comprovante Bancário** (`extractors/comprovante_bancario.py`): + padrão "nome do recebedor:" (PIX Itaú)
+    - **Casos corrigidos**:
+        - OBVIO BRASIL (NFSe SP): `PRESTADOR DE SERVIÇOS` → `OBVIO BRASIL SOFTWARE E SERVIÇOS S.A`
+        - WILIAN SANTOS (DANFSe): `EMITENTE DA NFS-e` → `WILIAN SANTOS MENDES ARAUJO`
+        - PITTSBURG (PIX): `nome do recebedor` → `PITTSBURG FIP MULTIESTRATEGIA`
+        - CONCEITO A EM (Boleto): `Cedente Número...` → `CONCEITO A EM AUDIOVISUAL S.A.`
     - **Resultado**: 670 testes passando, 0 warnings
 
 ### 19/02/2026
